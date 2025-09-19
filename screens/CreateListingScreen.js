@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   FlatList,
 } from "react-native";
-import styles from "../styles/createListingScreenStyle";
+import GlobalStyles from "../styles/GlobalStyles";
 
 // Denne skærm bruges til at oprette en ny annonce (titel, pris og beskrivelse)
 export default function CreateListingScreen({ navigation, route }) {
@@ -33,36 +33,36 @@ export default function CreateListingScreen({ navigation, route }) {
   // Nedenfor er UI til oprettelsesskærmen
   // Her er en simpel form for oprettelse, som giver en ide til hvordan det kan gøres
   return (
-    <View style={styles.container}>
-      <Text style={styles.heading}>Opret annonce</Text>
+    <View style={GlobalStyles.container}>
+      <Text style={GlobalStyles.heading}>Opret annonce</Text>
 
-      <Text style={styles.label}>Titel</Text>
+      <Text style={GlobalStyles.label}>Titel</Text>
       <TextInput
-        style={styles.input}
+        style={GlobalStyles.input}
         value={title}
         onChangeText={setTitle}
         placeholder="F.eks. Plæneklipper"
       />
 
-      <Text style={styles.label}>Pris (kr/dag)</Text>
+      <Text style={GlobalStyles.label}>Pris (kr/dag)</Text>
       <TextInput
-        style={styles.input}
+        style={GlobalStyles.input}
         value={price}
         onChangeText={setPrice}
         placeholder="F.eks. 100"
         keyboardType="numeric"
       />
 
-      <Text style={styles.label}>Beskrivelse</Text>
+      <Text style={GlobalStyles.label}>Beskrivelse</Text>
       <TextInput
-        style={[styles.input, { height: 100, textAlignVertical: "top" }]}
+        style={[GlobalStyles.input, { height: 100, textAlignVertical: "top" }]}
         value={description}
         onChangeText={setDescription}
         placeholder="Skriv en kort beskrivelse..."
         multiline
       />
 
-      <Text style={styles.label}>Vælg kategori</Text>
+      <Text style={GlobalStyles.label}>Vælg kategori</Text>
       <FlatList
         data={categories}
         numColumns={2}
@@ -70,16 +70,17 @@ export default function CreateListingScreen({ navigation, route }) {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={[
-              styles.categoryButton,
-              selectedCategory === item.name && styles.categoryButtonSelected,
+              GlobalStyles.categoryButton,
+              selectedCategory === item.name &&
+                GlobalStyles.categoryButtonSelected,
             ]}
             onPress={() => setSelectedCategory(item.name)}
           >
             <Text
               style={[
-                styles.categoryButtonText,
+                GlobalStyles.categoryButtonText,
                 selectedCategory === item.name &&
-                  styles.categoryButtonTextSelected,
+                  GlobalStyles.categoryButtonTextSelected,
               ]}
             >
               {item.name}
@@ -87,11 +88,14 @@ export default function CreateListingScreen({ navigation, route }) {
           </TouchableOpacity>
         )}
         style={{ flexGrow: 0 }}
-        contentContainerStyle={styles.categoryList}
+        contentContainerStyle={GlobalStyles.categoryList}
       />
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit}>
-        <Text style={styles.buttonText}>Opret</Text>
+      <TouchableOpacity
+        style={GlobalStyles.buttonPrimary}
+        onPress={handleSubmit}
+      >
+        <Text style={GlobalStyles.buttonText}>Opret</Text>
       </TouchableOpacity>
     </View>
   );

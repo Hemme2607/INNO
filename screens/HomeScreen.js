@@ -1,20 +1,20 @@
 import { View, Text, TouchableOpacity, Image } from "react-native";
-import styles from "../styles/homeScreenStyle";
+import GlobalStyles from "../styles/GlobalStyles";
 
 // Hjemmeskærmen med en knap til at oprette en ny annonce
 export default function HomeScreen({ navigation }) {
   return (
-    <View style={styles.container}>
+    <View style={GlobalStyles.homeContainer}>
       <Image
         source={require("../assets/lently-logo.png")}
-        style={styles.logo}
+        style={GlobalStyles.logo}
       />
-      <Text style={styles.title}>Welcome to Lently</Text>
+      <Text style={GlobalStyles.title}>Welcome to Lently</Text>
       <TouchableOpacity
-        style={styles.button}
+        style={GlobalStyles.buttonSecondary}
         onPress={() => navigation.navigate("CreateListing", { listings: [] })}
       >
-        <Text style={styles.buttonText}>
+        <Text style={GlobalStyles.buttonSecondaryText}>
           Opret din første annonce lige her!
         </Text>
       </TouchableOpacity>
