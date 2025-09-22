@@ -1,9 +1,9 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import GlobalStyles from "../styles/GlobalStyles";
 
+//Denne skærm viser detaljerne for de annoncer, som brugeren vil have oprettet
 export default function ListingDetailScreen({ route }) {
   const { listings } = route.params;
-
   return (
     <View style={GlobalStyles.container}>
       {listings.map((item, index) => (
