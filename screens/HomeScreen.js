@@ -52,7 +52,11 @@ export default function HomeScreen({ navigation }) {
               </LinearGradient>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            
+          </View>
+          
+        </View>
+        <TouchableOpacity
               style={[
                 GlobalStyles.socialButton,
                 { backgroundColor: "#FDECEF", borderColor: "transparent" },
@@ -65,8 +69,6 @@ export default function HomeScreen({ navigation }) {
                 Log ud
               </Text>
             </TouchableOpacity>
-          </View>
-        </View>
       </View>
     </View>
   );

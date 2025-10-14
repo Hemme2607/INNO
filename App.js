@@ -43,8 +43,9 @@ export default function App() {
         {user ? (
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="CreateListing" component={CreateListingScreen} />
-            <Stack.Screen name="ListingDetails" component={ListingDetailScreen} />
+        <Stack.Screen name="CreateListing" component={CreateListingScreen} />
+        <Stack.Screen name="ListingDetails" component={ListingDetailScreen} />
+        <Stack.Screen name="EditListing" component={EditDetailScreen} />
           </>
         ) : (
           <Stack.Screen
@@ -53,10 +54,6 @@ export default function App() {
             options={{ headerShown: false }}
           />
         )}
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="CreateListing" component={CreateListingScreen} />
-        <Stack.Screen name="ListingDetails" component={ListingDetailScreen} />
-        <Stack.Screen name="EditListing" component={EditDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
