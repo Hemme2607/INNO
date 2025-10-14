@@ -2,8 +2,19 @@ import { View, Text, TouchableOpacity } from "react-native";
 import GlobalStyles from "../styles/GlobalStyles";
 
 //Denne skærm viser detaljerne for de annoncer, som brugeren vil have oprettet
-export default function ListingDetailScreen({ route }) {
-  const { listings } = route.params;
+export default function ListingDetailScreen({ navigation, route }) {
+  const listings = route.params?.listings ?? [];
+
+  if (!listings.length) {
+    return (
+      <View style={GlobalStyles.container}>
+        <Text style={GlobalStyles.description}>
+          Der er endnu ikke oprettet nogle annoncer.
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={GlobalStyles.container}>
       {listings.map((item, index) => (
@@ -22,8 +33,16 @@ export default function ListingDetailScreen({ route }) {
             <Text style={GlobalStyles.category}>Kategori: {item.category}</Text>
           </View>
 
-          <TouchableOpacity style={GlobalStyles.buttonPrimary}>
-            <Text style={GlobalStyles.buttonText}>Rediger</Text>
+          <TouchableOpacity
+            style={GlobalStyles.buttonPrimary}
+            onPress={() =>
+              navigation.navigate("EditListing", {
+                listings,
+                itemIndex: index,
+              })
+            }
+          >
+            <Text style={GlobalStyles.buttonPrimaryText}>Rediger</Text>
           </TouchableOpacity>
         </View>
       ))}

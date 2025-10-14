@@ -60,6 +60,10 @@ const GlobalStyles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
   },
+  categoryList: {
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
 
   // Styler Home screen
   homeContainer: {
@@ -101,6 +105,21 @@ const GlobalStyles = StyleSheet.create({
   price: { fontSize: 16, color: "green" },
   description: { fontSize: 16, color: "#444" },
   category: { fontSize: 14, color: "#555" },
+
+  // Styler Edit detail screen
+  editSaveButton: {
+    marginTop: 20,
+  },
+  editEmptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  editEmptyText: {
+    textAlign: "center",
+    color: "#666",
+    marginBottom: 16,
+  },
 });
 
 // Eksporterer stilen, så den kan bruges i andre filer
