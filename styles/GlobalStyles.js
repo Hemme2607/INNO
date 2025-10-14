@@ -149,6 +149,10 @@ const GlobalStyles = StyleSheet.create({
   categoryButtonTextSelected: {
     color: COLORS.primaryDark,
   },
+  categoryList: {
+    justifyContent: "center",
+    paddingVertical: 10,
+  },
 
   // Info boxes
   infoBox: {

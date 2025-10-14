@@ -9,6 +9,7 @@ import CreateListingScreen from "./screens/CreateListingScreen";
 import ListingDetailScreen from "./screens/ListingDetailScreen";
 import AuthScreen from "./screens/AuthScreen";
 import { auth } from "./database/database";
+import EditDetailScreen from "./screens/EditDetailScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -52,6 +53,10 @@ export default function App() {
             options={{ headerShown: false }}
           />
         )}
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="CreateListing" component={CreateListingScreen} />
+        <Stack.Screen name="ListingDetails" component={ListingDetailScreen} />
+        <Stack.Screen name="EditListing" component={EditDetailScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );
