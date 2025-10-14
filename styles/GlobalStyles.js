@@ -1,126 +1,253 @@
 import { StyleSheet } from "react-native";
 
-const GlobalStyles = StyleSheet.create({
-  //Fælles ting
-  container: { flex: 1, backgroundColor: "#f9f9f9", padding: 20 },
-  heading: { fontSize: 26, fontWeight: "bold", marginBottom: 20 },
-  label: { fontSize: 16, marginTop: 15, marginBottom: 5 },
+const COLORS = {
+  primary: "#5B3DF6",
+  primaryDark: "#3A1CCB",
+  secondary: "#8C42FF",
+  surface: "#FFFFFF",
+  background: "#EEF0FF",
+  text: "#1F1F39",
+  muted: "#6E7191",
+  success: "#41C98F",
+  danger: "#FF4D4F",
+};
 
-  //Inputs
+const GlobalStyles = StyleSheet.create({
+  // Shared layout
+  screen: { flex: 1, backgroundColor: COLORS.background },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    paddingHorizontal: 24,
+    paddingVertical: 32,
+  },
+  authBackground: { flex: 1 },
+  authWrapper: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+
+  // Cards
+  card: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 24,
+    shadowColor: "#2D1B69",
+    shadowOpacity: 0.15,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
+  },
+  cardHeader: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+
+  // Typography
+  heading: { fontSize: 28, fontWeight: "700", color: COLORS.text },
+  subheading: {
+    fontSize: 15,
+    color: COLORS.muted,
+    marginTop: 4,
+    textAlign: "center",
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.muted,
+    marginBottom: 8,
+  },
+  linkText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
+  },
+  detailTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: COLORS.text,
+    marginBottom: 12,
+  },
+  price: { fontSize: 16, fontWeight: "600", color: COLORS.primary },
+  description: { fontSize: 15, color: COLORS.text },
+  category: { fontSize: 14, color: COLORS.muted },
+
+  // Inputs
+  inputGroup: { marginBottom: 18 },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
-    backgroundColor: "#fff",
-  },
-
-  //Primære/sekundære knapper
-  buttonPrimary: {
-    backgroundColor: "#4CAF50",
+    borderColor: "#D8DAF2",
+    borderRadius: 16,
+    paddingHorizontal: 18,
     paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
+    fontSize: 15,
+    color: COLORS.text,
+    backgroundColor: "#F7F8FF",
   },
-  buttonPrimaryText: { color: "#fff", fontSize: 18, fontWeight: "bold" },
 
-  buttonSecondary: {
-    backgroundColor: "#2196F3",
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: "center",
+  // Buttons
+  button: {
+    borderRadius: 18,
+    overflow: "hidden",
+    marginTop: 8,
   },
-  buttonSecondaryText: { color: "#fff", fontSize: 18, fontWeight: "600" },
-
-  // Styler Kategoriknapper
-  categoryButton: {
-    backgroundColor: "#eee",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    margin: 6,
-    borderWidth: 1,
-    borderColor: "#ccc",
+  buttonGradient: {
+    paddingVertical: 16,
     alignItems: "center",
     justifyContent: "center",
+  },
+  buttonText: {
+    color: COLORS.surface,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  buttonPrimary: {
+    marginTop: 24,
+    backgroundColor: COLORS.primary,
+    borderRadius: 18,
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  ghostButton: {
+    marginTop: 16,
+    alignItems: "center",
+  },
+  ghostButtonText: {
+    fontSize: 14,
+    color: COLORS.muted,
+    textDecorationLine: "underline",
+  },
+
+  // Lists
+  categoryList: {
+    gap: 12,
+    paddingVertical: 12,
+  },
+  categoryButton: {
     flex: 1,
-    minWidth: 120,
-    height: 50,
+    margin: 6,
+    paddingVertical: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#D8DAF2",
+    backgroundColor: COLORS.surface,
+    alignItems: "center",
+    justifyContent: "center",
   },
   categoryButtonSelected: {
-    backgroundColor: "#2196F3",
-    borderColor: "#1976D2",
+    borderColor: COLORS.primary,
+    backgroundColor: "#E8E5FF",
   },
   categoryButtonText: {
     fontSize: 14,
-    color: "#333",
+    fontWeight: "600",
+    color: COLORS.muted,
   },
   categoryButtonTextSelected: {
-    color: "#fff",
-    fontWeight: "bold",
+    color: COLORS.primaryDark,
   },
   categoryList: {
     justifyContent: "center",
     paddingVertical: 10,
   },
 
-  // Styler Home screen
+  // Info boxes
+  infoBox: {
+    backgroundColor: "#F7F8FF",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+
+  // Divider / helpers
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E0E2F4",
+  },
+  dividerText: {
+    marginHorizontal: 12,
+    color: COLORS.muted,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  // Social buttons
+  socialRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 16,
+  },
+  socialButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#E0E2F4",
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    backgroundColor: COLORS.surface,
+  },
+  socialButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.muted,
+  },
+
+  // Home screen
   homeContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: COLORS.background,
   },
-  logo: { width: 200, height: 200, resizeMode: "contain" },
-  title: { fontSize: 28, fontWeight: "bold", marginBottom: 10 },
-
-  // Styler Listing detail screen
-  detailContainer: {
+  homeHero: {
+    paddingHorizontal: 24,
+    paddingTop: 64,
+    paddingBottom: 32,
+  },
+  homeHeroText: {
+    color: COLORS.surface,
+    fontSize: 28,
+    fontWeight: "700",
+  },
+  homeContent: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-    padding: 20,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    gap: 16,
   },
-  card: {
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
-    width: "90%",
-    marginBottom: 20,
+  homeCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: "#2D1B69",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
   },
-  infoBox: {
-    backgroundColor: "#eee",
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 10,
-    width: "100%",
+  homeTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.text,
   },
-  detailTitle: { fontSize: 20, fontWeight: "bold" },
-  price: { fontSize: 16, color: "green" },
-  description: { fontSize: 16, color: "#444" },
-  category: { fontSize: 14, color: "#555" },
-
-  // Styler Edit detail screen
-  editSaveButton: {
-    marginTop: 20,
+  homeSubtitle: {
+    fontSize: 15,
+    color: COLORS.muted,
+    marginTop: 6,
   },
-  editEmptyContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  homeButtonRow: {
+    marginTop: 24,
+    gap: 12,
   },
-  editEmptyText: {
-    textAlign: "center",
-    color: "#666",
-    marginBottom: 16,
-  },
+  logoutButton: { marginTop: 12 },
 });
 
-// Eksporterer stilen, så den kan bruges i andre filer
+export { COLORS };
 export default GlobalStyles;
