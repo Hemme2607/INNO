@@ -17,6 +17,7 @@
     "@react-navigation/native-stack": "^7.3.28",
     "@react-navigation/stack": "^7.4.8",
     "expo": "~54.0.10",
+    "expo-auth-session": "^7.0.8",
     "expo-linear-gradient": "~15.0.7",
     "expo-status-bar": "~3.0.8",
     "firebase": "^12.4.0",

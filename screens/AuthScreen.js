@@ -18,10 +18,10 @@ export default function AuthScreen() {
       <View style={GlobalStyles.authWrapper}>
         <View style={GlobalStyles.cardHeader}>
           <Text style={[GlobalStyles.homeHeroText, { textAlign: "center" }]}>
-            Lently
+            Sona
           </Text>
           <Text style={[GlobalStyles.subheading, { color: "#E5E6FF" }]}>
-            Del, lån og oplev mere sammen
+            Lad AI overtage din kundeservice
           </Text>
         </View>
 
