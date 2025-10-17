@@ -11,6 +11,7 @@ import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../database/database";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
+// Login funktion til at logge ind med Firebase
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,6 +25,7 @@ export default function Login() {
     }
   };
 
+  // Opstætning og reference til styling for login komponent fra GlobalStyles
   return (
     <View>
       <View style={GlobalStyles.cardHeader}>

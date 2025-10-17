@@ -1,18 +1,15 @@
-import { initializeApp } from 'firebase/app';
-import {
-  initializeAuth,
-  getReactNativePersistence,
-} from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initializeApp } from "firebase/app";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-//connecter til firebase database
+// Firebase konfigurationsobjekt, som henter værdier fra .env filen
 const firebaseConfig = {
-  apiKey: "AIzaSyCdbKvohgVgikFh3_vgqUQ-zrXDXE4fQT0",
-  authDomain: "inno-e0b9f.firebaseapp.com",
-  projectId: "inno-e0b9f",
-  storageBucket: "inno-e0b9f.firebasestorage.app",
-  messagingSenderId: "342720399549",
-  appId: "1:342720399549:web:8484fa7f5e3ec0e2284fd4"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
 };
 
 const app = initializeApp(firebaseConfig);

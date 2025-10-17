@@ -17,6 +17,7 @@ import ProfileScreen from "./screens/ProfileScreen";
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// De forskellige tabs i applikation
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const tabIcons = {
@@ -25,7 +26,7 @@ function MainTabs() {
     Integrations: "share-social-outline",
     Profile: "person-circle-outline",
   };
-
+// Styling til naviation bar
   return (
     <Tab.Navigator
       screenOptions={{
@@ -90,6 +91,8 @@ function MainTabs() {
     </Tab.Navigator>
   );
 }
+
+
 
 export default function App() {
   const [user, setUser] = useState(null);
