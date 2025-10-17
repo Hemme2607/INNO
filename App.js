@@ -2,16 +2,94 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { onAuthStateChanged } from "firebase/auth";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HomeScreen from "./screens/HomeScreen";
-import CreateListingScreen from "./screens/CreateListingScreen";
-import ListingDetailScreen from "./screens/ListingDetailScreen";
 import AuthScreen from "./screens/AuthScreen";
 import { auth } from "./database/database";
-import EditDetailScreen from "./screens/EditDetailScreen";
+import InboxScreen from "./screens/InboxScreen";
+import IntegrationsScreen from "./screens/IntegrationsScreen";
+import ProfileScreen from "./screens/ProfileScreen";
 
 const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
+
+function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const tabIcons = {
+    Home: "home-outline",
+    Inbox: "mail-outline",
+    Integrations: "share-social-outline",
+    Profile: "person-circle-outline",
+  };
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          height: 54 + Math.max(insets.bottom - 8, 6),
+          paddingTop: 4,
+          paddingBottom: Math.max(insets.bottom - 8, 6),
+        },
+        safeAreaInsets: { bottom: 0 },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
+        tabBarActiveTintColor: "#5B3DF6",
+        tabBarInactiveTintColor: "#6E7191",
+      }}
+    >
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{
+          tabBarLabel: "Hjem",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={tabIcons.Home} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Inbox"
+        component={InboxScreen}
+        options={{
+          tabBarLabel: "Indbakke",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={tabIcons.Inbox} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Integrations"
+        component={IntegrationsScreen}
+        options={{
+          tabBarLabel: "Integrationer",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={tabIcons.Integrations} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: "Profil",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name={tabIcons.Profile} size={size} color={color} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -38,23 +116,16 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator>
-        {user ? (
-          <>
-            <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen name="CreateListing" component={CreateListingScreen} />
-        <Stack.Screen name="ListingDetails" component={ListingDetailScreen} />
-        <Stack.Screen name="EditListing" component={EditDetailScreen} />
-          </>
-        ) : (
-          <Stack.Screen
-            name="Auth"
-            component={AuthScreen}
-            options={{ headerShown: false }}
-          />
-        )}
-      </Stack.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <Stack.Screen name="Main" component={MainTabs} />
+          ) : (
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
