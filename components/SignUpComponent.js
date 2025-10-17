@@ -11,6 +11,8 @@ import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../database/database";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
+
+// Funktion til at kunne oprette bruger i systemet
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +27,8 @@ export default function Signup() {
     }
   };
 
+
+  // Opstætning og reference til styling for signup komponent fra GlobalStyles
   return (
     <View>
       <View style={GlobalStyles.cardHeader}>
