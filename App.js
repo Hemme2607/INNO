@@ -1,18 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, View } from "react-native";
+import React from "react";
+import { ActivityIndicator, View, Text } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { onAuthStateChanged } from "firebase/auth";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
+import * as SecureStore from "expo-secure-store";
 
 import HomeScreen from "./screens/HomeScreen";
 import AuthScreen from "./screens/AuthScreen";
-import { auth } from "./database/database";
 import InboxScreen from "./screens/InboxScreen";
 import IntegrationsScreen from "./screens/IntegrationsScreen";
 import ProfileScreen from "./screens/ProfileScreen";
+import { CLERK_PUBLISHABLE_KEY, clerkConfig } from "./clerk-config";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -94,23 +95,11 @@ function MainTabs() {
 
 
 
-export default function App() {
-  const [user, setUser] = useState(null);
-  const [initializing, setInitializing] = useState(true);
+// Komponent der håndterer authentication state
+function AppContent() {
+  const { isLoaded, isSignedIn } = useAuth();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (authenticatedUser) => {
-      setUser(authenticatedUser);
-
-      if (initializing) {
-        setInitializing(false);
-      }
-    });
-
-    return unsubscribe;
-  }, [initializing]);
-
-  if (initializing) {
+  if (!isLoaded) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" />
@@ -119,16 +108,37 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {user ? (
-            <Stack.Screen name="Main" component={MainTabs} />
-          ) : (
-            <Stack.Screen name="Auth" component={AuthScreen} />
-          )}
-        </Stack.Navigator>
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <NavigationContainer>
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        {isSignedIn ? (
+          <Stack.Screen name="Main" component={MainTabs} />
+        ) : (
+          <Stack.Screen name="Auth" component={AuthScreen} />
+        )}
+      </Stack.Navigator>
+    </NavigationContainer>
+  );
+}
+
+export default function App() {
+  if (!CLERK_PUBLISHABLE_KEY) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 20 }}>
+          Error: Clerk Publishable Key not found.
+        </Text>
+        <Text style={{ fontSize: 14, textAlign: 'center', color: '#666' }}>
+          Check your .env file and make sure EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is set.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ClerkProvider {...clerkConfig}>
+      <SafeAreaProvider>
+        <AppContent />
+      </SafeAreaProvider>
+    </ClerkProvider>
   );
 }

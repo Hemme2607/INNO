@@ -7,21 +7,44 @@ import {
   Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../database/database";
+import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
-// Login funktion til at logge ind med Firebase
+// Login funktion til at logge ind med Clerk
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const { signIn, setActive, isLoaded } = useSignIn();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const handleLogin = async () => {
+    if (!isLoaded) return;
+
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      Alert.alert("Velkommen tilbage!");
+      const result = await signIn.create({
+        identifier: email.trim(),
+        password: password,
+      });
+
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        Alert.alert("Velkommen tilbage!");
+      }
     } catch (error) {
-      Alert.alert("Login fejlede", error.message);
+      Alert.alert("Login fejlede", error.errors?.[0]?.message || error.message);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      const { createdSessionId, setActive } = await startOAuthFlow();
+      
+      if (createdSessionId) {
+        await setActive({ session: createdSessionId });
+        Alert.alert("Velkommen!", "Du er nu logget ind med Google");
+      }
+    } catch (error) {
+      Alert.alert("Google login fejlede", error.message || "Ukendt fejl");
     }
   };
 
@@ -82,7 +105,7 @@ export default function Login() {
       </View>
 
       <View style={GlobalStyles.socialRow}>
-        <TouchableOpacity style={GlobalStyles.socialButton}>
+        <TouchableOpacity style={GlobalStyles.socialButton} onPress={handleGoogleLogin}>
           <Text style={GlobalStyles.socialButtonText}>Google</Text>
         </TouchableOpacity>
         <TouchableOpacity style={GlobalStyles.socialButton}>

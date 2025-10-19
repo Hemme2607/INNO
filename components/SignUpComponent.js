@@ -7,26 +7,70 @@ import {
   Alert,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../database/database";
+import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
 
-// Funktion til at kunne oprette bruger i systemet
+// Funktion til at kunne oprette bruger i systemet med Clerk
 export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const { signUp, setActive, isLoaded } = useSignUp();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const handleSignup = async () => {
+    if (!isLoaded) {
+      Alert.alert("Vent venligst", "Clerk er ikke klar endnu");
+      return;
+    }
+
+    // Validering
+    if (!email.trim()) {
+      Alert.alert("Fejl", "Email er påkrævet");
+      return;
+    }
+    if (!password || password.length < 8) {
+      Alert.alert("Fejl", "Adgangskode skal være mindst 8 tegn");
+      return;
+    }
+    if (!name.trim()) {
+      Alert.alert("Fejl", "Navn er påkrævet");
+      return;
+    }
+
     try {
-      await createUserWithEmailAndPassword(auth, email.trim(), password);
-      Alert.alert("Konto oprettet", "Velkommen til Lently!");
+      const result = await signUp.create({
+        emailAddress: email.trim(),
+        password: password,
+        firstName: name.trim(),
+      });
+
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        Alert.alert("Konto oprettet", "Velkommen til Lently!");
+      } else if (result.status === "missing_requirements") {
+        // Hvis der mangler verificering
+        Alert.alert("Verificering påkrævet", "Tjek din email for verificeringslink");
+      }
     } catch (error) {
-      Alert.alert("Noget gik galt", error.message);
+      const errorMessage = error.errors?.[0]?.message || error.message || "Ukendt fejl";
+      Alert.alert("Noget gik galt", errorMessage);
     }
   };
 
+  const handleGoogleSignup = async () => {
+    try {
+      const { createdSessionId, setActive } = await startOAuthFlow();
+      
+      if (createdSessionId) {
+        await setActive({ session: createdSessionId });
+        Alert.alert("Velkommen!", "Din konto er oprettet med Google");
+      }
+    } catch (error) {
+      Alert.alert("Google signup fejlede", error.message || "Ukendt fejl");
+    }
+  };
 
   // Opstætning og reference til styling for signup komponent fra GlobalStyles
   return (
@@ -92,7 +136,7 @@ export default function Signup() {
       </View>
 
       <View style={GlobalStyles.socialRow}>
-        <TouchableOpacity style={GlobalStyles.socialButton}>
+        <TouchableOpacity style={GlobalStyles.socialButton} onPress={handleGoogleSignup}>
           <Text style={GlobalStyles.socialButtonText}>Google</Text>
         </TouchableOpacity>
         <TouchableOpacity style={GlobalStyles.socialButton}>
