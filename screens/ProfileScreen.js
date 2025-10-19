@@ -1,19 +1,21 @@
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { signOut } from "firebase/auth";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
-import { auth } from "../database/database";
 
 
 // Profilskærm-komponenten med brugeroplysninger og logout-funktionalitet
 export default function ProfileScreen() {
-  const email = auth.currentUser?.email ?? "ukendt bruger";
+  const { signOut } = useAuth();
+  const { user } = useUser();
+  
+  const email = user?.emailAddresses?.[0]?.emailAddress ?? "ukendt bruger";
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      await signOut();
     } catch (error) {
-      console.error("Logout fejlede:", error.message);
+      // Logout fejlede - stille fejl
     }
   };
 
