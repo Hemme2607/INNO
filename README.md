@@ -7,3 +7,11 @@ Link til Github: [https://github.com/Hemme2607/GK1](https://github.com/Hemme2607
 Guide til at starte appen:
 1. npm install i terminalen
 2. Kør npx expo start
+
+
+Hvem der har lavet hvad:
+- Oliver = Homescreen.js og inboxscreen.js
+- Philip = IntegrationScreen.js og ProfileScreen.js
+- Cornelius = LoginComponent.js og SignUpComponent.js
+- Jonas = Clerk-config.js og AuthScreen.js (implmenteret clerk)
+- Vi alle har bidraget til styles og app.js
