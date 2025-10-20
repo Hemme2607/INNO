@@ -1,4 +1,5 @@
 import { View, Text, FlatList } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
@@ -32,7 +33,12 @@ export default function InboxScreen() {
 
   // Opbygning af InboxScreen-komponenten
   return (
-    <View style={GlobalStyles.inboxScreen}>
+    <LinearGradient
+      colors={[COLORS.background, COLORS.surfaceAlt]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={GlobalStyles.inboxScreen}
+    >
       <View style={GlobalStyles.inboxTopDivider} />
       <View style={GlobalStyles.inboxHeader}>
         <View>
@@ -75,6 +81,6 @@ export default function InboxScreen() {
           </View>
         }
       />
-    </View>
+    </LinearGradient>
   );
 }

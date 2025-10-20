@@ -24,7 +24,12 @@ export default function HomeScreen({ navigation }) {
 
   // Opbygning af HomeScreen-komponenten og GlobalStyles anvendelse
   return (
-    <View style={GlobalStyles.homeScreenContainer}>
+    <LinearGradient
+      colors={[COLORS.background, COLORS.surfaceAlt]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
+      style={GlobalStyles.homeScreenContainer}
+    >
       <View style={GlobalStyles.homeScreenHeader}>
         <Text style={GlobalStyles.homeScreenGreeting}>Hej {displayName} 👋</Text>
         <Text style={GlobalStyles.homeScreenIntro}>
@@ -44,7 +49,7 @@ export default function HomeScreen({ navigation }) {
           onPress={handleGoToInbox}
         >
           <LinearGradient
-            colors={[COLORS.primary, COLORS.secondary]}
+            colors={[COLORS.primaryDark, COLORS.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={GlobalStyles.homeScreenCardButtonGradient}
@@ -66,7 +71,7 @@ export default function HomeScreen({ navigation }) {
           onPress={handleConnectIntegration}
         >
           <LinearGradient
-            colors={[COLORS.primary, COLORS.secondary]}
+            colors={[COLORS.primaryDark, COLORS.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={GlobalStyles.homeScreenCardButtonGradient}
@@ -91,7 +96,7 @@ export default function HomeScreen({ navigation }) {
           onPress={handleOpenProfile}
         >
           <LinearGradient
-            colors={[COLORS.primary, COLORS.secondary]}
+            colors={[COLORS.primaryDark, COLORS.primary]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={GlobalStyles.homeScreenCardButtonGradient}
@@ -102,6 +107,6 @@ export default function HomeScreen({ navigation }) {
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </View>
+    </LinearGradient>
   );
 }

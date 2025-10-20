@@ -62,7 +62,7 @@ export default function Login() {
         <Text style={GlobalStyles.label}>Email adresse</Text>
         <TextInput
           placeholder="navn@email.com"
-          placeholderTextColor="#A2A4C3"
+          placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={email}
           onChangeText={setEmail}
@@ -75,7 +75,7 @@ export default function Login() {
         <Text style={GlobalStyles.label}>Adgangskode</Text>
         <TextInput
           placeholder="********"
-          placeholderTextColor="#A2A4C3"
+          placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={password}
           onChangeText={setPassword}
@@ -85,7 +85,7 @@ export default function Login() {
 
       <TouchableOpacity style={GlobalStyles.button} onPress={handleLogin}>
         <LinearGradient
-          colors={[COLORS.primary, COLORS.secondary]}
+          colors={[COLORS.primaryDark, COLORS.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={GlobalStyles.buttonGradient}

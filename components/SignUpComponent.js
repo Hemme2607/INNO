@@ -83,7 +83,7 @@ export default function Signup() {
         <Text style={GlobalStyles.label}>Navn</Text>
         <TextInput
           placeholder="Dit fulde navn"
-          placeholderTextColor="#A2A4C3"
+          placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={name}
           onChangeText={setName}
@@ -94,7 +94,7 @@ export default function Signup() {
         <Text style={GlobalStyles.label}>Email adresse</Text>
         <TextInput
           placeholder="navn@email.com"
-          placeholderTextColor="#A2A4C3"
+          placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={email}
           onChangeText={setEmail}
@@ -107,7 +107,7 @@ export default function Signup() {
         <Text style={GlobalStyles.label}>Adgangskode</Text>
         <TextInput
           placeholder="Min. 8 tegn"
-          placeholderTextColor="#A2A4C3"
+          placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={password}
           onChangeText={setPassword}
@@ -117,7 +117,7 @@ export default function Signup() {
 
       <TouchableOpacity style={GlobalStyles.button} onPress={handleSignup}>
         <LinearGradient
-          colors={[COLORS.primary, COLORS.secondary]}
+          colors={[COLORS.primaryDark, COLORS.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={GlobalStyles.buttonGradient}

@@ -21,13 +21,19 @@ export default function ProfileScreen() {
 
   // Opbygning af ProfileScreen-komponenten
   return (
-    <ScrollView
+    <LinearGradient
+      colors={[COLORS.background, COLORS.surfaceAlt]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
       style={GlobalStyles.profileScreen}
+    >
+    <ScrollView
+      style={{ flex: 1 }}
       contentContainerStyle={GlobalStyles.profileContent}
       showsVerticalScrollIndicator={false}
     >
       <LinearGradient
-        colors={[COLORS.primary, COLORS.secondary]}
+        colors={[COLORS.primaryDark, COLORS.primary]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={GlobalStyles.profileHero}
@@ -66,5 +72,6 @@ export default function ProfileScreen() {
         <Text style={GlobalStyles.profileLogoutText}>Log ud</Text>
       </TouchableOpacity>
     </ScrollView>
+    </LinearGradient>
   );
 }
