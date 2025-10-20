@@ -14,16 +14,16 @@ export default function AuthScreen() {
 
   return (
     <LinearGradient
-      colors={[COLORS.primaryDark, COLORS.secondary]}
+      colors={[COLORS.surfaceAlt, COLORS.background]}
       start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
+      end={{ x: 0.8, y: 1 }}
       style={GlobalStyles.authBackground}
     >
       <View style={GlobalStyles.authWrapper}>
         <View style={GlobalStyles.cardHeader}>
           <Text style={GlobalStyles.authBrandTitle}>Sona</Text>
           <Text style={GlobalStyles.authBrandSubtitle}>
-            Optimer din kundeservice med AI-drevne svar
+            Optimer kundeservice med AI-klargjorte svar i din indbakke
           </Text>
         </View>
 

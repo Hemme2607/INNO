@@ -1,4 +1,5 @@
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
@@ -41,11 +42,17 @@ const sections = [
 // IntegrationsScreen-komponenten med GlobalStyles
 export default function IntegrationsScreen() {
   return (
-    <ScrollView
+    <LinearGradient
+      colors={[COLORS.background, COLORS.surfaceAlt]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0.8, y: 1 }}
       style={GlobalStyles.integrationsScreen}
-      contentContainerStyle={GlobalStyles.integrationsContent}
-      showsVerticalScrollIndicator={false}
     >
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={GlobalStyles.integrationsContent}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={GlobalStyles.integrationsHeader}>
         <Text style={GlobalStyles.integrationsHeading}>Integrationer</Text>
         <Text style={GlobalStyles.integrationsSubtitle}>
@@ -93,6 +100,7 @@ export default function IntegrationsScreen() {
           </View>
         </View>
       ))}
-    </ScrollView>
+      </ScrollView>
+    </LinearGradient>
   );
 }

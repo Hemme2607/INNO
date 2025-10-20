@@ -1,6 +1,6 @@
 import React from "react";
-import { ActivityIndicator, View, Text } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { ActivityIndicator, View } from "react-native";
+import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +14,7 @@ import InboxScreen from "./screens/InboxScreen";
 import IntegrationsScreen from "./screens/IntegrationsScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 import { CLERK_PUBLISHABLE_KEY, clerkConfig } from "./clerk-config";
+import { COLORS } from "./styles/GlobalStyles";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -32,10 +33,14 @@ function MainTabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
+        sceneContainerStyle: { backgroundColor: COLORS.background },
         tabBarStyle: {
-          height: 54 + Math.max(insets.bottom - 8, 6),
-          paddingTop: 4,
-          paddingBottom: Math.max(insets.bottom - 8, 6),
+          height: 60 + Math.max(insets.bottom - 6, 0),
+          paddingTop: 6,
+          paddingBottom: Math.max(insets.bottom ? insets.bottom - 6 : 10, 10),
+          backgroundColor: COLORS.surfaceAlt,
+          borderTopWidth: 0,
+          elevation: 0,
         },
         safeAreaInsets: { bottom: 0 },
         tabBarLabelStyle: {
@@ -45,8 +50,8 @@ function MainTabs() {
         tabBarItemStyle: {
           paddingVertical: 4,
         },
-        tabBarActiveTintColor: "#5B3DF6",
-        tabBarInactiveTintColor: "#6E7191",
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.muted,
       }}
     >
       <Tab.Screen
@@ -101,15 +106,38 @@ function AppContent() {
 
   if (!isLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" />
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: COLORS.background,
+        }}
+      >
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
+  const navigationTheme = {
+    ...DefaultTheme,
+    colors: {
+      ...DefaultTheme.colors,
+      background: COLORS.background,
+      card: COLORS.surfaceAlt,
+      text: COLORS.text,
+      border: "rgba(77, 124, 255, 0.12)",
+    },
+  };
+
   return (
-    <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <NavigationContainer theme={navigationTheme}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: COLORS.background },
+        }}
+      >
         {isSignedIn ? (
           <Stack.Screen name="Main" component={MainTabs} />
         ) : (
