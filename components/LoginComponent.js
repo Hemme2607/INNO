@@ -52,7 +52,7 @@ export default function Login() {
   return (
     <View>
       <View style={GlobalStyles.cardHeader}>
-        <Text style={GlobalStyles.heading}>Velkommen tilbage</Text>
+        <Text style={GlobalStyles.heading}>Velkommen</Text>
         <Text style={GlobalStyles.subheading}>
           Indtast dine oplysninger for at logge ind
         </Text>

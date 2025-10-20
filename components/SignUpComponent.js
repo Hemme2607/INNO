@@ -77,9 +77,6 @@ export default function Signup() {
     <View>
       <View style={GlobalStyles.cardHeader}>
         <Text style={GlobalStyles.heading}>Kom i gang gratis</Text>
-        <Text style={GlobalStyles.subheading}>
-          Opret en konto og udforsk Lently-universet
-        </Text>
       </View>
 
       <View style={GlobalStyles.inputGroup}>
