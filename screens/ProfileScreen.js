@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
-import { useDisplayName } from "../lib/useDisplayName";
+import { useDisplayName } from "../lib/hooks/useDisplayName";
 
 
 // Profilskærm-komponenten med brugeroplysninger og logout-funktionalitet

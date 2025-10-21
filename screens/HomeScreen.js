@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
-import { useDisplayName } from "../lib/useDisplayName";
+import { useDisplayName } from "../lib/hooks/useDisplayName";
 
 
 // HomeScreen-komponenten
