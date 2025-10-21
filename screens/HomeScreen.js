@@ -1,14 +1,12 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useUser } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
+import { useDisplayName } from "../lib/useDisplayName";
 
 
 // HomeScreen-komponenten
 export default function HomeScreen({ navigation }) {
-  const { user } = useUser();
-  const userEmail = user?.emailAddresses?.[0]?.emailAddress ?? "ven";
-  const displayName = userEmail.split("@")[0] || "ven";
+  const displayName = useDisplayName();
 
   const handleGoToInbox = () => {
     navigation.navigate("Inbox");
