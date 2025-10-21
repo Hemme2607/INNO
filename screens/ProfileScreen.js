@@ -1,15 +1,14 @@
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
+import { useDisplayName } from "../lib/hooks/useDisplayName";
 
 
 // Profilskærm-komponenten med brugeroplysninger og logout-funktionalitet
 export default function ProfileScreen() {
   const { signOut } = useAuth();
-  const { user } = useUser();
-  
-  const email = user?.emailAddresses?.[0]?.emailAddress ?? "ukendt bruger";
+  const displayName = useDisplayName();
 
   const handleLogout = async () => {
     try {
@@ -40,7 +39,7 @@ export default function ProfileScreen() {
       >
         <Text style={GlobalStyles.profileHeroHeading}>Din profil</Text>
         <Text style={GlobalStyles.profileHeroLabel}>Logget ind som</Text>
-        <Text style={GlobalStyles.profileHeroEmail}>{email}</Text>
+        <Text style={GlobalStyles.profileHeroEmail}>{displayName}</Text>
       </LinearGradient>
 
       <View style={GlobalStyles.profileSection}>
