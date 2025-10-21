@@ -1,11 +1,5 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
@@ -17,7 +11,12 @@ export default function Signup() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const { signUp, setActive, isLoaded } = useSignUp();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { startOAuthFlow: startGoogleOAuth } = useOAuth({
+    strategy: "oauth_google",
+  });
+  const { startOAuthFlow: startMicrosoftOAuth } = useOAuth({
+    strategy: "oauth_microsoft",
+  });
 
   const handleSignup = async () => {
     if (!isLoaded) {
@@ -59,16 +58,17 @@ export default function Signup() {
     }
   };
 
-  const handleGoogleSignup = async () => {
+  const handleOAuthSignup = async (providerLabel, startOAuth) => {
     try {
-      const { createdSessionId, setActive } = await startOAuthFlow();
-      
-      if (createdSessionId) {
-        await setActive({ session: createdSessionId });
-        Alert.alert("Velkommen!", "Din konto er oprettet med Google");
+      const { createdSessionId, setActive: setOAuthActive } = await startOAuth();
+
+      if (createdSessionId && setOAuthActive) {
+        await setOAuthActive({ session: createdSessionId });
+        Alert.alert("Velkommen!", `Din konto er oprettet med ${providerLabel}`);
       }
     } catch (error) {
-      Alert.alert("Google signup fejlede", error.message || "Ukendt fejl");
+      const message = error.errors?.[0]?.message || error.message || "Ukendt fejl";
+      Alert.alert(`${providerLabel} signup fejlede`, message);
     }
   };
 
@@ -132,12 +132,36 @@ export default function Signup() {
         <View style={GlobalStyles.dividerLine} />
       </View>
 
-      <View style={GlobalStyles.socialRow}>
-        <TouchableOpacity style={GlobalStyles.socialButton} onPress={handleGoogleSignup}>
-          <Text style={GlobalStyles.socialButtonText}>Google</Text>
+      <View style={GlobalStyles.socialStack}>
+        <TouchableOpacity
+          style={GlobalStyles.socialButtonFull}
+          onPress={() => handleOAuthSignup("Google", startGoogleOAuth)}
+        >
+          <View style={GlobalStyles.socialButtonContent}>
+            <View style={GlobalStyles.socialIconBadge}>
+              <Image
+                source={require("../assets/google-logo.png")}
+                style={GlobalStyles.socialIconImage}
+              />
+            </View>
+            <Text style={GlobalStyles.socialButtonLabel}>Opret med Google</Text>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={GlobalStyles.socialButton}>
-          <Text style={GlobalStyles.socialButtonText}>Facebook</Text>
+        <TouchableOpacity
+          style={GlobalStyles.socialButtonFull}
+          onPress={() => handleOAuthSignup("Microsoft", startMicrosoftOAuth)}
+        >
+          <View style={GlobalStyles.socialButtonContent}>
+            <View style={GlobalStyles.socialIconBadge}>
+              <Image
+                source={require("../assets/Microsoft-logo.png")}
+                style={GlobalStyles.socialIconImage}
+              />
+            </View>
+            <Text style={GlobalStyles.socialButtonLabel}>
+              Opret med Microsoft
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
     </View>
