@@ -11,6 +11,7 @@ const CLERK_JWT_ISSUER = Deno.env.get("CLERK_JWT_ISSUER"); // fx https://<your>.
 if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
 
+// Clerk SDK skal kun bruge secret key – resten henter vi via REST
 const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const JWKS = CLERK_JWT_ISSUER
   ? createRemoteJWKSet(new URL(`${CLERK_JWT_ISSUER.replace(/\/$/, "")}/.well-known/jwks.json`))
@@ -39,7 +40,7 @@ function readDebugFlag(req: Request) {
   const url = new URL(req.url);
   let debug = url.searchParams.get("debug") === "1";
   if (req.method === "POST") {
-    // prøv også at læse fra body; vi læser igen i handleren (så vi ikke forbruger streamen her)
+    // Body læses senere (vi vil undgå at forbruge streamen her)
   }
   return debug;
 }
@@ -77,11 +78,11 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
 }
 
 async function getGmailAccessToken(userId: string): Promise<string> {
-  // 1) eksisterende
+  // 1) prøv den token Clerk allerede har liggende
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
   let accessToken = tokens?.data?.[0]?.token ?? null;
 
-  // 2) refresh hvis nødvendigt
+  // 2) ellers tving en refresh via Clerk så vi får et frisk token
   if (!accessToken) {
     await clerk.users.refreshUserOauthAccessToken(userId, "oauth_google");
     const refreshed = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
@@ -101,7 +102,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const text = await res.text();
   let json: any = null;
-  try { json = text ? JSON.parse(text) : null; } catch { /* non-JSON */ }
+  try { json = text ? JSON.parse(text) : null; } catch { /* Gmail kan svare med tom body ved 204 */ }
   if (!res.ok) {
     const msg = (json && (json.error?.message || json.message)) || text || `HTTP ${res.status}`;
     throw Object.assign(new Error(`Gmail request failed (${res.status}): ${msg}`), { status: res.status });
@@ -135,7 +136,7 @@ Deno.serve(async (req) => {
     // Debug: inspect Clerk's stored Google OAuth tokens (without leaking the token)
     if (debug) {
       try {
-        const tokens = await clerk.users.getUserOauthAccessToken(userId, { provider: "oauth_google" });
+        const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
         const meta = (tokens?.data ?? []).map((t: any) => ({
           id: t.id,
           hasToken: !!t.token,

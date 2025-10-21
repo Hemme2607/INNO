@@ -20,7 +20,7 @@ export default function InboxScreen() {
   const lastFetchRef = useRef(0);
   const isFetchingRef = useRef(false);
 
-  const MIN_FETCH_INTERVAL = 60 * 1000; // 1 minut throttle
+  const MIN_FETCH_INTERVAL = 60 * 1000; //så vi ikke spammer Clerk
 
   const fetchInbox = useCallback(
     async ({ showLoader = true, force = false } = {}) => {
@@ -36,7 +36,7 @@ export default function InboxScreen() {
 
       const now = Date.now();
       if (!force && now - lastFetchRef.current < MIN_FETCH_INTERVAL) {
-        // Vi har fetched for nylig – undgå flere kald for at holde Clerk token-rate nede
+        // Har allerede hentet indenfor intervallet → spring over
         if (showLoader) {
           setLoading(false);
         }
@@ -71,6 +71,7 @@ export default function InboxScreen() {
           );
         }
 
+        // Hent data via edge function (leverer allerede normaliserede felter)
         const response = await fetch(
           `${supabaseUrl.replace(/\/$/, "")}/functions/v1/gmail-list`,
           {
@@ -103,6 +104,7 @@ export default function InboxScreen() {
           : [];
 
         const mapped = rawItems.map((message) => {
+          // Forvent både "from" og "sender" afhængigt af backend-version
           const rawSender =
             typeof message?.sender === "string"
               ? message.sender
@@ -118,6 +120,7 @@ export default function InboxScreen() {
             message?.internalDate ??
             message?.receivedAt ??
             null;
+          // Gmail kan give unix-timestamp som string → parse det
           if (dateSource) {
             const normalizedDate =
               typeof dateSource === "string" && /^\d+$/.test(dateSource)
