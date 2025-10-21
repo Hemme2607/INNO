@@ -5,19 +5,38 @@ import * as SecureStore from "expo-secure-store";
 export const CLERK_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
 // Token cache funktion til SecureStore
+const memoryFallback = new Map();
+
 const tokenCache = {
   async getToken(key) {
     try {
-      return SecureStore.getItemAsync(key);
+      const value = await SecureStore.getItemAsync(key);
+      if (value !== null) {
+        memoryFallback.set(key, value);
+      }
+      return value ?? memoryFallback.get(key) ?? null;
     } catch (err) {
-      return null;
+      console.warn(
+        "SecureStore.getItemAsync failed, falling back to in-memory cache:",
+        err
+      );
+      return memoryFallback.get(key) ?? null;
     }
   },
   async saveToken(key, token) {
     try {
-      return SecureStore.setItemAsync(key, token);
+      await SecureStore.setItemAsync(key, token);
+      memoryFallback.set(key, token);
     } catch (err) {
-      return;
+      console.warn(
+        "SecureStore.setItemAsync failed, storing token in-memory instead:",
+        err
+      );
+      if (token === null || typeof token === "undefined") {
+        memoryFallback.delete(key);
+        return;
+      }
+      memoryFallback.set(key, token);
     }
   },
 };

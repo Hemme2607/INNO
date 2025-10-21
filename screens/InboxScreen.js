@@ -5,7 +5,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
@@ -17,12 +17,29 @@ export default function InboxScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const lastFetchRef = useRef(0);
+  const isFetchingRef = useRef(false);
+
+  const MIN_FETCH_INTERVAL = 60 * 1000; // 1 minut throttle
 
   const fetchInbox = useCallback(
-    async ({ showLoader = true } = {}) => {
+    async ({ showLoader = true, force = false } = {}) => {
       if (!sessionId) {
         setInboxItems([]);
         setLoading(false);
+        return;
+      }
+
+      if (isFetchingRef.current) {
+        return;
+      }
+
+      const now = Date.now();
+      if (!force && now - lastFetchRef.current < MIN_FETCH_INTERVAL) {
+        // Vi har fetched for nylig – undgå flere kald for at holde Clerk token-rate nede
+        if (showLoader) {
+          setLoading(false);
+        }
         return;
       }
 
@@ -31,101 +48,119 @@ export default function InboxScreen() {
       }
 
       setErrorMessage(null);
+      isFetchingRef.current = true;
 
       try {
-        // Token template "gmail" must be configured in Clerk to expose the Google OAuth access token.
-        const accessToken = await getToken({ template: "gmail" });
-
-        if (!accessToken) {
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+        const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+        if (!supabaseUrl) {
           throw new Error(
-            "Der blev ikke returneret en Gmail-adgangstoken. Tjek at du har logget ind med Google og at Clerk-token templaten 'gmail' giver adgang til Gmail scopes."
+            "Supabase URL mangler. Sæt EXPO_PUBLIC_SUPABASE_URL i din app-konfiguration."
+          );
+        }
+        if (!supabaseAnonKey) {
+          throw new Error(
+            "Supabase anon nøgle mangler. Sæt EXPO_PUBLIC_SUPABASE_ANON_KEY i din app-konfiguration."
           );
         }
 
-        const baseUrl = "https://gmail.googleapis.com/gmail/v1/users/me";
-        const listResponse = await fetch(
-          `${baseUrl}/messages?maxResults=20&labelIds=INBOX`,
+        const sessionToken = await getToken();
+        if (!sessionToken) {
+          throw new Error(
+            "Kunne ikke hente Clerk session token. Log ind igen og prøv senere."
+          );
+        }
+
+        const response = await fetch(
+          `${supabaseUrl.replace(/\/$/, "")}/functions/v1/gmail-list`,
           {
             headers: {
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${sessionToken}`,
+              apikey: supabaseAnonKey,
             },
           }
         );
 
-        if (!listResponse.ok) {
-          const errorBody = await listResponse.json().catch(() => ({}));
-          const reason =
-            errorBody.error?.message || `HTTP ${listResponse.status}`;
-          throw new Error(`Kunne ikke hente listen af mails: ${reason}`);
-        }
-
-        const listPayload = await listResponse.json();
-        const messageIds = listPayload.messages ?? [];
-
-        if (messageIds.length === 0) {
-          setInboxItems([]);
-          return;
-        }
-
-        const detailedMessages = await Promise.all(
-          messageIds.map(async ({ id }) => {
-            const detailResponse = await fetch(
-              `${baseUrl}/messages/${id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                },
-              }
+        if (!response.ok) {
+          const errorBody = await response.text();
+          if (response.status === 429) {
+            throw new Error(
+              "Vi har ramt Clerk rate limit. Vent et øjeblik og prøv igen."
             );
+          }
+          throw new Error(
+            `Kunne ikke hente mails fra Edge Function: ${
+              errorBody || `HTTP ${response.status}`
+            }`
+          );
+        }
 
-            if (!detailResponse.ok) {
-              const reason = `HTTP ${detailResponse.status}`;
-              throw new Error(`Kunne ikke hente maildetaljer: ${reason}`);
+        const payload = await response.json();
+        const rawItems = Array.isArray(payload?.items)
+          ? payload.items
+          : Array.isArray(payload?.messages)
+          ? payload.messages
+          : [];
+
+        const mapped = rawItems.map((message) => {
+          const rawSender =
+            typeof message?.sender === "string"
+              ? message.sender
+              : typeof message?.from === "string"
+              ? message.from
+              : "";
+
+          const cleanSender = rawSender.replace(/<.*?>/g, "").trim();
+
+          let timeLabel = "";
+          const dateSource =
+            message?.date ??
+            message?.internalDate ??
+            message?.receivedAt ??
+            null;
+          if (dateSource) {
+            const normalizedDate =
+              typeof dateSource === "string" && /^\d+$/.test(dateSource)
+                ? Number(dateSource)
+                : dateSource;
+            const parsedDate = new Date(normalizedDate);
+            if (!Number.isNaN(parsedDate.getTime())) {
+              timeLabel = parsedDate.toLocaleString("da-DK", {
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              });
             }
+          }
 
-            const detail = await detailResponse.json();
-            const headers = detail.payload?.headers ?? [];
+          return {
+            id: message?.id ?? Math.random().toString(36),
+            sender: cleanSender || "Ukendt afsender",
+            subject:
+              typeof message?.subject === "string"
+                ? message.subject
+                : "(ingen emne)",
+            preview:
+              typeof message?.preview === "string"
+                ? message.preview
+                : typeof message?.snippet === "string"
+                ? message.snippet
+                : "",
+            time: timeLabel,
+          };
+        });
 
-            const findHeader = (name) =>
-              headers.find(
-                (header) => header.name?.toLowerCase() === name.toLowerCase()
-              )?.value;
-
-            const subject = findHeader("Subject") || "(ingen emne)";
-            const from = findHeader("From") || "Ukendt afsender";
-            const dateHeader = findHeader("Date");
-
-            let timeLabel = "";
-            if (dateHeader) {
-              const parsedDate = new Date(dateHeader);
-              if (!Number.isNaN(parsedDate.getTime())) {
-                timeLabel = parsedDate.toLocaleString("da-DK", {
-                  day: "numeric",
-                  month: "short",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                });
-              }
-            }
-
-            return {
-              id: detail.id,
-              sender: from.replace(/<.*?>/g, "").trim(),
-              subject,
-              preview: detail.snippet || "",
-              time: timeLabel,
-            };
-          })
-        );
-
-        setInboxItems(detailedMessages);
+        setInboxItems(mapped);
       } catch (error) {
         setInboxItems([]);
         setErrorMessage(error.message);
       } finally {
+        isFetchingRef.current = false;
         if (showLoader) {
           setLoading(false);
         }
+        lastFetchRef.current = Date.now();
       }
     },
     [getToken, sessionId]
@@ -138,7 +173,7 @@ export default function InboxScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await fetchInbox({ showLoader: false });
+      await fetchInbox({ showLoader: false, force: true });
     } finally {
       setRefreshing(false);
     }
