@@ -538,6 +538,112 @@ const GlobalStyles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.primary,
   },
+  integrationCardStatus: {
+    marginTop: 12,
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.success,
+  },
+  integrationModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(5, 7, 15, 0.78)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  integrationModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: COLORS.surface,
+    borderRadius: 26,
+    padding: 24,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: "rgba(77, 124, 255, 0.16)",
+    shadowColor: "#05070F",
+    shadowOpacity: 0.45,
+    shadowRadius: 26,
+    shadowOffset: { width: 0, height: 22 },
+  },
+  integrationModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  integrationModalDescription: {
+    fontSize: 14,
+    color: COLORS.muted,
+    lineHeight: 20,
+  },
+  integrationModalField: {
+    gap: 6,
+  },
+  integrationModalLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.muted,
+  },
+  integrationModalInput: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(125, 138, 173, 0.45)",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    color: COLORS.text,
+    backgroundColor: COLORS.surfaceAlt,
+    fontSize: 14,
+  },
+  integrationModalHint: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+  integrationModalError: {
+    fontSize: 13,
+    color: COLORS.danger,
+  },
+  integrationModalLoading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  integrationModalActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  integrationModalPrimary: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  integrationModalPrimaryLabel: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  integrationModalGhost: {
+    flex: 1,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(125, 138, 173, 0.4)",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  integrationModalGhostLabel: {
+    color: COLORS.text,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  integrationModalDisconnect: {
+    marginTop: 4,
+    alignItems: "center",
+  },
+  integrationModalDisconnectLabel: {
+    color: COLORS.danger,
+    fontSize: 14,
+    fontWeight: "600",
+  },
 
   // Profile screen
   profileScreen: {
