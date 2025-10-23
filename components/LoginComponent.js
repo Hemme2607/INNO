@@ -1,11 +1,5 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
@@ -14,8 +8,13 @@ import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { signIn, setActive, isLoaded } = useSignIn();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { signIn, setActive: setActiveSession, isLoaded } = useSignIn();
+  const { startOAuthFlow: startGoogleOAuth } = useOAuth({
+    strategy: "oauth_google",
+  });
+  const { startOAuthFlow: startMicrosoftOAuth } = useOAuth({
+    strategy: "oauth_microsoft",
+  });
 
   const handleLogin = async () => {
     if (!isLoaded) return;
@@ -27,7 +26,7 @@ export default function Login() {
       });
 
       if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
+        await setActiveSession({ session: result.createdSessionId });
         Alert.alert("Velkommen tilbage!");
       }
     } catch (error) {
@@ -35,16 +34,17 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleOAuthLogin = async (providerLabel, startOAuth) => {
     try {
-      const { createdSessionId, setActive } = await startOAuthFlow();
-      
-      if (createdSessionId) {
+      const { createdSessionId, setActive } = await startOAuth();
+
+      if (createdSessionId && setActive) {
         await setActive({ session: createdSessionId });
-        Alert.alert("Velkommen!", "Du er nu logget ind med Google");
+        Alert.alert("Velkommen!", `Du er nu logget ind med ${providerLabel}`);
       }
     } catch (error) {
-      Alert.alert("Google login fejlede", error.message || "Ukendt fejl");
+      const message = error.errors?.[0]?.message || error.message || "Ukendt fejl";
+      Alert.alert(`${providerLabel} login fejlede`, message);
     }
   };
 
@@ -104,12 +104,36 @@ export default function Login() {
         <View style={GlobalStyles.dividerLine} />
       </View>
 
-      <View style={GlobalStyles.socialRow}>
-        <TouchableOpacity style={GlobalStyles.socialButton} onPress={handleGoogleLogin}>
-          <Text style={GlobalStyles.socialButtonText}>Google</Text>
+      <View style={GlobalStyles.socialStack}>
+        <TouchableOpacity
+          style={GlobalStyles.socialButtonFull}
+          onPress={() => handleOAuthLogin("Google", startGoogleOAuth)}
+        >
+          <View style={GlobalStyles.socialButtonContent}>
+            <View style={GlobalStyles.socialIconBadge}>
+              <Image
+                source={require("../assets/google-logo.png")}
+                style={GlobalStyles.socialIconImage}
+              />
+            </View>
+            <Text style={GlobalStyles.socialButtonLabel}>Log ind med Google</Text>
+          </View>
         </TouchableOpacity>
-        <TouchableOpacity style={GlobalStyles.socialButton}>
-          <Text style={GlobalStyles.socialButtonText}>Facebook</Text>
+        <TouchableOpacity
+          style={GlobalStyles.socialButtonFull}
+          onPress={() => handleOAuthLogin("Microsoft", startMicrosoftOAuth)}
+        >
+          <View style={GlobalStyles.socialButtonContent}>
+            <View style={GlobalStyles.socialIconBadge}>
+              <Image
+                source={require("../assets/Microsoft-logo.png")}
+                style={GlobalStyles.socialIconImage}
+              />
+            </View>
+            <Text style={GlobalStyles.socialButtonLabel}>
+              Log ind med Microsoft
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
     </View>

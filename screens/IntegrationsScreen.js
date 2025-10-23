@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
@@ -14,13 +14,13 @@ const sections = [
         id: "gmail",
         name: "Gmail",
         description: "Importer labels, tråd-historik og vedhæftede filer.",
-        icon: "logo-google",
+        logo: require("../assets/google-logo.png"),
       },
       {
         id: "outlook",
         name: "Outlook",
         description: "Synkroniser indbakker og send svar via Microsoft 365.",
-        icon: "mail-outline",
+        logo: require("../assets/Microsoft-logo.png"),
       },
     ],
   },
@@ -33,7 +33,8 @@ const sections = [
         id: "shopify",
         name: "Shopify",
         description: "Hent ordre, returneringer og kundesegmenter automatisk.",
-        icon: "cart-outline",
+        logo: require("../assets/Shopify-Logo.png"),
+        logoStyle: GlobalStyles.integrationIconImageLarge,
       },
     ],
   },
@@ -74,11 +75,21 @@ export default function IntegrationsScreen() {
               <View key={integration.id} style={GlobalStyles.integrationCard}>
                 <View style={GlobalStyles.integrationCardHeader}>
                   <View style={GlobalStyles.integrationIconWrapper}>
-                    <Ionicons
-                      name={integration.icon}
-                      size={20}
-                      color={COLORS.primary}
-                    />
+                    {integration.logo ? (
+                      <Image
+                        source={integration.logo}
+                        style={[
+                          GlobalStyles.integrationIconImage,
+                          integration.logoStyle,
+                        ]}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={integration.icon}
+                        size={20}
+                        color={COLORS.primary}
+                      />
+                    )}
                   </View>
                   <Text style={GlobalStyles.integrationCardTitle}>
                     {integration.name}

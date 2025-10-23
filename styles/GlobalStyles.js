@@ -24,17 +24,24 @@ const GlobalStyles = StyleSheet.create({
   },
   authBackground: { flex: 1 },
   authWrapper: {
-    flex: 1,
-    justifyContent: "center",
+    width: "100%",
+    maxWidth: 420,
+    alignSelf: "center",
+  },
+  authScrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingTop: 48,
+    paddingBottom: 56,
+    width: "100%",
+    alignItems: "center",
   },
 
   // Cards
   card: {
     backgroundColor: COLORS.surfaceAlt,
     borderRadius: 28,
-    paddingVertical: 36,
+    paddingVertical: 30,
     paddingHorizontal: 24,
     shadowColor: "#05070F",
     shadowOpacity: 0.45,
@@ -44,7 +51,7 @@ const GlobalStyles = StyleSheet.create({
   },
   cardHeader: {
     alignItems: "center",
-    marginBottom: 24,
+    marginBottom: 20,
   },
 
   // Typography
@@ -77,7 +84,7 @@ const GlobalStyles = StyleSheet.create({
   category: { fontSize: 14, color: COLORS.muted },
 
   // Inputs
-  inputGroup: { marginBottom: 18 },
+  inputGroup: { marginBottom: 16 },
   input: {
     borderWidth: 1,
     borderColor: "rgba(125, 138, 173, 0.3)",
@@ -164,11 +171,7 @@ const GlobalStyles = StyleSheet.create({
   },
 
   // Divider / helpers
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 24,
-  },
+  divider: { flexDirection: "row", alignItems: "center", marginVertical: 20 },
   dividerLine: {
     flex: 1,
     height: 1,
@@ -182,22 +185,43 @@ const GlobalStyles = StyleSheet.create({
   },
 
   // Social buttons
-  socialRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 16,
+  socialStack: {
+    width: "100%",
+    gap: 14,
   },
-  socialButton: {
-    flex: 1,
+  socialButtonFull: {
+    width: "100%",
     borderWidth: 1,
-    borderColor: "rgba(125, 138, 173, 0.24)",
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: "center",
-    backgroundColor: COLORS.surfaceAlt,
+    borderColor: "rgba(125, 138, 173, 0.28)",
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    overflow: "hidden",
   },
-  socialButtonText: {
-    fontSize: 14,
+  socialButtonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  socialIconBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(0, 0, 0, 0.08)",
+  },
+  socialIconImage: {
+    width: 18,
+    height: 18,
+    resizeMode: "contain",
+  },
+  socialButtonLabel: {
+    fontSize: 15,
     fontWeight: "600",
     color: COLORS.text,
   },
@@ -480,6 +504,15 @@ const GlobalStyles = StyleSheet.create({
     backgroundColor: "rgba(77, 124, 255, 0.18)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  integrationIconImage: {
+    width: 24,
+    height: 24,
+    resizeMode: "cover",
+  },
+  integrationIconImageLarge: {
+    width: 36,
+    height: 36,
   },
   integrationCardTitle: {
     fontSize: 16,
