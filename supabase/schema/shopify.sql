@@ -58,10 +58,10 @@ begin
     raise exception 'missing encryption secret';
   end if;
 
-  select owner_user_id
+  select s.owner_user_id
   into v_existing_owner
-  from public.shops
-  where shop_domain = p_domain;
+  from public.shops as s
+  where s.shop_domain = lower(trim(p_domain));
 
   if found and v_existing_owner is not null and v_existing_owner <> v_owner then
     raise exception 'shop domain already claimed by another user';
@@ -71,7 +71,7 @@ begin
   values (
     v_owner,
     lower(trim(p_domain)),
-    pgp_sym_encrypt(p_access_token, p_secret)
+    extensions.pgp_sym_encrypt(p_access_token, p_secret)
   )
   on conflict (shop_domain)
   do update
@@ -108,11 +108,11 @@ begin
 
   return query
     select
-      shop_domain,
-      pgp_sym_decrypt(access_token_encrypted, p_secret)::text as access_token
-    from public.shops
-    where owner_user_id = v_owner
-    order by created_at desc
+      s.shop_domain,
+      extensions.pgp_sym_decrypt(s.access_token_encrypted, p_secret)::text as access_token
+    from public.shops as s
+    where s.owner_user_id = v_owner
+    order by s.created_at desc
     limit 1;
 end;
 $$;
