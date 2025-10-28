@@ -1,31 +1,65 @@
-import {
-  View,
-  Text,
-  FlatList,
-  ActivityIndicator,
-  RefreshControl,
-} from "react-native";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { View, Text, FlatList, ActivityIndicator, RefreshControl } from "react-native";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
+
+const MAIL_PROVIDERS = [
+  {
+    id: "gmail",
+    label: "Gmail",
+    functionName: "gmail-list",
+    providerKey: "oauth_google",
+  },
+  {
+    id: "outlook",
+    label: "Microsoft",
+    functionName: "outlook-list",
+    providerKey: "oauth_microsoft",
+  },
+];
 
 export default function InboxScreen() {
   const { getToken, sessionId } = useAuth();
+  const { user } = useUser();
   const [inboxItems, setInboxItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [activeMailProvider, setActiveMailProvider] = useState(null);
   const lastFetchRef = useRef(0);
   const isFetchingRef = useRef(false);
 
   const MIN_FETCH_INTERVAL = 60 * 1000; //så vi ikke spammer Clerk
 
+  const prioritizedProviders = useMemo(() => {
+    const connected = new Set(
+      (user?.externalAccounts ?? [])
+        .map((account) => account?.provider)
+        .filter((provider) => typeof provider === "string")
+    );
+
+    const connectedMail = MAIL_PROVIDERS.filter((provider) =>
+      connected.has(provider.providerKey)
+    );
+    const fallbackMail = MAIL_PROVIDERS.filter(
+      (provider) => !connected.has(provider.providerKey)
+    );
+
+    return [...connectedMail, ...fallbackMail];
+  }, [user]);
+
+  const activeProviderLabel = useMemo(() => {
+    const provider = MAIL_PROVIDERS.find((item) => item.id === activeMailProvider);
+    return provider?.label ?? null;
+  }, [activeMailProvider]);
+
   const fetchInbox = useCallback(
     async ({ showLoader = true, force = false } = {}) => {
       if (!sessionId) {
         setInboxItems([]);
+        setActiveMailProvider(null);
         setLoading(false);
         return;
       }
@@ -71,92 +105,117 @@ export default function InboxScreen() {
           );
         }
 
-        // Hent data via edge function (leverer allerede normaliserede felter)
-        const response = await fetch(
-          `${supabaseUrl.replace(/\/$/, "")}/functions/v1/gmail-list`,
-          {
-            headers: {
-              Authorization: `Bearer ${sessionToken}`,
-              apikey: supabaseAnonKey,
-            },
-          }
-        );
+        const baseUrl = supabaseUrl.replace(/\/$/, "");
+        let fetched = false;
+        let lastError = null;
 
-        if (!response.ok) {
-          const errorBody = await response.text();
-          if (response.status === 429) {
-            throw new Error(
-              "Vi har ramt Clerk rate limit. Vent et øjeblik og prøv igen."
-            );
+        for (const provider of prioritizedProviders) {
+          const endpoint = `${baseUrl}/functions/v1/${provider.functionName}`;
+          try {
+            const response = await fetch(endpoint, {
+              headers: {
+                Authorization: `Bearer ${sessionToken}`,
+                apikey: supabaseAnonKey,
+              },
+            });
+
+            if (!response.ok) {
+              const errorBody = await response.text();
+              if (response.status === 429) {
+                throw new Error("Vi har ramt Clerk rate limit. Vent et øjeblik og prøv igen.");
+              }
+              const message =
+                errorBody?.trim() || `HTTP ${response.status}`;
+              const error = new Error(
+                `Kunne ikke hente mails fra ${provider.label}: ${message}`
+              );
+              if ([401, 403, 404].includes(response.status)) {
+                lastError = error;
+                continue;
+              }
+              throw error;
+            }
+
+            const payload = await response.json();
+            const rawItems = Array.isArray(payload?.items)
+              ? payload.items
+              : Array.isArray(payload?.messages)
+              ? payload.messages
+              : [];
+
+            const mapped = rawItems.map((message) => {
+              // Forvent både "from" og "sender" afhængigt af backend-version
+              const rawSender =
+                typeof message?.sender === "string"
+                  ? message.sender
+                  : typeof message?.from === "string"
+                  ? message.from
+                  : "";
+
+              const cleanSender = rawSender.replace(/<.*?>/g, "").trim();
+
+              let timeLabel = "";
+              const dateSource =
+                message?.date ??
+                message?.internalDate ??
+                message?.receivedAt ??
+                null;
+              // Gmail og Outlook kan give unix-timestamp eller ISO string → parse det
+              if (dateSource) {
+                const normalizedDate =
+                  typeof dateSource === "string" && /^\d+$/.test(dateSource)
+                    ? Number(dateSource)
+                    : dateSource;
+                const parsedDate = new Date(normalizedDate);
+                if (!Number.isNaN(parsedDate.getTime())) {
+                  timeLabel = parsedDate.toLocaleString("da-DK", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  });
+                }
+              }
+
+              return {
+                id: message?.id ?? Math.random().toString(36),
+                sender: cleanSender || "Ukendt afsender",
+                subject:
+                  typeof message?.subject === "string"
+                    ? message.subject
+                    : "(ingen emne)",
+                preview:
+                  typeof message?.preview === "string"
+                    ? message.preview
+                    : typeof message?.snippet === "string"
+                    ? message.snippet
+                    : "",
+                time: timeLabel,
+              };
+            });
+
+            setInboxItems(mapped);
+            setActiveMailProvider(provider.id);
+            fetched = true;
+            break;
+          } catch (providerError) {
+            lastError =
+              providerError instanceof Error
+                ? providerError
+                : new Error(String(providerError));
           }
-          throw new Error(
-            `Kunne ikke hente mails fra Edge Function: ${
-              errorBody || `HTTP ${response.status}`
-            }`
-          );
         }
 
-        const payload = await response.json();
-        const rawItems = Array.isArray(payload?.items)
-          ? payload.items
-          : Array.isArray(payload?.messages)
-          ? payload.messages
-          : [];
-
-        const mapped = rawItems.map((message) => {
-          // Forvent både "from" og "sender" afhængigt af backend-version
-          const rawSender =
-            typeof message?.sender === "string"
-              ? message.sender
-              : typeof message?.from === "string"
-              ? message.from
-              : "";
-
-          const cleanSender = rawSender.replace(/<.*?>/g, "").trim();
-
-          let timeLabel = "";
-          const dateSource =
-            message?.date ??
-            message?.internalDate ??
-            message?.receivedAt ??
-            null;
-          // Gmail kan give unix-timestamp som string → parse det
-          if (dateSource) {
-            const normalizedDate =
-              typeof dateSource === "string" && /^\d+$/.test(dateSource)
-                ? Number(dateSource)
-                : dateSource;
-            const parsedDate = new Date(normalizedDate);
-            if (!Number.isNaN(parsedDate.getTime())) {
-              timeLabel = parsedDate.toLocaleString("da-DK", {
-                day: "numeric",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-            }
+        if (!fetched) {
+          setActiveMailProvider(null);
+          if (lastError) {
+            throw lastError;
           }
-
-          return {
-            id: message?.id ?? Math.random().toString(36),
-            sender: cleanSender || "Ukendt afsender",
-            subject:
-              typeof message?.subject === "string"
-                ? message.subject
-                : "(ingen emne)",
-            preview:
-              typeof message?.preview === "string"
-                ? message.preview
-                : typeof message?.snippet === "string"
-                ? message.snippet
-                : "",
-            time: timeLabel,
-          };
-        });
-
-        setInboxItems(mapped);
+          throw new Error("Kunne ikke hente mails fra nogen mailudbyder.");
+        }
       } catch (error) {
         setInboxItems([]);
+        setActiveMailProvider(null);
         setErrorMessage(error.message);
       } finally {
         isFetchingRef.current = false;
@@ -166,7 +225,7 @@ export default function InboxScreen() {
         lastFetchRef.current = Date.now();
       }
     },
-    [getToken, sessionId]
+    [getToken, sessionId, prioritizedProviders]
   );
 
   useEffect(() => {
@@ -259,7 +318,7 @@ export default function InboxScreen() {
                   Henter dine mails
                 </Text>
                 <Text style={GlobalStyles.inboxEmptySubtitle}>
-                  Vi forbinder til Gmail og indlæser dine seneste beskeder.
+                  {`Vi forbinder til ${activeProviderLabel ?? "din mailkonto"} og indlæser dine seneste beskeder.`}
                 </Text>
               </>
             ) : errorMessage ? (
@@ -299,10 +358,10 @@ export default function InboxScreen() {
                   color={COLORS.primary}
                 />
                 <Text style={GlobalStyles.inboxEmptyHeading}>
-                  Log ind for at se Gmail
+                  Log ind for at se indbakken
                 </Text>
                 <Text style={GlobalStyles.inboxEmptySubtitle}>
-                  Brug Google login via Clerk for at forbinde din konto.
+                  Brug Clerk til at forbinde din Google- eller Microsoft-konto.
                 </Text>
               </>
             )}
