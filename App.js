@@ -3,9 +3,9 @@ import { ActivityIndicator, View, Text } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { ClerkProvider, useAuth, useUser } from "@clerk/clerk-expo";
+import { ClerkProvider, useAuth } from "@clerk/clerk-expo";
 import * as SecureStore from "expo-secure-store";
 
 import HomeScreen from "./screens/HomeScreen";
@@ -13,6 +13,7 @@ import AuthScreen from "./screens/AuthScreen";
 import InboxScreen from "./screens/InboxScreen";
 import IntegrationsScreen from "./screens/IntegrationsScreen";
 import ProfileScreen from "./screens/ProfileScreen";
+import AgentScreen from "./screens/AgentScreen";
 import { CLERK_PUBLISHABLE_KEY, clerkConfig } from "./clerk-config";
 import { COLORS } from "./styles/GlobalStyles";
 
@@ -71,6 +72,16 @@ function MainTabs() {
           tabBarLabel: "Indbakke",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={tabIcons.Inbox} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Agent"
+        component={AgentScreen}
+        options={{
+          tabBarLabel: "Agent",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="robot-happy-outline" size={size} color={color} />
           ),
         }}
       />
