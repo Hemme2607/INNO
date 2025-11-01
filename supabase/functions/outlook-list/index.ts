@@ -134,6 +134,7 @@ Deno.serve(async (req) => {
     );
     const skipToken = (url.searchParams.get("pageToken") ?? body?.pageToken) || undefined;
     const searchQuery = (url.searchParams.get("q") ?? body?.q ?? "").trim();
+    const messageId = (url.searchParams.get("messageId") ?? body?.messageId ?? "").trim();
 
     const userId = await requireUserIdFromJWT(req);
 
@@ -153,6 +154,62 @@ Deno.serve(async (req) => {
     }
 
     const accessToken = await getMicrosoftAccessToken(userId);
+
+    const accessToken = await getMicrosoftAccessToken(userId);
+
+    if (messageId) {
+      const messageUrl = new URL(`${GRAPH_BASE}/messages/${messageId}`);
+      messageUrl.searchParams.set(
+        "$select",
+        ["id", "subject", "bodyPreview", "body", "from"].join(","),
+      );
+
+      const messageRes = await fetch(messageUrl.toString(), {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      const text = await messageRes.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        // ignore
+      }
+
+      if (!messageRes.ok) {
+        const message =
+          (json && (json.error?.message || json.message)) ||
+          text ||
+          `HTTP ${messageRes.status}`;
+        throw Object.assign(
+          new Error(`Microsoft Graph request failed (${messageRes.status}): ${message}`),
+          { status: messageRes.status },
+        );
+      }
+
+      const message = json as GraphMessage & {
+        body?: { contentType?: string; content?: string };
+      };
+
+      const from = asAddress(message?.from);
+      const rawContent = message?.body?.content ?? "";
+      const contentType = message?.body?.contentType ?? "";
+      const bodyContent = contentType?.toLowerCase() === "html"
+        ? stripHtml(rawContent)
+        : rawContent || message?.bodyPreview || "";
+
+      return Response.json({
+        item: {
+          id: message?.id ?? messageId,
+          subject: message?.subject || "(ingen emne)",
+          preview: message?.bodyPreview ?? "",
+          from,
+          body: bodyContent,
+        },
+      });
+    }
 
     const listUrl = new URL(`${GRAPH_BASE}/messages`);
     listUrl.searchParams.set("$orderby", "receivedDateTime DESC");
@@ -237,3 +294,7 @@ Deno.serve(async (req) => {
     return new Response(message, { status });
   }
 });
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}

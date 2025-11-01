@@ -13,6 +13,12 @@ export default function AgentOverviewScreen({
   defaultSignature,
   displayName,
   shopDomain,
+  automationSettings,
+  automationLoading,
+  automationSaving,
+  automationError,
+  automationDefaults,
+  onAutomationToggle,
 }) {
   const handleActivateAgent = () => {};
 
@@ -33,7 +39,14 @@ export default function AgentOverviewScreen({
         instructions={personaConfig?.instructions ?? ""}
       />
       <AgentKnowledgeSection onOpenTemplates={onOpenTemplates} onOpenDocuments={onOpenDocuments} />
-      <AgentAutomationSection />
+      <AgentAutomationSection
+        settings={automationSettings}
+        loading={automationLoading}
+        saving={automationSaving}
+        error={automationError}
+        defaults={automationDefaults}
+        onToggle={onAutomationToggle}
+      />
     </ScrollView>
   );
 }

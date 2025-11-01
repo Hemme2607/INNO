@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { View, Text, Switch, StyleSheet, Alert } from "react-native";
+import { View, Text, Switch, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
 
@@ -7,7 +6,8 @@ const CONTROL_DEFINITIONS = [
   {
     id: "orderUpdates",
     title: "Opdater ordreoplysninger i Shopify",
-    description: "Tillad agenten at rette leveringsadresse, kontaktinfo og tilføje ordre-noter på vegne af kunden.",
+    description:
+      "Tillad agenten at rette leveringsadresse, kontaktinfo og tilføje ordre-noter på vegne af kunden.",
     defaultValue: true,
   },
   {
@@ -25,28 +25,33 @@ const CONTROL_DEFINITIONS = [
   {
     id: "historicInboxAccess",
     title: "Analysér tidligere mails",
-    description: "Giv agenten adgang til tidligere besvarede mails for at lære tone, vendinger og standardsvar.",
+    description:
+      "Giv agenten adgang til tidligere besvarede mails for at lære tone, vendinger og standardsvar.",
     defaultValue: false,
   },
 ];
 
-export default function AgentAutomationSection() {
-  const [controlStates, setControlStates] = useState(() =>
-    CONTROL_DEFINITIONS.reduce(
-      (acc, control) => ({ ...acc, [control.id]: control.defaultValue }),
-      {},
-    ),
-  );
+export default function AgentAutomationSection({
+  settings,
+  onToggle = () => {},
+  loading = false,
+  saving = false,
+  error = null,
+  defaults,
+}) {
+  const resolvedDefaults = defaults ?? CONTROL_DEFINITIONS.reduce((acc, control) => {
+    acc[control.id] = control.defaultValue;
+    return acc;
+  }, {});
 
-  const handleToggle = (id, nextValue) => {
-    const control = CONTROL_DEFINITIONS.find((item) => item.id === id);
-    if (!control) {
-      return;
-    }
+  const resolvedSettings = {
+    ...resolvedDefaults,
+    ...(settings ?? {}),
+  };
 
-    if (controlStates[id] === nextValue) {
-      return;
-    }
+  const handleToggle = (controlId, nextValue) => {
+    const control = CONTROL_DEFINITIONS.find((item) => item.id === controlId);
+    if (!control) return;
 
     const confirmTitle = nextValue ? "Aktivér handling" : "Deaktivér handling";
     const confirmDescription = `${nextValue ? "Agenten får lov til" : "Agenten mister adgangen til"} "${control.title}".\n\n${control.description}`;
@@ -58,9 +63,7 @@ export default function AgentAutomationSection() {
       },
       {
         text: nextValue ? "Aktivér" : "Deaktivér",
-        onPress: () => {
-          setControlStates((prev) => ({ ...prev, [id]: nextValue }));
-        },
+        onPress: () => onToggle(controlId, nextValue),
       },
     ]);
   };
@@ -72,7 +75,7 @@ export default function AgentAutomationSection() {
     >
       <View style={styles.toggleList}>
         {CONTROL_DEFINITIONS.map((control) => {
-          const value = controlStates[control.id];
+          const value = Boolean(resolvedSettings[control.id]);
           return (
             <View key={control.id} style={styles.toggleCard}>
               <View style={styles.toggleCopy}>
@@ -84,11 +87,25 @@ export default function AgentAutomationSection() {
                 onValueChange={(nextValue) => handleToggle(control.id, nextValue)}
                 trackColor={{ false: "rgba(71, 85, 105, 0.45)", true: "rgba(77, 124, 255, 0.6)" }}
                 thumbColor={value ? COLORS.primary : "#E2E8F0"}
+                disabled={loading || saving}
               />
             </View>
           );
         })}
       </View>
+
+      {saving ? (
+        <View style={styles.statusRow}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.statusText}>Gemmer indstillinger…</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <View style={styles.errorBox}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.helperBox}>
         <Text style={styles.helperTitle}>Anbefaling</Text>
@@ -150,5 +167,27 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: COLORS.text,
+  },
+  statusRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  statusText: {
+    fontSize: 13,
+    color: COLORS.muted,
+  },
+  errorBox: {
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 91, 107, 0.25)",
+    backgroundColor: "rgba(255, 91, 107, 0.12)",
+    padding: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    color: COLORS.danger,
   },
 });

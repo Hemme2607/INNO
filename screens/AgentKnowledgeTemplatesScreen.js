@@ -1,21 +1,21 @@
-import { ScrollView, StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import { ScrollView, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
-const dummyTemplates = [
-  {
-    id: "shipping-delay",
-    title: "Forsinket levering",
-    description: "Svar der informerer om forventet leveringstid og tilbyder kompensation.",
-  },
-  {
-    id: "return-flow",
-    title: "Returnering & ombytning",
-    description: "Forklar hvordan kunden sender en vare retur med returportal-link.",
-  },
-];
+export default function AgentKnowledgeTemplatesScreen({
+  navigation,
+  templates = [],
+  loading = false,
+  processing = false,
+}) {
+  const handleCreateTemplate = () => {
+    navigation.navigate("AgentKnowledgeTemplateEditor");
+  };
 
-export default function AgentKnowledgeTemplatesScreen() {
+  const handleEditTemplate = (templateId) => {
+    navigation.navigate("AgentKnowledgeTemplateEditor", { templateId });
+  };
+
   return (
     <ScrollView
       style={GlobalStyles.screen}
@@ -27,19 +27,48 @@ export default function AgentKnowledgeTemplatesScreen() {
         Her kan du oprette og redigere standardsvar, som agenten bruger som udgangspunkt til at personalisere svar.
       </Text>
 
-      <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88}>
+      <TouchableOpacity
+        style={[styles.primaryButton, processing && styles.primaryButtonDisabled]}
+        activeOpacity={0.88}
+        onPress={handleCreateTemplate}
+        disabled={processing}
+      >
         <Ionicons name="add-circle-outline" size={20} color={COLORS.text} />
         <Text style={styles.primaryButtonText}>Tilføj standardsvar</Text>
       </TouchableOpacity>
 
-      <View style={styles.list}>
-        {dummyTemplates.map((template) => (
-          <View key={template.id} style={styles.card}>
-            <Text style={styles.cardTitle}>{template.title}</Text>
-            <Text style={styles.cardDescription}>{template.description}</Text>
-          </View>
-        ))}
-      </View>
+      {loading ? (
+        <View style={styles.loadingRow}>
+          <ActivityIndicator size="small" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Henter standardsvar…</Text>
+        </View>
+      ) : templates.length ? (
+        <View style={styles.list}>
+          {templates.map((template) => (
+            <TouchableOpacity
+              key={template.id}
+              style={styles.card}
+              activeOpacity={0.88}
+              onPress={() => handleEditTemplate(template.id)}
+            >
+              <Text style={styles.cardTitle}>{template.title}</Text>
+              {template.description ? (
+                <Text style={styles.cardDescription}>{template.description}</Text>
+              ) : null}
+              <Text style={styles.cardLink}>Redigér</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="chatbubbles-outline" size={24} color="rgba(148, 163, 196, 0.6)" />
+          <Text style={styles.emptyTitle}>Ingen standardsvar endnu</Text>
+          <Text style={styles.emptyDescription}>
+            Opret dit første standardsvar for ofte stillede spørgsmål. Agenten bruger det som udgangspunkt og
+            personaliserer svaret for hver kunde.
+          </Text>
+        </View>
+      )}
     </ScrollView>
   );
 }
@@ -73,6 +102,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 18,
   },
+  primaryButtonDisabled: {
+    opacity: 0.75,
+  },
   primaryButtonText: {
     fontSize: 14,
     fontWeight: "700",
@@ -80,6 +112,16 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 12,
+  },
+  loadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 12,
+  },
+  loadingText: {
+    fontSize: 13,
+    color: COLORS.muted,
   },
   card: {
     borderRadius: 18,
@@ -98,5 +140,31 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: COLORS.muted,
+  },
+  cardLink: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: "700",
+  },
+  emptyState: {
+    marginTop: 16,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(77, 124, 255, 0.12)",
+    backgroundColor: "rgba(12, 18, 33, 0.9)",
+    padding: 22,
+    gap: 10,
+    alignItems: "center",
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: COLORS.text,
+  },
+  emptyDescription: {
+    fontSize: 13,
+    color: COLORS.muted,
+    lineHeight: 18,
+    textAlign: "center",
   },
 });
