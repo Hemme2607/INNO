@@ -114,6 +114,7 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const debugQuery = url.searchParams.get("debug") === "1";
+  const messageId = (url.searchParams.get("messageId") ?? body?.messageId ?? "").trim();
   const body = await readBodySafe(req);
   const debug = debugQuery || !!body?.debug;
 
@@ -151,6 +152,29 @@ Deno.serve(async (req) => {
 
     // 2) Hent/forny Gmail access token
     const gmailToken = await getGmailAccessToken(userId);
+
+    if (messageId) {
+      const messageUrl = `${GMAIL_BASE}/messages/${messageId}?format=full`;
+      const fullMessage = await fetchJson<GmailMessage>(messageUrl, gmailToken);
+      const payload = fullMessage.payload ?? null;
+      const subject = findHeader(fullMessage, "Subject") || "(ingen emne)";
+      const from = findHeader(fullMessage, "From") ?? "";
+      const decodedBody = payload ? extractPlainTextFromPayload(payload) : "";
+      const body =
+        decodedBody ||
+        fullMessage.snippet ||
+        "";
+
+      return Response.json({
+        item: {
+          id: fullMessage.id ?? messageId,
+          subject,
+          from,
+          snippet: fullMessage.snippet ?? "",
+          body,
+        },
+      });
+    }
 
     // 3) Liste af mails
     const listUrl = new URL(`${GMAIL_BASE}/messages`);
@@ -204,3 +228,43 @@ Deno.serve(async (req) => {
     return new Response(message, { status });
   }
 });
+
+function extractPlainTextFromPayload(payload: GmailMessage["payload"]): string {
+  if (!payload) return "";
+
+  if (payload.body?.data) {
+    return decodeBase64Url(payload.body.data);
+  }
+
+  if (Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const mime = part?.mimeType ?? "";
+      const value = extractPlainTextFromPayload(part);
+      if (!value) continue;
+
+      if (mime.includes("text/plain")) {
+        return value;
+      }
+      if (mime.includes("text/html")) {
+        return stripHtml(value);
+      }
+
+      // Fallback: return first non-empty content
+      return value;
+    }
+  }
+
+  return "";
+}
+
+function decodeBase64Url(data: string): string {
+  const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binaryString = atob(padded);
+  const bytes = Uint8Array.from(binaryString, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
+}
