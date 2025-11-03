@@ -3,7 +3,7 @@ create extension if not exists pgcrypto;
 
 create table if not exists public.shops (
   id uuid primary key default gen_random_uuid(),
-  owner_user_id text not null,
+  owner_user_id uuid not null,
   shop_domain text not null unique,
   access_token_encrypted bytea not null,
   created_at timestamptz not null default now()
@@ -17,27 +17,67 @@ alter table public.shops enable row level security;
 create policy "owner can select own shops"
   on public.shops
   for select
-  using (owner_user_id = auth.jwt()->>'sub');
+  using (
+    owner_user_id::text = auth.jwt()->>'sub'
+    or exists (
+      select 1
+      from public.profiles as p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = auth.jwt()->>'sub'
+    )
+  );
 
 create policy "owner can insert own shops"
   on public.shops
   for insert
-  with check (owner_user_id = auth.jwt()->>'sub');
+  with check (
+    owner_user_id::text = auth.jwt()->>'sub'
+    or exists (
+      select 1
+      from public.profiles as p
+      where p.user_id = owner_user_id
+        and p.clerk_user_id = auth.jwt()->>'sub'
+    )
+  );
 
 create policy "owner can update own shops"
   on public.shops
   for update
-  using (owner_user_id = auth.jwt()->>'sub')
-  with check (owner_user_id = auth.jwt()->>'sub');
+  using (
+    owner_user_id::text = auth.jwt()->>'sub'
+    or exists (
+      select 1
+      from public.profiles as p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = auth.jwt()->>'sub'
+    )
+  )
+  with check (
+    owner_user_id::text = auth.jwt()->>'sub'
+    or exists (
+      select 1
+      from public.profiles as p
+      where p.user_id = owner_user_id
+        and p.clerk_user_id = auth.jwt()->>'sub'
+    )
+  );
 
 create policy "owner can delete own shops"
   on public.shops
   for delete
-  using (owner_user_id = auth.jwt()->>'sub');
+  using (
+    owner_user_id::text = auth.jwt()->>'sub'
+    or exists (
+      select 1
+      from public.profiles as p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = auth.jwt()->>'sub'
+    )
+  );
 
 -- Upsert-funktion bruges af edge function til at gemme token krypteret
 create or replace function public.upsert_shop(
-  p_owner_user_id text,
+  p_owner_user_id uuid,
   p_domain text,
   p_access_token text,
   p_secret text
@@ -48,8 +88,8 @@ security definer
 set search_path = public
 as $$
 declare
-  v_owner text := coalesce(p_owner_user_id, auth.jwt()->>'sub');
-  v_existing_owner text;
+  v_owner uuid := coalesce(p_owner_user_id, (auth.jwt()->>'sub')::uuid);
+  v_existing_owner uuid;
 begin
   if v_owner is null then
     raise exception 'missing owner_user_id';
@@ -80,12 +120,12 @@ begin
 end;
 $$;
 
-revoke all on function public.upsert_shop(text, text, text, text) from public;
-grant execute on function public.upsert_shop(text, text, text, text) to service_role;
+revoke all on function public.upsert_shop(uuid, text, text, text) from public;
+grant execute on function public.upsert_shop(uuid, text, text, text) to service_role;
 
 -- Funktion til at hente og dekryptere token (kaldes kun fra server)
 create or replace function public.get_shop_credentials_for_user(
-  p_owner_user_id text,
+  p_owner_user_id uuid,
   p_secret text
 )
 returns table (
@@ -97,7 +137,7 @@ security definer
 set search_path = public
 as $$
 declare
-  v_owner text := coalesce(p_owner_user_id, auth.jwt()->>'sub');
+  v_owner uuid := coalesce(p_owner_user_id, (auth.jwt()->>'sub')::uuid);
 begin
   if v_owner is null then
     raise exception 'missing owner_user_id';
@@ -117,5 +157,5 @@ begin
 end;
 $$;
 
-revoke all on function public.get_shop_credentials_for_user(text, text) from public;
-grant execute on function public.get_shop_credentials_for_user(text, text) to service_role;
+revoke all on function public.get_shop_credentials_for_user(uuid, text) from public;
+grant execute on function public.get_shop_credentials_for_user(uuid, text) to service_role;

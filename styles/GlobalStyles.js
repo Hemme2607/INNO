@@ -11,6 +11,7 @@ const COLORS = {
   muted: "#7D8AAD",
   success: "#2ED6A3",
   danger: "#FF5B6B",
+  warning: "#FFC24B",
 };
 
 const GlobalStyles = StyleSheet.create({

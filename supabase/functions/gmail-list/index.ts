@@ -113,9 +113,9 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
 // --- Handler ---
 Deno.serve(async (req) => {
   const url = new URL(req.url);
+  const body = await readBodySafe(req);
   const debugQuery = url.searchParams.get("debug") === "1";
   const messageId = (url.searchParams.get("messageId") ?? body?.messageId ?? "").trim();
-  const body = await readBodySafe(req);
   const debug = debugQuery || !!body?.debug;
 
   try {

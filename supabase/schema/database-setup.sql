@@ -1,0 +1,135 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+-- Dette er vores database setup for Supabase
+
+CREATE TABLE public.agent_automation (
+  user_id uuid NOT NULL,
+  order_updates boolean DEFAULT true,
+  cancel_orders boolean DEFAULT true,
+  automatic_refunds boolean DEFAULT false,
+  historic_inbox_access boolean DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  auto_draft_enabled boolean NOT NULL DEFAULT false,
+  min_confidence numeric DEFAULT 0.6,
+  CONSTRAINT agent_automation_pkey PRIMARY KEY (user_id),
+  CONSTRAINT agent_automation_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.agent_documents (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  file_name text NOT NULL,
+  file_size bigint,
+  storage_path text,
+  description text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT agent_documents_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_documents_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.agent_persona (
+  user_id uuid NOT NULL,
+  signature text,
+  scenario text,
+  instructions text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT agent_persona_pkey PRIMARY KEY (user_id),
+  CONSTRAINT agent_persona_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.agent_templates (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  source_body text,
+  linked_mail_id text,
+  linked_mail_provider text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT agent_templates_pkey PRIMARY KEY (id),
+  CONSTRAINT agent_templates_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.ai_drafts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  source_message_id text NOT NULL,
+  draft_id text NOT NULL,
+  draft_url text,
+  model text,
+  confidence numeric,
+  latency_ms integer,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT ai_drafts_pkey PRIMARY KEY (id),
+  CONSTRAINT ai_drafts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.auto_reply_log (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid,
+  message_id text NOT NULL,
+  provider text NOT NULL,
+  decision text NOT NULL,
+  reason text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  draft_id text,
+  draft_url text,
+  confidence numeric,
+  model text,
+  CONSTRAINT auto_reply_log_pkey PRIMARY KEY (id),
+  CONSTRAINT auto_reply_log_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.mail_accounts (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  provider_email text,
+  access_token_enc bytea NOT NULL,
+  refresh_token_enc bytea,
+  token_expires_at timestamp with time zone,
+  gmail_history_id text,
+  gmail_watch_expires_at timestamp with time zone,
+  outlook_subscription_id text,
+  outlook_subscription_expires_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mail_accounts_pkey PRIMARY KEY (id),
+  CONSTRAINT mail_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.mail_jobs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  message_id text NOT NULL,
+  thread_id text,
+  payload jsonb,
+  status USER-DEFINED NOT NULL DEFAULT 'queued'::job_status,
+  attempts integer NOT NULL DEFAULT 0,
+  last_error text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT mail_jobs_pkey PRIMARY KEY (id),
+  CONSTRAINT mail_jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.profiles (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  clerk_user_id text NOT NULL UNIQUE,
+  email text,
+  first_name text,
+  last_name text,
+  image_url text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  user_id uuid NOT NULL,
+  CONSTRAINT profiles_pkey PRIMARY KEY (id),
+  CONSTRAINT profiles_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.shops (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  shop_domain text NOT NULL UNIQUE,
+  access_token_encrypted bytea NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  owner_user_id uuid NOT NULL,
+  CONSTRAINT shops_pkey PRIMARY KEY (id),
+  CONSTRAINT shops_owner_user_uuid_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id)
+);

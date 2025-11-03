@@ -1,12 +1,10 @@
-import { ScrollView, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
+import { ScrollView, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
 export default function AgentKnowledgeDocumentsScreen({
-  documents = [],
   onUploadDocument = () => {},
-  loading = false,
-  processing = false,
+  warningMessage = null,
 }) {
   return (
     <ScrollView
@@ -20,40 +18,24 @@ export default function AgentKnowledgeDocumentsScreen({
       </Text>
 
       <TouchableOpacity
-        style={[styles.primaryButton, processing && styles.primaryButtonDisabled]}
+        style={styles.primaryButton}
         activeOpacity={0.88}
         onPress={onUploadDocument}
-        disabled={processing}
       >
         <Ionicons name="cloud-upload-outline" size={20} color={COLORS.text} />
-        <Text style={styles.primaryButtonText}>Upload dokument</Text>
+        <Text style={styles.primaryButtonText}>Upload dokument (kommer snart)</Text>
       </TouchableOpacity>
 
-      {loading ? (
-        <View style={styles.loadingRow}>
-          <ActivityIndicator size="small" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Henter dokumenter…</Text>
-        </View>
-      ) : documents.length ? (
-        <View style={styles.list}>
-          {documents.map((document) => (
-            <View key={document.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{document.fileName}</Text>
-              {document.fileSize ? (
-                <Text style={styles.cardDescription}>Størrelse: {document.fileSize}</Text>
-              ) : null}
-            </View>
-          ))}
-        </View>
-      ) : (
-        <View style={styles.emptyState}>
-          <Ionicons name="document-text-outline" size={24} color="rgba(148, 163, 196, 0.6)" />
-          <Text style={styles.emptyTitle}>Ingen dokumenter endnu</Text>
-          <Text style={styles.emptyDescription}>
-            Upload produktguides, politikker eller FAQ-dokumenter for at give agenten mere viden at trække på.
-          </Text>
-        </View>
-      )}
+      <View style={styles.emptyState}>
+        <Ionicons name="sparkles" size={28} color={COLORS.primary} />
+        <Text style={styles.emptyTitle}>Dokumentbibliotek på vej</Text>
+        <Text style={styles.emptyDescription}>
+          Vi arbejder på en forbedret dokumentoplevelse. Snart kan du uploade og organisere filer direkte her.
+        </Text>
+        {warningMessage ? (
+          <Text style={[styles.emptyDescription, styles.warningText]}>{warningMessage}</Text>
+        ) : null}
+      </View>
     </ScrollView>
   );
 }
@@ -87,44 +69,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 18,
   },
-  primaryButtonDisabled: {
-    opacity: 0.75,
-  },
   primaryButtonText: {
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.text,
   },
-  list: {
-    gap: 12,
-  },
-  loadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingVertical: 12,
-  },
-  loadingText: {
-    fontSize: 13,
-    color: COLORS.muted,
-  },
-  card: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.16)",
-    backgroundColor: "rgba(11, 16, 27, 0.92)",
-    padding: 18,
-    gap: 8,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: COLORS.text,
-  },
-  cardDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.muted,
+  warningText: {
+    color: COLORS.warning,
+    marginTop: 8,
   },
   emptyState: {
     marginTop: 16,

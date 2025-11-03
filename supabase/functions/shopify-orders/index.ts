@@ -59,7 +59,37 @@ async function requireClerkUserId(req: Request): Promise<string> {
   return sub;
 }
 
-async function getShopForUser(userId: string): Promise<ShopRecord> {
+async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
+  if (!supabase) {
+    throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw Object.assign(
+      new Error(`Kunne ikke slå Supabase-bruger op: ${error.message}`),
+      { status: 500 },
+    );
+  }
+
+  const supabaseUserId = data?.user_id;
+
+  if (!supabaseUserId) {
+    throw Object.assign(
+      new Error("Ingen Supabase-bruger er tilknyttet denne Clerk-bruger."),
+      { status: 404 },
+    );
+  }
+
+  return supabaseUserId;
+}
+
+async function getShopForUser(clerkUserId: string): Promise<ShopRecord> {
   // Henter og dekrypterer butikken for nuværende bruger
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
@@ -70,9 +100,11 @@ async function getShopForUser(userId: string): Promise<ShopRecord> {
     });
   }
 
+  const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
+
   const { data, error } = await supabase
     .rpc<ShopRecord>("get_shop_credentials_for_user", {
-      p_owner_user_id: userId,
+      p_owner_user_id: supabaseUserId,
       p_secret: SHOPIFY_TOKEN_KEY,
     })
     .single();
