@@ -155,8 +155,6 @@ Deno.serve(async (req) => {
 
     const accessToken = await getMicrosoftAccessToken(userId);
 
-    const accessToken = await getMicrosoftAccessToken(userId);
-
     if (messageId) {
       const messageUrl = new URL(`${GRAPH_BASE}/messages/${messageId}`);
       messageUrl.searchParams.set(

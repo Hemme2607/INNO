@@ -12,13 +12,8 @@ import { useShopDomain } from "../lib/hooks/useShopDomain";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useAgentPersonaConfig } from "../lib/hooks/useAgentPersonaConfig";
 import { useAgentTemplates } from "../lib/hooks/useAgentTemplates";
-import { useAgentDocuments } from "../lib/hooks/useAgentDocuments";
 import { useAgentAutomation } from "../lib/hooks/useAgentAutomation";
 import { useClerkSupabase } from "../lib/supabaseClient";
-import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from "expo-file-system";
-import { decode as base64Decode } from "base-64";
-
 const AgentStack = createNativeStackNavigator();
 
 const MAIL_PROVIDERS = [
@@ -42,24 +37,98 @@ export default function AgentScreen() {
   const { getToken, sessionId } = useAuth();
   const { user } = useUser();
   const supabase = useClerkSupabase();
+  const metadataSupabaseId =
+    typeof user?.publicMetadata?.supabase_uuid === "string" &&
+    user.publicMetadata.supabase_uuid.length
+      ? user.publicMetadata.supabase_uuid
+      : null;
+  const [supabaseUserId, setSupabaseUserId] = useState(metadataSupabaseId);
+  const [isResolvingSupabaseId, setIsResolvingSupabaseId] = useState(false);
+  const supabaseIdLookupAttempted = useRef(false);
+
+  useEffect(() => {
+    setSupabaseUserId(metadataSupabaseId);
+    if (metadataSupabaseId) {
+      supabaseIdLookupAttempted.current = true;
+    }
+  }, [metadataSupabaseId]);
+
+  useEffect(() => {
+    supabaseIdLookupAttempted.current = false;
+  }, [user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      supabaseUserId ||
+      !user?.id ||
+      isResolvingSupabaseId ||
+      supabaseIdLookupAttempted.current
+    ) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsResolvingSupabaseId(true);
+    supabaseIdLookupAttempted.current = true;
+
+    supabase
+      .from("profiles")
+      .select("supabase_user_id")
+      .eq("clerk_user_id", user.id)
+      .maybeSingle()
+      .then(async ({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn("Kunne ikke slå supabase_user_id op:", error);
+          setSupabaseUserId(null);
+          return;
+        }
+        const fetchedId =
+          typeof data?.supabase_user_id === "string" && data.supabase_user_id.length
+            ? data.supabase_user_id
+            : null;
+        if (!fetchedId) {
+          setSupabaseUserId(null);
+          return;
+        }
+        setSupabaseUserId(fetchedId);
+        if (!metadataSupabaseId && user) {
+          try {
+            await user.update({
+              publicMetadata: {
+                ...(user.publicMetadata ?? {}),
+                supabase_uuid: fetchedId,
+              },
+            });
+          } catch (updateError) {
+            console.warn("Kunne ikke opdatere Clerk metadata med supabase_uuid:", updateError);
+          }
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsResolvingSupabaseId(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [metadataSupabaseId, supabase, supabaseUserId, user, isResolvingSupabaseId]);
 
   const {
     persona,
     loading: personaLoading,
     save: savePersona,
-  } = useAgentPersonaConfig({ userId: user?.id ?? null, lazy: !user });
+  } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: !supabaseUserId });
   const {
     templates,
     loading: templatesLoading,
     processing: templatesProcessing,
     createTemplate,
-  } = useAgentTemplates({ userId: user?.id ?? null, lazy: !user });
-  const {
-    documents,
-    loading: documentsLoading,
-    processing: documentsProcessing,
-    createDocumentRecord,
-  } = useAgentDocuments({ userId: user?.id ?? null, lazy: !user });
+  } = useAgentTemplates({ userId: supabaseUserId, lazy: !supabaseUserId });
   const {
     settings: automationSettings,
     loading: automationLoading,
@@ -67,7 +136,7 @@ export default function AgentScreen() {
     save: saveAutomation,
     defaults: automationDefaults,
     error: automationError,
-  } = useAgentAutomation({ userId: user?.id ?? null, lazy: !user });
+  } = useAgentAutomation({ userId: supabaseUserId, lazy: !supabaseUserId });
 
   const [personaConfig, setPersonaConfig] = useState({
     signature: "",
@@ -399,78 +468,12 @@ export default function AgentScreen() {
     // Placeholder til senere implementering
   }, []);
 
-  const handleUploadDocument = useCallback(async () => {
-    if (documentsProcessing) {
-      return;
-    }
-
-    try {
-      if (!user?.id) {
-        Alert.alert("Upload ikke muligt", "Brugeren er ikke klar endnu. Prøv igen om lidt.");
-        return;
-      }
-
-      const result = await DocumentPicker.getDocumentAsync({
-        multiple: false,
-        copyToCacheDirectory: true,
-        type: "*/*",
-      });
-
-      if (result.canceled) {
-        return;
-      }
-
-      const asset = result.assets?.[0] ?? result;
-      if (!asset?.uri) {
-        return;
-      }
-
-      const fileName = asset.name ?? asset.file?.name ?? `dokument-${Date.now()}`;
-      const mimeType = asset.mimeType ?? asset.file?.type ?? "application/octet-stream";
-      const fileSize = asset.size ?? null;
-
-      const base64Content = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const binary = base64Decode(base64Content);
-      const byteArray = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i += 1) {
-        byteArray[i] = binary.charCodeAt(i);
-      }
-
-      const fileBody =
-        typeof Blob !== "undefined"
-          ? new Blob([byteArray.buffer], { type: mimeType })
-          : byteArray;
-
-      const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const storagePath = `${user.id}/${Date.now()}-${safeName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("agent-documents")
-        .upload(storagePath, fileBody, {
-          contentType: mimeType,
-          upsert: false,
-        });
-
-      if (uploadError) {
-        throw uploadError;
-      }
-
-      await createDocumentRecord({
-        fileName,
-        fileSize,
-        storagePath,
-      });
-
-      Alert.alert("Upload fuldført", `${fileName} er nu tilgængeligt for agenten.`);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Kunne ikke uploade dokument.";
-      Alert.alert("Upload fejlede", message);
-    }
-  }, [createDocumentRecord, documentsProcessing, supabase, user?.id]);
+  const handleUploadDocument = useCallback(() => {
+    Alert.alert(
+      "Kommer snart",
+      "Dokumentbiblioteket er under udvikling. Upload af filer bliver tilgængeligt snart."
+    );
+  }, []);
 
   const handleAutomationToggle = useCallback(
     (key, value) => {
@@ -555,9 +558,7 @@ export default function AgentScreen() {
         {(props) => (
           <AgentKnowledgeDocumentsScreen
             {...props}
-            documents={documents}
-            loading={documentsLoading}
-            processing={documentsProcessing}
+            warningMessage="Dokumentbiblioteket er under udvikling og bliver tilgængeligt snart."
             onUploadDocument={handleUploadDocument}
           />
         )}

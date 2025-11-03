@@ -1,40 +1,44 @@
 -- Bucket policies for agent-documents storage bucket
 begin;
 
-create policy if not exists "agent_docs_write"
+create policy "agent_docs_write"
 on storage.objects
 for insert
+to authenticated
 with check (
   bucket_id = 'agent-documents'
-  and auth.uid()::text = split_part(name, '/', 1)
+  and auth.jwt()->>'sub' = split_part(name, '/', 1)
 );
 
-create policy if not exists "agent_docs_update"
+create policy "agent_docs_update"
 on storage.objects
 for update
+to authenticated
 using (
   bucket_id = 'agent-documents'
-  and auth.uid()::text = split_part(name, '/', 1)
+  and auth.jwt()->>'sub' = split_part(name, '/', 1)
 )
 with check (
   bucket_id = 'agent-documents'
-  and auth.uid()::text = split_part(name, '/', 1)
+  and auth.jwt()->>'sub' = split_part(name, '/', 1)
 );
 
-create policy if not exists "agent_docs_select"
+create policy "agent_docs_select"
 on storage.objects
 for select
+to authenticated
 using (
   bucket_id = 'agent-documents'
-  and auth.uid()::text = split_part(name, '/', 1)
+  and auth.jwt()->>'sub' = split_part(name, '/', 1)
 );
 
-create policy if not exists "agent_docs_delete"
+create policy "agent_docs_delete"
 on storage.objects
 for delete
+to authenticated
 using (
   bucket_id = 'agent-documents'
-  and auth.uid()::text = split_part(name, '/', 1)
+  and auth.jwt()->>'sub' = split_part(name, '/', 1)
 );
 
 commit;
