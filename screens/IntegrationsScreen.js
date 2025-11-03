@@ -1,9 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { View, Text, TouchableOpacity, ScrollView, Image, Modal, TextInput, ActivityIndicator, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
+import { useClerkSupabase } from "../lib/supabaseClient";
+import { useShopDomain } from "../lib/hooks/useShopDomain";
 
 const sections = [
   {
@@ -44,17 +46,24 @@ const sections = [
 ];
 
 export default function IntegrationsScreen() {
-  const { getToken, isSignedIn } = useAuth();
+  const { getToken } = useAuth();
+  const supabase = useClerkSupabase();
+  const {
+    shopDomain: shopifyConnectedDomain,
+    ownerUserId: shopifyOwnerUserId,
+    isLoaded: isShopDomainLoaded,
+    refresh: refreshShopDomain,
+  } =
+    useShopDomain();
   const [shopifyModalVisible, setShopifyModalVisible] = useState(false);
   const [shopifyDomainInput, setShopifyDomainInput] = useState("");
   const [shopifyTokenInput, setShopifyTokenInput] = useState("");
-  const [shopifyConnectedDomain, setShopifyConnectedDomain] = useState(null);
   const [shopifyError, setShopifyError] = useState(null);
-  const [isLoadingConnection, setIsLoadingConnection] = useState(false);
+  const isLoadingConnection = !isShopDomainLoaded;
   const [isMutating, setIsMutating] = useState(false);
+  const [isTestingShopify, setIsTestingShopify] = useState(false);
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
 
   const normalizeDomain = useCallback(
@@ -62,50 +71,6 @@ export default function IntegrationsScreen() {
       value.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "").toLowerCase(),
     [],
   );
-
-  const fetchShopifyConnection = useCallback(async () => {
-    if (!isSignedIn || !supabaseUrl || !supabaseAnonKey) {
-      setShopifyConnectedDomain(null);
-      return;
-    }
-
-    setIsLoadingConnection(true);
-    try {
-      const token = await getToken();
-      if (!token) {
-        setShopifyConnectedDomain(null);
-        return;
-      }
-      const response = await fetch(
-        `${supabaseUrl}/rest/v1/shops?select=shop_domain&limit=1`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: supabaseAnonKey,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `Kunne ikke hente Shopify data (${response.status}).`);
-      }
-
-      const items = await response.json();
-      const domain =
-        Array.isArray(items) && items[0]?.shop_domain ? items[0].shop_domain : null;
-      setShopifyConnectedDomain(domain);
-    } catch (error) {
-      console.warn("Kunne ikke hente shop:", error);
-      setShopifyConnectedDomain(null);
-    } finally {
-      setIsLoadingConnection(false);
-    }
-  }, [getToken, isSignedIn, supabaseAnonKey, supabaseUrl]);
-
-  useEffect(() => {
-    fetchShopifyConnection();
-  }, [fetchShopifyConnection]);
 
   const openShopifyModal = () => {
     setShopifyError(null);
@@ -159,7 +124,7 @@ export default function IntegrationsScreen() {
         throw new Error(message);
       }
 
-      await fetchShopifyConnection();
+      await refreshShopDomain();
       setShopifyModalVisible(false);
       setShopifyTokenInput("");
       Alert.alert("Shopify forbundet", `Butikken ${domain} er nu tilsluttet.`);
@@ -172,34 +137,22 @@ export default function IntegrationsScreen() {
   };
 
   const disconnectShopify = async () => {
-    if (!shopifyConnectedDomain || !supabaseUrl || !supabaseAnonKey) {
+    if (!shopifyConnectedDomain || !supabase) {
       return;
     }
 
     setIsMutating(true);
     try {
-      const token = await getToken();
-      if (!token) {
-        throw new Error("Kunne ikke hente Clerk session token.");
+      const { error } = await supabase
+        .from("shops")
+        .delete()
+        .eq("shop_domain", shopifyConnectedDomain);
+
+      if (error) {
+        throw error;
       }
 
-      const response = await fetch(
-        `${supabaseUrl}/rest/v1/shops?shop_domain=eq.${encodeURIComponent(shopifyConnectedDomain)}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            apikey: supabaseAnonKey,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const text = await response.text();
-        throw new Error(text || `Kunne ikke fjerne Shopify (${response.status}).`);
-      }
-
-      setShopifyConnectedDomain(null);
+      await refreshShopDomain();
       setShopifyModalVisible(false);
       Alert.alert("Shopify frakoblet", "Butikken er fjernet fra din konto.");
     } catch (error) {
@@ -210,6 +163,50 @@ export default function IntegrationsScreen() {
       setIsMutating(false);
     }
   };
+
+  const testShopifyConnection = useCallback(async () => {
+    if (!functionsBase || !supabase) {
+      Alert.alert("Shopify test", "Supabase miljøvariabler mangler.");
+      return;
+    }
+
+    setIsTestingShopify(true);
+    try {
+      const clerkToken = await getToken();
+      if (!clerkToken) {
+        throw new Error("Kunne ikke hente Clerk session token.");
+      }
+
+      const response = await fetch(`${functionsBase}/shopify-orders?limit=1`, {
+        headers: {
+          Authorization: `Bearer ${clerkToken}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const message =
+          typeof payload?.error === "string"
+            ? payload.error
+            : `Shopify endpoint svarede ${response.status}.`;
+        throw new Error(message);
+      }
+
+      const orderCount = Array.isArray(payload?.orders) ? payload.orders.length : 0;
+      Alert.alert(
+        "Shopify test",
+        orderCount
+          ? `Forbindelsen virker. Modtog ${orderCount} ordre${orderCount === 1 ? "" : "r"} i testkaldet.`
+          : "Forbindelsen virker. Ingen ordre blev returneret i testkaldet."
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ukendt fejl under testen.";
+      Alert.alert("Shopify test fejlede", message);
+    } finally {
+      setIsTestingShopify(false);
+    }
+  }, [functionsBase, supabase]);
 
   const confirmDisconnectShopify = () => {
     if (!shopifyConnectedDomain) return;
@@ -300,9 +297,16 @@ export default function IntegrationsScreen() {
                       {integration.description}
                     </Text>
                     {isShopify && shopifyConnectedDomain ? (
-                      <Text style={GlobalStyles.integrationCardStatus}>
-                        Forbundet til {shopifyConnectedDomain}
-                      </Text>
+                      <>
+                        <Text style={GlobalStyles.integrationCardStatus}>
+                          Forbundet til {shopifyConnectedDomain}
+                        </Text>
+                        {shopifyOwnerUserId ? (
+                          <Text style={GlobalStyles.integrationCardStatus}>
+                            Owner ID: {shopifyOwnerUserId}
+                          </Text>
+                        ) : null}
+                      </>
                     ) : null}
                     <TouchableOpacity
                       style={GlobalStyles.integrationCardButton}
@@ -320,6 +324,46 @@ export default function IntegrationsScreen() {
             </View>
           </View>
         ))}
+
+        {shopifyConnectedDomain ? (
+          <View style={GlobalStyles.integrationSection}>
+            <Text style={GlobalStyles.integrationSectionTitle}>Shopify status</Text>
+            <View style={GlobalStyles.integrationCard}>
+              <View style={GlobalStyles.integrationCardHeader}>
+                <View style={GlobalStyles.integrationIconWrapper}>
+                  <Image
+                    source={require("../assets/Shopify-Logo.png")}
+                    style={[
+                      GlobalStyles.integrationIconImage,
+                      GlobalStyles.integrationIconImageLarge,
+                    ]}
+                  />
+                </View>
+                <Text style={GlobalStyles.integrationCardTitle}>Forbundet butik</Text>
+              </View>
+              <Text style={GlobalStyles.integrationCardDescription}>
+                {`Domæne: ${shopifyConnectedDomain}`}
+              </Text>
+              {shopifyOwnerUserId ? (
+                <Text style={GlobalStyles.integrationCardDescription}>
+                  {`Owner ID: ${shopifyOwnerUserId}`}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                style={GlobalStyles.integrationCardButton}
+                activeOpacity={0.9}
+                onPress={testShopifyConnection}
+                disabled={isTestingShopify}
+              >
+                {isTestingShopify ? (
+                  <ActivityIndicator size="small" color={COLORS.background} />
+                ) : (
+                  <Text style={GlobalStyles.integrationCardButtonLabel}>Test forbindelse</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
       </ScrollView>
 
       <Modal

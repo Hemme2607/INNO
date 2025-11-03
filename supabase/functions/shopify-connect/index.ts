@@ -113,7 +113,42 @@ async function validateShopifyCredentials(domain: string, token: string): Promis
   return json ?? {};
 }
 
-async function upsertShop(userId: string, domain: string, token: string): Promise<void> {
+async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
+  if (!supabase) {
+    throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw Object.assign(
+      new Error(`Kunne ikke slå Supabase-bruger op: ${error.message}`),
+      { status: 500 },
+    );
+  }
+
+  const supabaseUserId = data?.user_id;
+  if (!supabaseUserId) {
+    throw Object.assign(
+      new Error("Der findes endnu ingen Supabase-bruger tilknyttet denne Clerk-bruger."),
+      { status: 404 },
+    );
+  }
+
+  return supabaseUserId;
+}
+
+async function upsertShop(options: {
+  supabaseUserId: string;
+  domain: string;
+  token: string;
+}): Promise<void> {
+  const { supabaseUserId, domain, token } = options;
+
   // Gemmer krypteret token via vores PostgreSQL-funktion
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
@@ -137,7 +172,7 @@ async function upsertShop(userId: string, domain: string, token: string): Promis
     });
   }
 
-  if (existing && existing.owner_user_id && existing.owner_user_id !== userId) {
+  if (existing && existing.owner_user_id && existing.owner_user_id !== supabaseUserId) {
     throw Object.assign(
       new Error("Denne butik er allerede forbundet til en anden bruger."),
       { status: 409 },
@@ -145,7 +180,7 @@ async function upsertShop(userId: string, domain: string, token: string): Promis
   }
 
   const { error: upsertError } = await supabase.rpc("upsert_shop", {
-    p_owner_user_id: userId,
+    p_owner_user_id: supabaseUserId,
     p_domain: domain,
     p_access_token: token,
     p_secret: SHOPIFY_TOKEN_KEY,
@@ -166,6 +201,7 @@ Deno.serve(async (req) => {
     }
 
     const clerkUserId = await requireClerkUserId(req);
+    const supabaseUserId = await resolveSupabaseUserId(clerkUserId);
 
     let body: { domain?: string; accessToken?: string } = {};
     try {
@@ -185,7 +221,11 @@ Deno.serve(async (req) => {
     validateDomain(domain);
 
     await validateShopifyCredentials(domain, accessToken);
-    await upsertShop(clerkUserId, domain, accessToken);
+    await upsertShop({
+      supabaseUserId,
+      domain,
+      token: accessToken,
+    });
 
     return Response.json({
       ok: true,
