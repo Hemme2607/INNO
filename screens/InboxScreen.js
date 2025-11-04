@@ -1,4 +1,4 @@
-import { View, Text, FlatList, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,6 +23,7 @@ const MAIL_PROVIDERS = [
 export default function InboxScreen() {
   const { getToken, sessionId } = useAuth();
   const { user } = useUser();
+  const [creatingDraftId, setCreatingDraftId] = useState(null);
   const [inboxItems, setInboxItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -178,20 +179,22 @@ export default function InboxScreen() {
               }
 
               return {
-                id: message?.id ?? Math.random().toString(36),
-                sender: cleanSender || "Ukendt afsender",
-                subject:
-                  typeof message?.subject === "string"
-                    ? message.subject
-                    : "(ingen emne)",
-                preview:
-                  typeof message?.preview === "string"
-                    ? message.preview
-                    : typeof message?.snippet === "string"
-                    ? message.snippet
-                    : "",
-                time: timeLabel,
-              };
+                  id: message?.id ?? Math.random().toString(36),
+                  // Keep both a cleaned sender for display and the raw header for extracting email addresses
+                  rawFrom: (typeof message?.from === "string" ? message.from : (typeof message?.sender === "string" ? message.sender : "")),
+                  sender: cleanSender || "Ukendt afsender",
+                  subject:
+                    typeof message?.subject === "string"
+                      ? message.subject
+                      : "(ingen emne)",
+                  preview:
+                    typeof message?.preview === "string"
+                      ? message.preview
+                      : typeof message?.snippet === "string"
+                      ? message.snippet
+                      : "",
+                  time: timeLabel,
+                };
             });
 
             setInboxItems(mapped);
@@ -232,6 +235,59 @@ export default function InboxScreen() {
     fetchInbox();
   }, [fetchInbox]);
 
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+  const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
+
+  const extractEmail = (raw) => {
+    if (!raw || typeof raw !== "string") return null;
+    // If raw contains angle-bracket address use that
+    const angle = raw.match(/<([^>]+)>/);
+    if (angle) return angle[1];
+    // Otherwise, try to find an email anywhere in the string
+    const simple = raw.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
+    return simple ? simple[1] : null;
+  };
+
+  const createDraft = async (item) => {
+    if (!functionsBase) {
+      Alert.alert("Funktionen ikke konfigureret", "Supabase functions base URL mangler.");
+      return;
+    }
+
+    setCreatingDraftId(item.id);
+    try {
+      const token = await getToken();
+      if (!token) throw new Error("Kunne ikke hente session token.");
+
+  const to = extractEmail(item.rawFrom ?? item.sender);
+      if (!to) throw new Error("Kunne ikke udtrække e-mailadresse fra afsender.");
+
+      const body = `Hej ${item.sender.split(" <")[0]},\n\nTak for din besked — her er et udkast til svar.\n\nMvh`;
+
+      const resp = await fetch(`${functionsBase}/gmail-create-draft-ai`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        // Provide messageId so the server can fetch the full message and build context (shopify orders, etc.)
+        body: JSON.stringify({ messageId: item.id, to, subject: `Re: ${item.subject ?? ""}`, body }),
+      });
+
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const message = payload?.error || `Server svarede ${resp.status}`;
+        throw new Error(message);
+      }
+
+  Alert.alert("AI-udkast oprettet", "Et AI-genereret udkast er blevet oprettet i din Gmail-indbakke.");
+    } catch (err) {
+      Alert.alert("Kunne ikke oprette udkast", err?.message ?? String(err));
+    } finally {
+      setCreatingDraftId(null);
+    }
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -262,6 +318,28 @@ export default function InboxScreen() {
         <Text style={GlobalStyles.inboxPreview} numberOfLines={2}>
           {item.preview ?? ""}
         </Text>
+        {activeMailProvider === "gmail" ? (
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity
+              style={{
+                alignSelf: "flex-start",
+                backgroundColor: COLORS.primary,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+              activeOpacity={0.9}
+              onPress={() => createDraft(item)}
+              disabled={creatingDraftId === item.id}
+            >
+              {creatingDraftId === item.id ? (
+                <ActivityIndicator size="small" color={COLORS.background} />
+              ) : (
+                <Text style={{ color: COLORS.background, fontWeight: "600" }}>Opret udkast</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
     </View>
   );
