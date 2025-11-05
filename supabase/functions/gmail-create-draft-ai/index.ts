@@ -122,12 +122,15 @@ async function fetchShopifyContext(clerkToken: string, email?: string) {
   try { return await res.json(); } catch { return null; }
 }
 
-async function callOpenAI(prompt: string) {
+async function callOpenAI(prompt: string, system?: string) {
   if (!OPENAI_API_KEY) return null;
+  const messages: any[] = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: prompt });
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "gpt-3.5-turbo", messages: [{ role: "user", content: prompt }], max_tokens: 600 }),
+    body: JSON.stringify({ model: "gpt-3.5-turbo", messages, max_tokens: 600, temperature: 0.2 }),
   });
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error?.message || `OpenAI error ${res.status}`);
@@ -156,32 +159,139 @@ Deno.serve(async (req) => {
     const emailMatch = from.match(/<([^>]+)>/);
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
 
-    const shopContext = await fetchShopifyContext(clerkToken, fromEmail);
-    const orders = Array.isArray(shopContext?.orders) ? shopContext.orders : [];
+    // Try to fetch Shopify orders by email. If none found, fetch recent orders and try to match locally
+  let shopContext = await fetchShopifyContext(clerkToken, fromEmail);
+  let orders = Array.isArray(shopContext?.orders) ? shopContext.orders : [];
+  let matchedSubjectNumber: string | null = null;
 
-    // Build prompt
-    let prompt = `Skriv et høfligt og professionelt svar på dansk til denne kundemail:\n\n---KUNDENS EMAIL---\n${plain}\n\n---KONTEKST---\n`;
+    console.log("gmail-create-draft-ai: initial fetch orders length:", orders?.length ?? 0, "for email:", fromEmail);
+
+    if ((!orders || orders.length === 0) && fromEmail) {
+      // Retry without email filter to fetch recent orders and try to match by customer email fields
+      const fallbackContext = await fetchShopifyContext(clerkToken);
+      const fallbackOrders = Array.isArray(fallbackContext?.orders) ? fallbackContext.orders : [];
+      console.log("gmail-create-draft-ai: fetched fallback recent orders length:", fallbackOrders.length);
+
+      if (fallbackOrders.length) {
+        const matched = fallbackOrders.filter((o: any) => {
+          const candidates = [
+            (o?.email ?? "") ,
+            (o?.customer?.email ?? ""),
+            (o?.billing_address?.email ?? ""),
+            (o?.shipping_address?.email ?? ""),
+          ].filter(Boolean).map((s: string) => String(s).toLowerCase());
+          const matchedResult = matchedAny(candidates, String(fromEmail).toLowerCase());
+          if (matchedResult) {
+            console.log("gmail-create-draft-ai: matched order by email candidate:", { orderId: o?.id ?? o?.name ?? o?.order_number, candidates });
+          }
+          return matchedResult;
+        });
+        if (matched.length) {
+          orders = matched;
+          shopContext = fallbackContext;
+        }
+      }
+    }
+
+    // If still no orders, try to extract an order number from the subject and match by name/order_number
+    if ((!orders || orders.length === 0) && subject) {
+      // Find a number sequence in subject (e.g., "ordre 1001", "#1001", "order 1001")
+      const numMatch = subject.match(/(?:ordre|order)?\s*#?\s*(\d{3,})/i) ?? subject.match(/(\d{3,})/);
+      const subjectNumber = numMatch ? numMatch[1] : null;
+      console.log("gmail-create-draft-ai: subjectNumber:", subjectNumber, "subject:", subject);
+
+      if (subjectNumber) {
+        const fallbackContext2 = await fetchShopifyContext(clerkToken);
+        const fallbackOrders2 = Array.isArray(fallbackContext2?.orders) ? fallbackContext2.orders : [];
+        console.log("gmail-create-draft-ai: fetched recent orders for subject-matching length:", fallbackOrders2.length);
+
+        const matchedByNumber = fallbackOrders2.filter((o: any) => {
+          const check = (val: any) => {
+            if (!val && val !== 0) return false;
+            const s = String(val).toLowerCase();
+            if (s.includes(subjectNumber)) return true;
+            // strip non-digits and compare numeric suffix
+            const digits = s.replace(/\D/g, "");
+            if (digits && digits.includes(subjectNumber)) return true;
+            return false;
+          };
+          const candidates = [o?.name, o?.order_number, o?.id, o?.legacy_order?.order_number, o?.number];
+          const matched = candidates.some(check);
+          if (matched) console.log("gmail-create-draft-ai: matched order by subject number", { orderId: o?.id ?? o?.name ?? o?.order_number, candidates });
+          return matched;
+        });
+
+        if (matchedByNumber.length) {
+          orders = matchedByNumber;
+          shopContext = fallbackContext2;
+          matchedSubjectNumber = subjectNumber;
+        }
+      }
+    }
+
+    function matchedAny(list: string[], target: string) {
+      if (!target) return false;
+      for (const item of list) {
+        if (!item) continue;
+        if (item === target) return true;
+        try {
+          // loosened match: startsWith or contains
+          if (item.includes(target) || target.includes(item)) return true;
+        } catch {}
+      }
+      return false;
+    }
+
+    // Build an order summary (human-friendly) that we always attach to the prompt / fallback
+    let orderSummary = "";
     if (orders.length) {
-      prompt += `Kunden har følgende ordrer (seneste ${orders.length}):\n`;
+      orderSummary += `Kunden har følgende ordrer (seneste ${orders.length}):\n`;
       for (const o of orders.slice(0, 5)) {
-        prompt += `- Ordre #${o.id || o.name || o.order_number} — status: ${o.fulfillment_status ?? o.status ?? "ukendt"} — total: ${o.total_price ?? o.current_total_price ?? o.price ?? "ukendt"}\n`;
+        // Prefer a human-friendly order number/name over the internal id
+        const friendlyId = o?.order_number ?? o?.name ?? (o?.id ? String(o.id) : "ukendt");
+        const status = o?.fulfillment_status ?? o?.status ?? "ukendt";
+        const total = o?.total_price ?? o?.current_total_price ?? o?.price ?? "ukendt";
+        orderSummary += `- Ordre ${friendlyId} — status: ${status} — total: ${total}\n`;
+        // If we have line items, include a very short summary (1-2 items)
+        try {
+          const items = Array.isArray(o?.line_items) ? o.line_items.slice(0, 2).map((li: any) => `${li.quantity ?? 1}× ${li.title ?? li.name ?? ''}`) : [];
+          if (items.length) {
+            orderSummary += `  Varer: ${items.join(', ')}${o?.line_items?.length && o.line_items.length > items.length ? ` (+${o.line_items.length - items.length} flere)` : ''}\n`;
+          }
+        } catch (e) {
+          // ignore malformed line_items
+        }
       }
     } else {
-      prompt += "Ingen relaterede ordrer fundet.\n";
+      orderSummary = "Ingen relaterede ordrer fundet.\n";
     }
-    prompt += "\nSkriv et kort svar (3-6 sætninger) som inkluderer den relevante ordreinfo hvis den findes, og spørg om yderligere detaljer hvis nødvendigt.";
 
-    let aiText = null;
+    // Build prompt for OpenAI (if configured)
+    let prompt = `Skriv et høfligt og professionelt svar på dansk til denne kundemail:\n\n---KUNDENS EMAIL---\n${plain}\n\n---KONTEKST---\n${orderSummary}\n`;
+    if (matchedSubjectNumber) {
+      prompt += `NB: Kunden nævnte ordrenummer #${matchedSubjectNumber} i e-mail-emnet — brug dette som reference og spørg IKKE efter ordrenummer igen.\n`;
+    }
+    prompt += "Skriv et kort svar (3-6 sætninger) som inkluderer den relevante ordreinfo hvis den findes. Hvis ordren er fundet, sig direkte hvilken ordre (ordre #X) og undlad at bede om ordrenummer. Hvis ordren ikke findes, bed om præcist ordrenummer eller kundeoplysninger der kan hjælpe.";
+
+    let aiText: string | null = null;
     try {
-      aiText = OPENAI_API_KEY ? await callOpenAI(prompt) : null;
+      if (OPENAI_API_KEY) {
+        const systemMsgBase = `Du er en dansk kundeservice-assistent. Skriv kort, venligt og professionelt på dansk. Brug KONTEKST-sektionen til at finde relevante oplysninger og nævn dem eksplicit i svaret.`;
+        const systemMsg = matchedSubjectNumber
+          ? systemMsgBase + ` Hvis KONTEKST indeholder et ordrenummer (fx #${matchedSubjectNumber}), brug dette ordrenummer som reference i svaret og spørg IKKE efter ordrenummer igen.`
+          : systemMsgBase;
+        aiText = await callOpenAI(prompt, systemMsg);
+      } else {
+        aiText = null;
+      }
     } catch (e) {
       console.warn("OpenAI fejl", e?.message || e);
       aiText = null;
     }
 
     if (!aiText) {
-      // Fallback simple template
-      aiText = `Hej ${from.split(" <")[0] || "kunde"},\n\nTak for din besked. Jeg har kigget på din sag${orders.length ? ` og fundet ${orders.length} ordre(r) relateret til din e-mail.` : "."} Vi vender tilbage hurtigst muligt med en opdatering.\n\nMvh`;
+      // Fallback simple template — include the order summary so the draft contains the key info even without OpenAI
+      aiText = `Hej ${from.split(" <")[0] || "kunde"},\n\nTak for din besked. Jeg har kigget på din sag${orders.length ? ` og fundet ${orders.length} ordre(r) relateret til din e-mail.` : "."}\n\n${orderSummary}\nVi vender tilbage hurtigst muligt med en opdatering.\n\nMvh`;
     }
 
     // Create draft in Gmail
