@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet } from "react-native";
+import { ScrollView, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 import AgentPersonaSection from "../components/agent/AgentPersonaSection";
 
@@ -6,17 +6,20 @@ export default function AgentPersonaDetailsScreen({
   personaConfig,
   onUpdatePersonaConfig,
   defaultSignature,
+  onSavePersona,
+  savingPersona = false,
+  personaError = null,
 }) {
   const handleSignatureChange = (value) => {
-    onUpdatePersonaConfig((prev) => ({ ...prev, signature: value }));
+    onUpdatePersonaConfig({ signature: value });
   };
 
   const handleScenarioChange = (value) => {
-    onUpdatePersonaConfig((prev) => ({ ...prev, scenario: value }));
+    onUpdatePersonaConfig({ scenario: value });
   };
 
   const handleInstructionsChange = (value) => {
-    onUpdatePersonaConfig((prev) => ({ ...prev, instructions: value }));
+    onUpdatePersonaConfig({ instructions: value });
   };
 
   return (
@@ -34,6 +37,21 @@ export default function AgentPersonaDetailsScreen({
         instructions={personaConfig?.instructions ?? ""}
         onInstructionsChange={handleInstructionsChange}
       />
+      <View style={styles.footer}>
+        {personaError ? <Text style={styles.errorText}>{personaError}</Text> : null}
+        <TouchableOpacity
+          style={[styles.saveButton, savingPersona && styles.saveButtonDisabled]}
+          activeOpacity={0.9}
+          onPress={onSavePersona}
+          disabled={savingPersona}
+        >
+          {savingPersona ? (
+            <ActivityIndicator color={COLORS.background} size="small" />
+          ) : (
+            <Text style={styles.saveButtonLabel}>Gem ændringer</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 }
@@ -44,5 +62,26 @@ const styles = StyleSheet.create({
     paddingVertical: 32,
     gap: 28,
     backgroundColor: COLORS.background,
+  },
+  footer: {
+    gap: 12,
+  },
+  saveButton: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  saveButtonDisabled: {
+    opacity: 0.7,
+  },
+  saveButtonLabel: {
+    color: COLORS.background,
+    fontWeight: "700",
+    fontSize: 15,
+  },
+  errorText: {
+    color: COLORS.error ?? "#ff6b6b",
+    fontSize: 13,
   },
 });

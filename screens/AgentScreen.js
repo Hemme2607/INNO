@@ -75,7 +75,7 @@ export default function AgentScreen() {
 
     supabase
       .from("profiles")
-      .select("supabase_user_id")
+      .select("user_id")
       .eq("clerk_user_id", user.id)
       .maybeSingle()
       .then(async ({ data, error }) => {
@@ -86,9 +86,7 @@ export default function AgentScreen() {
           return;
         }
         const fetchedId =
-          typeof data?.supabase_user_id === "string" && data.supabase_user_id.length
-            ? data.supabase_user_id
-            : null;
+          typeof data?.user_id === "string" && data.user_id.length ? data.user_id : null;
         if (!fetchedId) {
           setSupabaseUserId(null);
           return;
@@ -122,7 +120,9 @@ export default function AgentScreen() {
     persona,
     loading: personaLoading,
     save: savePersona,
-  } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: !supabaseUserId });
+    saving: personaSaving,
+    error: personaError,
+  } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: false });
   const {
     templates,
     loading: templatesLoading,
@@ -151,7 +151,6 @@ export default function AgentScreen() {
   const [templateSourceBody, setTemplateSourceBody] = useState("");
   const [templateSourceError, setTemplateSourceError] = useState(null);
   const [isFetchingTemplateSource, setIsFetchingTemplateSource] = useState(false);
-  const personaSaveTimeout = useRef(null);
 
   const defaultSignature = useMemo(() => {
     const trimmedName = displayName?.trim();
@@ -179,12 +178,6 @@ export default function AgentScreen() {
     }
   }, [persona, defaultSignature]);
 
-  useEffect(() => () => {
-    if (personaSaveTimeout.current) {
-      clearTimeout(personaSaveTimeout.current);
-    }
-  }, []);
-
   const prioritizedProviders = useMemo(() => {
     const connected = new Set(
       (user?.externalAccounts ?? [])
@@ -202,28 +195,31 @@ export default function AgentScreen() {
     return [...connectedMail, ...fallbackMail];
   }, [user]);
 
-  const schedulePersonaSave = useCallback(
-    (nextState) => {
-      if (personaSaveTimeout.current) {
-        clearTimeout(personaSaveTimeout.current);
-      }
-      personaSaveTimeout.current = setTimeout(() => {
-        savePersona(nextState).catch(() => null);
-      }, 600);
-    },
-    [savePersona]
-  );
+  const personaErrorMessage = useMemo(() => {
+    if (!personaError) {
+      return null;
+    }
+    if (typeof personaError === "string") {
+      return personaError;
+    }
+    if (personaError instanceof Error) {
+      return personaError.message;
+    }
+    return String(personaError);
+  }, [personaError]);
 
   const handlePersonaConfigUpdate = useCallback(
     (updates) => {
       setPersonaConfig((prev) => {
-        const next = { ...prev, ...updates };
-        schedulePersonaSave(next);
-        return next;
+        return { ...prev, ...updates };
       });
     },
-    [schedulePersonaSave]
+    []
   );
+
+  const handlePersonaSave = useCallback(() => {
+    savePersona(personaConfig).catch(() => null);
+  }, [personaConfig, savePersona]);
 
   const handleTemplateSearch = useCallback(
     async (query) => {
@@ -535,6 +531,9 @@ export default function AgentScreen() {
             personaConfig={personaConfig}
             onUpdatePersonaConfig={handlePersonaConfigUpdate}
             defaultSignature={defaultSignature}
+            onSavePersona={handlePersonaSave}
+            savingPersona={personaSaving}
+            personaError={personaErrorMessage}
           />
         )}
       </AgentStack.Screen>
