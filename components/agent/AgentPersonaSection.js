@@ -1,31 +1,6 @@
-import { useMemo } from "react";
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from "react-native";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
-
-function buildPreviewText({ scenarioValue, instructionValue, signatureValue }) {
-  const trimmedScenario = scenarioValue?.trim();
-  const scenarioLine = trimmedScenario?.length ? trimmedScenario : "din forespørgsel";
-
-  const trimmedInstruction = instructionValue?.trim();
-  const instructionSentence = trimmedInstruction?.length
-    ? `Jeg holder mig til dine retningslinjer: ${trimmedInstruction}.`
-    : "Jeg holder tonen personlig, venlig og uden unødige formaliteter.";
-
-  return [
-    "Hej {navn},",
-    "",
-    `Tak fordi du skriver angående ${scenarioLine}. Jeg har kigget på det med det samme og sikrer, at du får en løsning, der matcher dine behov.`,
-    "",
-    instructionSentence,
-    "",
-    "Jeg vender tilbage med en opdatering hurtigst muligt – og du er altid velkommen til at svare direkte på denne besked, hvis der dukker nye detaljer op.",
-    "",
-    signatureValue || "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
 
 export default function AgentPersonaSection({
   signature,
@@ -35,19 +10,11 @@ export default function AgentPersonaSection({
   onScenarioChange,
   instructions,
   onInstructionsChange,
+  onTestPersona,
+  testResult,
+  isTesting,
+  testError,
 }) {
-  const resolvedSignature =
-    signature && signature.trim().length ? signature : defaultSignature ?? "";
-
-  const previewText = useMemo(
-    () =>
-      buildPreviewText({
-        scenarioValue: scenario,
-        instructionValue: instructions,
-        signatureValue: resolvedSignature,
-      }),
-    [scenario, instructions, resolvedSignature],
-  );
 
   return (
     <AgentSection
@@ -108,14 +75,28 @@ export default function AgentPersonaSection({
 
       <View style={styles.previewBlock}>
         <View style={styles.testButtonWrapper}>
-          <TouchableOpacity style={styles.testButton} activeOpacity={0.9}>
-            <Text style={styles.testButtonText}>Test svar</Text>
+          <TouchableOpacity
+            style={[styles.testButton, isTesting && { opacity: 0.75 }]}
+            activeOpacity={0.9}
+            onPress={onTestPersona}
+            disabled={isTesting}
+          >
+            <Text style={styles.testButtonText}>
+              {isTesting ? "Tester..." : "Test svar"}
+            </Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.previewHeading}>Eksempel på svar</Text>
-        <View style={styles.previewBox}>
-          <Text style={styles.previewText}>{previewText}</Text>
-        </View>
+        {testError ? (
+          <Text style={styles.errorText}>{testError}</Text>
+        ) : null}
+        {typeof testResult === "string" && testResult.trim().length ? (
+          <>
+            <Text style={styles.previewHeading}>Test svar</Text>
+            <View style={styles.previewBox}>
+              <Text style={styles.previewText}>{testResult}</Text>
+            </View>
+          </>
+        ) : null}
       </View>
     </AgentSection>
   );
@@ -189,5 +170,9 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: COLORS.text,
+  },
+  errorText: {
+    color: COLORS.error ?? "#ff6b6b",
+    fontSize: 13,
   },
 });

@@ -75,7 +75,7 @@ export default function AgentScreen() {
 
     supabase
       .from("profiles")
-      .select("supabase_user_id")
+      .select("user_id")
       .eq("clerk_user_id", user.id)
       .maybeSingle()
       .then(async ({ data, error }) => {
@@ -86,9 +86,7 @@ export default function AgentScreen() {
           return;
         }
         const fetchedId =
-          typeof data?.supabase_user_id === "string" && data.supabase_user_id.length
-            ? data.supabase_user_id
-            : null;
+          typeof data?.user_id === "string" && data.user_id.length ? data.user_id : null;
         if (!fetchedId) {
           setSupabaseUserId(null);
           return;
@@ -122,7 +120,9 @@ export default function AgentScreen() {
     persona,
     loading: personaLoading,
     save: savePersona,
-  } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: !supabaseUserId });
+    saving: personaSaving,
+    error: personaError,
+  } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: false });
   const {
     templates,
     loading: templatesLoading,
@@ -143,6 +143,8 @@ export default function AgentScreen() {
     scenario: "",
     instructions: "",
   });
+  const [hasHydratedPersona, setHasHydratedPersona] = useState(false);
+  const [isPersonaModified, setIsPersonaModified] = useState(false);
   const [templateSearchResults, setTemplateSearchResults] = useState([]);
   const [templateSearchError, setTemplateSearchError] = useState(null);
   const [isSearchingTemplates, setIsSearchingTemplates] = useState(false);
@@ -151,7 +153,9 @@ export default function AgentScreen() {
   const [templateSourceBody, setTemplateSourceBody] = useState("");
   const [templateSourceError, setTemplateSourceError] = useState(null);
   const [isFetchingTemplateSource, setIsFetchingTemplateSource] = useState(false);
-  const personaSaveTimeout = useRef(null);
+  const [personaTestResult, setPersonaTestResult] = useState("");
+  const [personaTestError, setPersonaTestError] = useState(null);
+  const [isTestingPersonaResponse, setIsTestingPersonaResponse] = useState(false);
 
   const defaultSignature = useMemo(() => {
     const trimmedName = displayName?.trim();
@@ -164,26 +168,30 @@ export default function AgentScreen() {
   }, [displayName, shopDomain]);
 
   useEffect(() => {
-    if (persona) {
+    if (persona && !isPersonaModified) {
       setPersonaConfig({
         signature: persona.signature ?? "",
         scenario: persona.scenario ?? "",
         instructions: persona.instructions ?? "",
       });
-    } else {
+      setHasHydratedPersona(true);
+      return;
+    }
+
+    if (!persona && !hasHydratedPersona) {
       setPersonaConfig({
         signature: defaultSignature,
         scenario: "",
         instructions: "",
       });
+      setHasHydratedPersona(true);
     }
-  }, [persona, defaultSignature]);
+  }, [persona, defaultSignature, hasHydratedPersona, isPersonaModified]);
 
-  useEffect(() => () => {
-    if (personaSaveTimeout.current) {
-      clearTimeout(personaSaveTimeout.current);
-    }
-  }, []);
+  useEffect(() => {
+    setHasHydratedPersona(false);
+    setIsPersonaModified(false);
+  }, [supabaseUserId]);
 
   const prioritizedProviders = useMemo(() => {
     const connected = new Set(
@@ -202,28 +210,89 @@ export default function AgentScreen() {
     return [...connectedMail, ...fallbackMail];
   }, [user]);
 
-  const schedulePersonaSave = useCallback(
-    (nextState) => {
-      if (personaSaveTimeout.current) {
-        clearTimeout(personaSaveTimeout.current);
-      }
-      personaSaveTimeout.current = setTimeout(() => {
-        savePersona(nextState).catch(() => null);
-      }, 600);
-    },
-    [savePersona]
-  );
+  const personaErrorMessage = useMemo(() => {
+    if (!personaError) {
+      return null;
+    }
+    if (typeof personaError === "string") {
+      return personaError;
+    }
+    if (personaError instanceof Error) {
+      return personaError.message;
+    }
+    return String(personaError);
+  }, [personaError]);
 
   const handlePersonaConfigUpdate = useCallback(
     (updates) => {
       setPersonaConfig((prev) => {
         const next = { ...prev, ...updates };
-        schedulePersonaSave(next);
         return next;
       });
+      setIsPersonaModified(true);
     },
-    [schedulePersonaSave]
+    []
   );
+
+  const handlePersonaSave = useCallback(() => {
+    savePersona(personaConfig)
+      .then(() => {
+        setIsPersonaModified(false);
+      })
+      .catch(() => null);
+  }, [personaConfig, savePersona]);
+
+  const handlePersonaTest = useCallback(async () => {
+    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
+    if (!supabaseUrl) {
+      setPersonaTestError("Supabase URL mangler i miljøvariablerne.");
+      return;
+    }
+
+    setPersonaTestError(null);
+    setPersonaTestResult("");
+    setIsTestingPersonaResponse(true);
+
+    try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error("Kunne ikke hente session token.");
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/persona-test`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          signature: personaConfig.signature || defaultSignature,
+          scenario: personaConfig.scenario,
+          instructions: personaConfig.instructions,
+        }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const message =
+          typeof payload?.error === "string"
+            ? payload.error
+            : `Persona test fejlede (${response.status}).`;
+        throw new Error(message);
+      }
+
+      const reply =
+        typeof payload?.reply === "string" && payload.reply.trim().length
+          ? payload.reply.trim()
+          : "Testen returnerede intet svar.";
+      setPersonaTestResult(reply);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Ukendt fejl ved testen.";
+      setPersonaTestError(message);
+    } finally {
+      setIsTestingPersonaResponse(false);
+    }
+  }, [personaConfig, defaultSignature, getToken]);
 
   const handleTemplateSearch = useCallback(
     async (query) => {
@@ -535,6 +604,13 @@ export default function AgentScreen() {
             personaConfig={personaConfig}
             onUpdatePersonaConfig={handlePersonaConfigUpdate}
             defaultSignature={defaultSignature}
+            onSavePersona={handlePersonaSave}
+            savingPersona={personaSaving}
+            personaError={personaErrorMessage}
+            onTestPersona={handlePersonaTest}
+            testResult={personaTestResult}
+            testError={personaTestError}
+            isTestingPersona={isTestingPersonaResponse}
           />
         )}
       </AgentStack.Screen>

@@ -3,6 +3,12 @@ import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0/me";
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
+const emitDebugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
 
 // --- Env ---
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
@@ -122,6 +128,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const body = await readBodySafe(req);
   const debug = url.searchParams.get("debug") === "1" || body?.debug === true;
+  const debugEnabled = debug || EDGE_DEBUG_LOGS;
 
   try {
     if (req.method !== "GET" && req.method !== "POST") {
@@ -138,7 +145,7 @@ Deno.serve(async (req) => {
 
     const userId = await requireUserIdFromJWT(req);
 
-    if (debug) {
+    if (debugEnabled) {
       try {
         const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_microsoft");
         const meta = (tokens?.data ?? []).map((t: any) => ({
@@ -147,9 +154,9 @@ Deno.serve(async (req) => {
           scopes: t.scopes,
           created_at: t.created_at,
         }));
-        console.log("DEBUG oauth_microsoft tokens:", meta);
+        emitDebugLog("DEBUG oauth_microsoft tokens:", meta);
       } catch (error) {
-        console.log("DEBUG getUserOauthAccessToken failed:", (error as any)?.message || error);
+        emitDebugLog("DEBUG getUserOauthAccessToken failed:", (error as any)?.message || error);
       }
     }
 
@@ -281,7 +288,7 @@ Deno.serve(async (req) => {
     });
 
     if (debug) {
-      console.log("DEBUG outlook-list count:", items.length, "nextPageToken:", nextPageToken);
+      emitDebugLog("DEBUG outlook-list count:", items.length, "nextPageToken:", nextPageToken);
     }
 
     return Response.json({ items, nextPageToken });

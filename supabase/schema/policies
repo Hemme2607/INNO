@@ -1,0 +1,323 @@
+# Supabase RLS policies
+
+Denne fil indeholder de konkrete `CREATE POLICY` statements, så det er nemt at genskabe eller opdatere RLS på tværs af tabeller. Kør ét afsnit ad gangen når du deployer ændringer.
+
+---
+
+## public.profiles
+
+```sql
+alter table public.profiles enable row level security;
+
+drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_insert_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+drop policy if exists "profiles_delete_own" on public.profiles;
+
+create policy "profiles_select_own"
+  on public.profiles
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "profiles_insert_own"
+  on public.profiles
+  for insert
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "profiles_update_own"
+  on public.profiles
+  for update
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "profiles_delete_own"
+  on public.profiles
+  for delete
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+  );
+```
+
+---
+
+## public.shops
+
+```sql
+alter table public.shops enable row level security;
+
+drop policy if exists "shops_select_own" on public.shops;
+drop policy if exists "shops_insert_own" on public.shops;
+drop policy if exists "shops_update_own" on public.shops;
+drop policy if exists "shops_delete_own" on public.shops;
+
+create policy "shops_select_own"
+  on public.shops
+  for select
+  using (
+    owner_user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+
+create policy "shops_insert_own"
+  on public.shops
+  for insert
+  with check (
+    owner_user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+
+create policy "shops_update_own"
+  on public.shops
+  for update
+  using (
+    owner_user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  )
+  with check (
+    owner_user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+
+create policy "shops_delete_own"
+  on public.shops
+  for delete
+  using (
+    owner_user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.shops.owner_user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+```
+
+---
+
+## public.agent_persona
+
+```sql
+alter table public.agent_persona enable row level security;
+
+drop policy if exists "agent_persona_select_own" on public.agent_persona;
+drop policy if exists "agent_persona_modify_own" on public.agent_persona;
+
+create policy "agent_persona_select_own"
+  on public.agent_persona
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.agent_persona.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+
+create policy "agent_persona_modify_own"
+  on public.agent_persona
+  for all
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.agent_persona.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.agent_persona.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+```
+
+---
+
+## public.agent_documents
+
+```sql
+alter table public.agent_documents enable row level security;
+
+drop policy if exists "agent_documents_select_own" on public.agent_documents;
+drop policy if exists "agent_documents_modify_own" on public.agent_documents;
+
+create policy "agent_documents_select_own"
+  on public.agent_documents
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+
+create policy "agent_documents_modify_own"
+  on public.agent_documents
+  for all
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+```
+
+---
+
+## public.agent_automation
+
+```sql
+alter table public.agent_automation enable row level security;
+
+drop policy if exists "agent_automation_select_own" on public.agent_automation;
+drop policy if exists "agent_automation_modify_own" on public.agent_automation;
+
+create policy "agent_automation_select_own"
+  on public.agent_automation
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+
+create policy "agent_automation_modify_own"
+  on public.agent_automation
+  for all
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+```
+
+---
+
+## public.agent_templates
+
+```sql
+alter table public.agent_templates enable row level security;
+
+drop policy if exists "agent_templates_select_own" on public.agent_templates;
+drop policy if exists "agent_templates_modify_own" on public.agent_templates;
+
+create policy "agent_templates_select_own"
+  on public.agent_templates
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+
+create policy "agent_templates_modify_own"
+  on public.agent_templates
+  for all
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+  );
+```
+
+---
+
+## public.mail_accounts (mønster for øvrige mail-tabeller)
+
+```sql
+alter table public.mail_accounts enable row level security;
+
+drop policy if exists "mail_accounts_select_own" on public.mail_accounts;
+drop policy if exists "mail_accounts_modify_own" on public.mail_accounts;
+
+create policy "mail_accounts_select_own"
+  on public.mail_accounts
+  for select
+  using (user_id::text = coalesce(auth.jwt()->>'supabase_user_id', ''));
+
+create policy "mail_accounts_modify_own"
+  on public.mail_accounts
+  for all
+  using (user_id::text = coalesce(auth.jwt()->>'supabase_user_id', ''))
+  with check (user_id::text = coalesce(auth.jwt()->>'supabase_user_id', ''));
+```
+
+> Brug samme mønster (`user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')`) for tabeller som `mail_jobs`, `ai_drafts`, `auto_reply_log` osv., da de deler samme `user_id`-kolonne og ejerskabskrav.
+
+---
+
+## Supabase Storage (agent-documents bucket)
+
+```sql
+drop policy if exists "agent_docs_select" on storage.objects;
+drop policy if exists "agent_docs_write" on storage.objects;
+drop policy if exists "agent_docs_update" on storage.objects;
+drop policy if exists "agent_docs_delete" on storage.objects;
+
+create policy "agent_docs_select"
+  on storage.objects
+  for select
+  using (
+    bucket_id = 'agent-documents'
+    and split_part(name, '/', 1) = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "agent_docs_write"
+  on storage.objects
+  for insert
+  with check (
+    bucket_id = 'agent-documents'
+    and split_part(name, '/', 1) = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "agent_docs_update"
+  on storage.objects
+  for update
+  using (
+    bucket_id = 'agent-documents'
+    and split_part(name, '/', 1) = coalesce(auth.jwt()->>'sub', '')
+  )
+  with check (
+    bucket_id = 'agent-documents'
+    and split_part(name, '/', 1) = coalesce(auth.jwt()->>'sub', '')
+  );
+
+create policy "agent_docs_delete"
+  on storage.objects
+  for delete
+  using (
+    bucket_id = 'agent-documents'
+    and split_part(name, '/', 1) = coalesce(auth.jwt()->>'sub', '')
+  );
+```
+
+---
+
+**Note:** Hvis Clerk-templaten ikke udsender `supabase_user_id`, vil fallbacket via `profiles`/`sub` fortsat fungere for de tabeller hvor det er indbygget. Men for at undgå `22P02`-fejl bør templaten udfylde claimet så hurtigt som muligt. Tilføj flere tabeller efter samme mønster hvis du introducerer nye `user_id`-ejerkolonner.

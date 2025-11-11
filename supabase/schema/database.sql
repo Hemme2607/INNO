@@ -1,6 +1,5 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
--- Dette er vores database setup for Supabase
 
 CREATE TABLE public.agent_automation (
   user_id uuid NOT NULL,
@@ -120,7 +119,7 @@ CREATE TABLE public.profiles (
   image_url text,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   updated_at timestamp with time zone NOT NULL DEFAULT now(),
-  user_id uuid NOT NULL,
+  user_id uuid NOT NULL UNIQUE,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
@@ -130,6 +129,8 @@ CREATE TABLE public.shops (
   access_token_encrypted bytea NOT NULL,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   owner_user_id uuid NOT NULL,
+  agent_active boolean DEFAULT false,
+  last_mail_check timestamp with time zone,
   CONSTRAINT shops_pkey PRIMARY KEY (id),
   CONSTRAINT shops_owner_user_uuid_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id)
 );
