@@ -1,7 +1,9 @@
-import { useState, useCallback } from "react";
-import { useAuth } from "@clerk/clerk-expo";
+import { useState, useCallback, useMemo } from "react";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { View, Text, TouchableOpacity, ScrollView, Image, Modal, TextInput, ActivityIndicator, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 import { useClerkSupabase } from "../lib/supabaseClient";
@@ -19,12 +21,16 @@ const sections = [
         name: "Gmail",
         description: "Importer labels, tråd-historik og vedhæftede filer.",
         logo: require("../assets/google-logo.png"),
+        providerStrategy: "oauth_google",
+        scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
       },
       {
         id: "outlook",
         name: "Outlook",
         description: "Synkroniser indbakker og send svar via Microsoft 365.",
         logo: require("../assets/Microsoft-logo.png"),
+        providerStrategy: "oauth_microsoft",
+        scopes: ["https://graph.microsoft.com/Mail.Read"],
       },
     ],
   },
@@ -47,6 +53,7 @@ const sections = [
 
 export default function IntegrationsScreen() {
   const { getToken } = useAuth();
+  const { user, isLoaded: isUserLoaded } = useUser();
   const supabase = useClerkSupabase();
   const {
     shopDomain: shopifyConnectedDomain,
@@ -62,9 +69,25 @@ export default function IntegrationsScreen() {
   const isLoadingConnection = !isShopDomainLoaded;
   const [isMutating, setIsMutating] = useState(false);
   const [isTestingShopify, setIsTestingShopify] = useState(false);
+  const [linkingProviderId, setLinkingProviderId] = useState(null);
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
+  const oauthRedirectUrl = useMemo(
+    () => AuthSession.makeRedirectUri({ path: "oauth-native-callback" }),
+    []
+  );
+  const externalAccountMap = useMemo(() => {
+    const map = new Map();
+    if (user?.externalAccounts && Array.isArray(user.externalAccounts)) {
+      for (const account of user.externalAccounts) {
+        if (account?.provider) {
+          map.set(account.provider, account);
+        }
+      }
+    }
+    return map;
+  }, [user]);
 
   const normalizeDomain = useCallback(
     (value) =>
@@ -223,10 +246,78 @@ export default function IntegrationsScreen() {
       ]
     );
   };
-
-  const handleGenericIntegration = (name) => {
+  const handleGenericIntegration = useCallback((name) => {
     Alert.alert("Kommer snart", `${name} integrationen er på vej. Indtil da kan du forbinde Shopify.`);
-  };
+  }, []);
+  const handleMailIntegration = useCallback(
+    async (integration) => {
+      if (!isUserLoaded) {
+        Alert.alert("Vent et øjeblik", "Brugerdata indlæses stadig. Prøv igen om lidt.");
+        return;
+      }
+      if (!user) {
+        Alert.alert("Ikke logget ind", "Log ind for at forbinde dine mailkonti.");
+        return;
+      }
+      if (!integration?.providerStrategy) {
+        handleGenericIntegration(integration?.name ?? "Integration");
+        return;
+      }
+      const alreadyConnected = externalAccountMap.get(integration.providerStrategy);
+      if (alreadyConnected) {
+        Alert.alert(
+          "Allerede forbundet",
+          `${integration.name} er allerede forbundet til ${alreadyConnected.emailAddress || "din konto"}.`
+        );
+        return;
+      }
+
+      setLinkingProviderId(integration.id);
+      try {
+        const externalAccount = await user.createExternalAccount({
+          strategy: integration.providerStrategy,
+          redirectUrl: oauthRedirectUrl,
+          additionalScopes: integration.scopes,
+        });
+
+        const verificationUrl =
+          externalAccount?.verification?.externalVerificationRedirectURL?.toString() ?? null;
+        let rotatingTokenNonce;
+
+        if (verificationUrl) {
+          const result = await WebBrowser.openAuthSessionAsync(verificationUrl, oauthRedirectUrl);
+          if (result.type !== "success" || !result.url) {
+            throw new Error(
+              result.type === "dismiss"
+                ? "Godkendelsen blev annulleret."
+                : "Kunne ikke gennemføre godkendelsen."
+            );
+          }
+          try {
+            const redirect = new URL(result.url);
+            rotatingTokenNonce = redirect.searchParams.get("rotating_token_nonce") ?? undefined;
+          } catch {
+            rotatingTokenNonce = undefined;
+          }
+        }
+
+        await user.reload(
+          rotatingTokenNonce ? { rotatingTokenNonce } : undefined,
+        );
+        Alert.alert(`${integration.name} forbundet`, "Din mailintegration er klar til brug.");
+      } catch (error) {
+        const message =
+          error?.errors?.[0]?.longMessage ||
+          error?.errors?.[0]?.message ||
+          error?.message ||
+          "Kunne ikke forbinde integrationen.";
+        Alert.alert(`${integration.name} fejlede`, message);
+      } finally {
+        setLinkingProviderId(null);
+      }
+    },
+    [externalAccountMap, handleGenericIntegration, isUserLoaded, oauthRedirectUrl, user]
+  );
 
   return (
     <LinearGradient
@@ -259,15 +350,35 @@ export default function IntegrationsScreen() {
             <View style={GlobalStyles.integrationCardGrid}>
               {section.integrations.map((integration) => {
                 const isShopify = integration.id === "shopify";
+                const isMailIntegration = Boolean(integration.providerStrategy);
+                const connectedAccount = isMailIntegration
+                  ? externalAccountMap.get(integration.providerStrategy) ?? null
+                  : null;
+                const isConnected = Boolean(connectedAccount);
+                const isLinking = linkingProviderId === integration.id;
                 const buttonLabel = isShopify
                   ? shopifyConnectedDomain
                     ? "Administrer Shopify"
                     : "Tilføj Shopify"
+                  : isMailIntegration
+                  ? isLinking
+                    ? "Tilslutter..."
+                    : isConnected
+                    ? "Forbundet"
+                    : `Tilføj ${integration.name}`
                   : "Tilføj integration";
 
                 const onPress = isShopify
                   ? openShopifyModal
+                  : isMailIntegration
+                  ? () => handleMailIntegration(integration)
                   : () => handleGenericIntegration(integration.name);
+
+                const buttonDisabled = isShopify
+                  ? isLoadingConnection || isMutating
+                  : isMailIntegration
+                  ? isLinking || isConnected
+                  : false;
 
                 return (
                   <View key={integration.id} style={GlobalStyles.integrationCard}>
@@ -308,15 +419,24 @@ export default function IntegrationsScreen() {
                         ) : null}
                       </>
                     ) : null}
+                    {isMailIntegration && isConnected ? (
+                      <Text style={GlobalStyles.integrationCardStatus}>
+                        Forbundet til {connectedAccount.emailAddress || "din konto"}
+                      </Text>
+                    ) : null}
                     <TouchableOpacity
                       style={GlobalStyles.integrationCardButton}
                       activeOpacity={0.9}
                       onPress={onPress}
-                      disabled={isShopify && (isLoadingConnection || isMutating)}
+                      disabled={buttonDisabled}
                     >
-                      <Text style={GlobalStyles.integrationCardButtonLabel}>
-                        {buttonLabel}
-                      </Text>
+                      {isMailIntegration && isLinking ? (
+                        <ActivityIndicator size="small" color={COLORS.background} />
+                      ) : (
+                        <Text style={GlobalStyles.integrationCardButtonLabel}>
+                          {buttonLabel}
+                        </Text>
+                      )}
                     </TouchableOpacity>
                   </View>
                 );
