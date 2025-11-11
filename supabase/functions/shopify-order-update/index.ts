@@ -35,6 +35,15 @@ type UpdatePayload = {
   action: string;
   orderId: number;
   payload?: Record<string, unknown>;
+  clerkUserId?: string;
+  supabaseUserId?: string;
+};
+
+const DEFAULT_AUTOMATION = {
+  order_updates: true,
+  cancel_orders: true,
+  automatic_refunds: false,
+  historic_inbox_access: false,
 };
 
 function readBearerToken(req: Request): string {
@@ -65,6 +74,7 @@ async function requireClerkUserId(req: Request): Promise<string> {
   return sub;
 }
 
+// Finder Supabase bruger-id via profils-tabellen så vi kan kigge i agent_automation
 async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
@@ -95,8 +105,9 @@ async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
   return supabaseUserId;
 }
 
+// Henter butiksdomæne og dekrypteret token til den aktuelle bruger
 async function getShopForUser(clerkUserId: string): Promise<ShopRecord> {
-  // Slår butikken op og dekrypterer tokenet inden vi ringer til Shopify
+  // Slår butikken op og dekrypterer tokenet inden vi kalder Shopify
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
   }
@@ -125,6 +136,39 @@ async function getShopForUser(clerkUserId: string): Promise<ShopRecord> {
   }
 
   return data;
+}
+
+// Slår automationsflagene op, så vi kan blokere ulovlige handlinger
+async function fetchAutomationSettings(supabaseUserId: string) {
+  if (!supabase) {
+    throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
+  }
+
+  const { data, error } = await supabase
+    .from("agent_automation")
+    .select("order_updates, cancel_orders, automatic_refunds, historic_inbox_access")
+    .eq("user_id", supabaseUserId)
+    .maybeSingle();
+
+  if (error) {
+    console.warn("shopify-order-update: kunne ikke hente automation settings", error);
+    return DEFAULT_AUTOMATION;
+  }
+
+  return {
+    order_updates:
+      typeof data?.order_updates === "boolean" ? data.order_updates : DEFAULT_AUTOMATION.order_updates,
+    cancel_orders:
+      typeof data?.cancel_orders === "boolean" ? data.cancel_orders : DEFAULT_AUTOMATION.cancel_orders,
+    automatic_refunds:
+      typeof data?.automatic_refunds === "boolean"
+        ? data.automatic_refunds
+        : DEFAULT_AUTOMATION.automatic_refunds,
+    historic_inbox_access:
+      typeof data?.historic_inbox_access === "boolean"
+        ? data.historic_inbox_access
+        : DEFAULT_AUTOMATION.historic_inbox_access,
+  };
 }
 
 function shopifyUrl(shop: ShopRecord, path: string): string {
@@ -282,21 +326,65 @@ async function handleAction(shop: ShopRecord, payload: UpdatePayload) {
   }
 }
 
+// Simpel guard der sørger for at handlinger matcher automation-indstillingerne
+function ensureActionAllowed(
+  action: string,
+  automation: {
+    order_updates: boolean;
+    cancel_orders: boolean;
+    automatic_refunds: boolean;
+    historic_inbox_access: boolean;
+  },
+) {
+  const notAllowed = (reason: string) =>
+    Object.assign(new Error(`Automatiseringen tillader ikke denne handling: ${reason}`), {
+      status: 403,
+    });
+
+  switch (action) {
+    case "update_shipping_address":
+    case "add_note":
+    case "add_tag":
+      if (!automation.order_updates) {
+        throw notAllowed("ordreopdateringer er deaktiveret.");
+      }
+      break;
+    case "cancel_order":
+      if (!automation.cancel_orders) {
+        throw notAllowed("annulleringer er deaktiveret.");
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") {
       return new Response("Method Not Allowed", { status: 405 });
     }
 
-    const userId = await requireClerkUserId(req);
-    const shop = await getShopForUser(userId);
-
+    const callerClerkUserId = await requireClerkUserId(req);
     const payload = (await req.json().catch(() => ({}))) as UpdatePayload;
 
     if (!payload || typeof payload !== "object") {
       throw Object.assign(new Error("Body skal være JSON objekt."), { status: 400 });
     }
 
+    const targetClerkUserId =
+      typeof payload?.clerkUserId === "string" && payload.clerkUserId.length
+        ? payload.clerkUserId
+        : callerClerkUserId;
+
+    const shop = await getShopForUser(targetClerkUserId);
+    const supabaseUserId =
+      typeof payload?.supabaseUserId === "string" && payload.supabaseUserId.length
+        ? payload.supabaseUserId
+        : await resolveSupabaseUserId(targetClerkUserId);
+    const automation = await fetchAutomationSettings(supabaseUserId);
+
+    ensureActionAllowed(payload.action, automation);
     const result = await handleAction(shop, payload);
     return Response.json({ ok: true, result });
   } catch (error) {

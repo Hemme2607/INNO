@@ -46,6 +46,7 @@ export default function AgentScreen() {
   const [isResolvingSupabaseId, setIsResolvingSupabaseId] = useState(false);
   const supabaseIdLookupAttempted = useRef(false);
 
+  // Hydrer persona-formen fra Supabase første gang (men lad manuelle ændringer stå)
   useEffect(() => {
     setSupabaseUserId(metadataSupabaseId);
     if (metadataSupabaseId) {
@@ -223,6 +224,7 @@ export default function AgentScreen() {
     return String(personaError);
   }, [personaError]);
 
+  // Lokal state for formularfelterne – gem først når brugeren klikker
   const handlePersonaConfigUpdate = useCallback(
     (updates) => {
       setPersonaConfig((prev) => {
@@ -242,6 +244,7 @@ export default function AgentScreen() {
       .catch(() => null);
   }, [personaConfig, savePersona]);
 
+  // Genererer et AI-testsvar via edge funktionen
   const handlePersonaTest = useCallback(async () => {
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
     if (!supabaseUrl) {
