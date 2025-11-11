@@ -3,6 +3,12 @@ import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
+const emitDebugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
 
 // --- Env ---
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
@@ -117,6 +123,7 @@ Deno.serve(async (req) => {
   const debugQuery = url.searchParams.get("debug") === "1";
   const messageId = (url.searchParams.get("messageId") ?? body?.messageId ?? "").trim();
   const debug = debugQuery || !!body?.debug;
+  const debugEnabled = debug || EDGE_DEBUG_LOGS;
 
   try {
     if (req.method !== "GET" && req.method !== "POST") {
@@ -135,7 +142,7 @@ Deno.serve(async (req) => {
     // 1) Verificér bruger
     const userId = await requireUserIdFromJWT(req);
     // Debug: inspect Clerk's stored Google OAuth tokens (without leaking the token)
-    if (debug) {
+    if (debugEnabled) {
       try {
         const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
         const meta = (tokens?.data ?? []).map((t: any) => ({
@@ -144,9 +151,9 @@ Deno.serve(async (req) => {
           scopes: t.scopes ?? undefined,
           created_at: t.created_at,
         }));
-        console.log("DEBUG oauth_google tokens:", meta);
+        emitDebugLog("DEBUG oauth_google tokens:", meta);
       } catch (e) {
-        console.log("DEBUG getUserOauthAccessToken failed:", (e as any)?.message || e);
+        emitDebugLog("DEBUG getUserOauthAccessToken failed:", (e as any)?.message || e);
       }
     }
 
@@ -186,8 +193,8 @@ Deno.serve(async (req) => {
     const listJson = await fetchJson<GmailListResponse>(listUrl.toString(), gmailToken);
     const ids = listJson.messages ?? [];
 
-    if (debug) {
-      console.log("DEBUG list meta:", {
+    if (debugEnabled) {
+      emitDebugLog("DEBUG list meta:", {
         count: ids.length,
         nextPageToken: listJson.nextPageToken ?? null,
         q, labelIds, maxResults,
@@ -218,7 +225,7 @@ Deno.serve(async (req) => {
       }),
     )).filter(Boolean);
 
-    if (debug) console.log("DEBUG items count:", items.length);
+    if (debugEnabled) emitDebugLog("DEBUG items count:", items.length);
 
     return Response.json({ items, nextPageToken: listJson.nextPageToken ?? null });
   } catch (err: any) {

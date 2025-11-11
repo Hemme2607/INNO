@@ -9,6 +9,10 @@ export default function AgentPersonaDetailsScreen({
   onSavePersona,
   savingPersona = false,
   personaError = null,
+  onTestPersona,
+  testResult,
+  testError,
+  isTestingPersona = false,
 }) {
   const handleSignatureChange = (value) => {
     onUpdatePersonaConfig({ signature: value });
@@ -36,6 +40,10 @@ export default function AgentPersonaDetailsScreen({
         onScenarioChange={handleScenarioChange}
         instructions={personaConfig?.instructions ?? ""}
         onInstructionsChange={handleInstructionsChange}
+        onTestPersona={onTestPersona}
+        testResult={testResult}
+        testError={testError}
+        isTesting={isTestingPersona}
       />
       <View style={styles.footer}>
         {personaError ? <Text style={styles.errorText}>{personaError}</Text> : null}

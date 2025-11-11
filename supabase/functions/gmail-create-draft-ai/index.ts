@@ -3,6 +3,12 @@ import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/i
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
+const emitDebugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
 
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
 const CLERK_JWT_ISSUER = Deno.env.get("CLERK_JWT_ISSUER");
@@ -164,13 +170,13 @@ Deno.serve(async (req) => {
   let orders = Array.isArray(shopContext?.orders) ? shopContext.orders : [];
   let matchedSubjectNumber: string | null = null;
 
-    console.log("gmail-create-draft-ai: initial fetch orders length:", orders?.length ?? 0, "for email:", fromEmail);
+    emitDebugLog("gmail-create-draft-ai: initial fetch orders length:", orders?.length ?? 0, "for email:", fromEmail);
 
     if ((!orders || orders.length === 0) && fromEmail) {
       // Retry without email filter to fetch recent orders and try to match by customer email fields
       const fallbackContext = await fetchShopifyContext(clerkToken);
       const fallbackOrders = Array.isArray(fallbackContext?.orders) ? fallbackContext.orders : [];
-      console.log("gmail-create-draft-ai: fetched fallback recent orders length:", fallbackOrders.length);
+      emitDebugLog("gmail-create-draft-ai: fetched fallback recent orders length:", fallbackOrders.length);
 
       if (fallbackOrders.length) {
         const matched = fallbackOrders.filter((o: any) => {
@@ -182,7 +188,10 @@ Deno.serve(async (req) => {
           ].filter(Boolean).map((s: string) => String(s).toLowerCase());
           const matchedResult = matchedAny(candidates, String(fromEmail).toLowerCase());
           if (matchedResult) {
-            console.log("gmail-create-draft-ai: matched order by email candidate:", { orderId: o?.id ?? o?.name ?? o?.order_number, candidates });
+            emitDebugLog("gmail-create-draft-ai: matched order by email candidate:", {
+              orderId: o?.id ?? o?.name ?? o?.order_number,
+              candidates,
+            });
           }
           return matchedResult;
         });
@@ -198,12 +207,12 @@ Deno.serve(async (req) => {
       // Find a number sequence in subject (e.g., "ordre 1001", "#1001", "order 1001")
       const numMatch = subject.match(/(?:ordre|order)?\s*#?\s*(\d{3,})/i) ?? subject.match(/(\d{3,})/);
       const subjectNumber = numMatch ? numMatch[1] : null;
-      console.log("gmail-create-draft-ai: subjectNumber:", subjectNumber, "subject:", subject);
+      emitDebugLog("gmail-create-draft-ai: subjectNumber:", subjectNumber, "subject:", subject);
 
       if (subjectNumber) {
         const fallbackContext2 = await fetchShopifyContext(clerkToken);
         const fallbackOrders2 = Array.isArray(fallbackContext2?.orders) ? fallbackContext2.orders : [];
-        console.log("gmail-create-draft-ai: fetched recent orders for subject-matching length:", fallbackOrders2.length);
+        emitDebugLog("gmail-create-draft-ai: fetched recent orders for subject-matching length:", fallbackOrders2.length);
 
         const matchedByNumber = fallbackOrders2.filter((o: any) => {
           const check = (val: any) => {
@@ -217,7 +226,12 @@ Deno.serve(async (req) => {
           };
           const candidates = [o?.name, o?.order_number, o?.id, o?.legacy_order?.order_number, o?.number];
           const matched = candidates.some(check);
-          if (matched) console.log("gmail-create-draft-ai: matched order by subject number", { orderId: o?.id ?? o?.name ?? o?.order_number, candidates });
+          if (matched) {
+            emitDebugLog("gmail-create-draft-ai: matched order by subject number", {
+              orderId: o?.id ?? o?.name ?? o?.order_number,
+              candidates,
+            });
+          }
           return matched;
         });
 
