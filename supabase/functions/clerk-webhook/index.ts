@@ -380,6 +380,28 @@ serve(async (req) => {
       if (error) {
         return new Response(`Upsert error: ${error.message}`, { status: 500 });
       }
+
+      // Sikrer default-række i agent_persona og agent_automation
+      await supabase
+        .from("agent_persona")
+        .upsert(
+          {
+            user_id: supabaseUserId,
+            signature: `Venlig hilsen\n${data?.first_name ?? "Din agent"}`,
+            scenario: "",
+            instructions: "",
+          },
+          { onConflict: "user_id", ignoreDuplicates: true }
+        );
+
+      await supabase
+        .from("agent_automation")
+        .upsert(
+          {
+            user_id: supabaseUserId,
+          },
+          { onConflict: "user_id", ignoreDuplicates: true }
+        );
     } else if (type === "user.deleted") {
       const candidateIds = new Set<string>();
 
