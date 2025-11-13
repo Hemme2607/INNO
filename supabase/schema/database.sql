@@ -95,6 +95,14 @@ CREATE TABLE public.mail_accounts (
   CONSTRAINT mail_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT mail_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+-- Gemmer historik så gmail-poll ikke laver duplikerede drafts
+CREATE TABLE public.gmail_poll_state (
+  clerk_user_id text NOT NULL,
+  last_message_id text,
+  last_internal_date bigint,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT gmail_poll_state_pkey PRIMARY KEY (clerk_user_id)
+);
 CREATE TABLE public.mail_jobs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL,
