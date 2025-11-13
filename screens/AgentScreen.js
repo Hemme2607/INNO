@@ -554,6 +554,31 @@ export default function AgentScreen() {
     [saveAutomation]
   );
 
+  // Bruges af hero-knappen til at aktivere/deaktivere den bagvedliggende cron
+  const handleToggleAutoDraft = useCallback(
+    async (nextValue) => {
+      if (automationSaving) return;
+      try {
+        await saveAutomation({ autoDraftEnabled: nextValue });
+        Alert.alert(
+          nextValue ? "Agent aktiveret" : "Agent deaktiveret",
+          nextValue
+            ? "Din agent begynder nu automatisk at klargøre udkast."
+            : "Agenten stopper med automatisk at oprette drafts."
+        );
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : typeof err?.message === "string"
+            ? err.message
+            : "Kunne ikke opdatere agentstatus. Prøv igen senere.";
+        Alert.alert("Fejl", message);
+      }
+    },
+    [automationSaving, saveAutomation]
+  );
+
   return (
     <AgentStack.Navigator
       screenOptions={{
@@ -594,6 +619,7 @@ export default function AgentScreen() {
             }
             automationDefaults={automationDefaults}
             onAutomationToggle={handleAutomationToggle}
+            onToggleAutoDraft={handleToggleAutoDraft}
           />
         )}
       </AgentStack.Screen>

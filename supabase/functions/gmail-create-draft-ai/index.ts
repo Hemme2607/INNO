@@ -19,6 +19,9 @@ const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
+const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
+const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
+const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 
 if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
@@ -27,6 +30,10 @@ if (!SERVICE_ROLE_KEY)
   console.warn("SERVICE_ROLE_KEY mangler – gmail-create-draft-ai kan ikke læse Supabase tabeller.");
 if (!OPENAI_API_KEY) console.warn("OPENAI_API_KEY mangler – AI udkast vil kun bruge fallback.");
 if (!Deno.env.get("OPENAI_MODEL")) console.warn("OPENAI_MODEL mangler – bruger default gpt-4o-mini.");
+if (!SHOPIFY_TOKEN_KEY)
+  console.warn("SHOPIFY_TOKEN_KEY mangler – direkte Shopify-opslag fra interne kald er slået fra.");
+if (!INTERNAL_AGENT_SECRET)
+  console.warn("INTERNAL_AGENT_SECRET mangler – interne automatiske kald er ikke sikret.");
 
 const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const JWKS = CLERK_JWT_ISSUER
@@ -91,11 +98,35 @@ type OpenAIResult = {
   actions: AutomationAction[];
 };
 
+type ShopCredentials = {
+  shop_domain: string;
+  access_token: string;
+};
+
 function getBearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   const match = String(header).match(/^Bearer\s+(.+)$/i);
   if (!match) throw Object.assign(new Error("Missing Clerk session token"), { status: 401 });
   return match[1];
+}
+
+// Tillader gmail-poll at kalde funktionen uden Clerk-session via delt secret
+function isInternalAutomationRequest(req: Request): boolean {
+  if (!INTERNAL_AGENT_SECRET) return false;
+  const candidate =
+    req.headers.get("x-internal-secret") ??
+    req.headers.get("X-Internal-Secret") ??
+    req.headers.get("x-automation-secret") ??
+    req.headers.get("X-Automation-Secret");
+  return candidate === INTERNAL_AGENT_SECRET;
+}
+
+async function readJsonBody(req: Request) {
+  try {
+    return await req.json();
+  } catch {
+    return {};
+  }
 }
 
 async function requireUserIdFromJWT(req: Request): Promise<string> {
@@ -185,14 +216,33 @@ async function createGmailDraft(rawMessage: string, token: string, threadId?: st
   return json;
 }
 
-async function fetchShopifyContext(clerkToken: string, email?: string) {
-  if (!PROJECT_URL) return null;
-  const url = new URL(`${PROJECT_URL}${SHOPIFY_ORDERS_FN}`);
-  if (email) url.searchParams.set("email", email);
-  url.searchParams.set("limit", "5");
-  const res = await fetch(url.toString(), { headers: { Authorization: `Bearer ${clerkToken}` } });
-  if (!res.ok) return null;
-  try { return await res.json(); } catch { return null; }
+// Henter ordrer via frontend-token eller falder tilbage til direkte Shopify-kald
+async function fetchShopifyContext(options: {
+  clerkToken?: string | null;
+  supabaseUserId?: string | null;
+  email?: string | null;
+}) {
+  const email = options.email ?? undefined;
+  if (options.clerkToken && PROJECT_URL) {
+    const url = new URL(`${PROJECT_URL}${SHOPIFY_ORDERS_FN}`);
+    if (email) url.searchParams.set("email", email);
+    url.searchParams.set("limit", "5");
+    const res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${options.clerkToken}` },
+    });
+    if (!res.ok) return null;
+    try {
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  if (options.supabaseUserId) {
+    return await fetchShopifyContextDirect(options.supabaseUserId, email);
+  }
+
+  return null;
 }
 
 async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
@@ -285,13 +335,14 @@ async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult
 async function executeAutomationActions(options: {
   clerkUserId: string;
   supabaseUserId: string | null;
-  clerkToken: string;
+  clerkToken?: string | null;
   actions: AutomationAction[];
 }): Promise<AutomationResult[]> {
   const results: AutomationResult[] = [];
-  if (!options.actions.length || !PROJECT_URL) {
+  if (!options.actions.length || !PROJECT_URL || !options.clerkToken) {
     return results;
   }
+  const clerkToken = options.clerkToken;
   const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/shopify-order-update`;
 
   for (const action of options.actions) {
@@ -309,7 +360,7 @@ async function executeAutomationActions(options: {
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${options.clerkToken}`,
+          Authorization: `Bearer ${clerkToken}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -338,14 +389,34 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-    const clerkToken = getBearerToken(req);
-    const clerkUserId = await requireUserIdFromJWT(req);
+    const body = await readJsonBody(req);
+    const internalRequest = isInternalAutomationRequest(req);
+
+    let clerkToken: string | null = null;
+    let clerkUserId: string;
+    if (internalRequest) {
+      const providedUserId = typeof body?.clerkUserId === "string" ? body.clerkUserId.trim() : "";
+      if (!INTERNAL_AGENT_SECRET) {
+        return new Response(JSON.stringify({ error: "Internt secret ikke konfigureret" }), {
+          status: 500,
+        });
+      }
+      if (!providedUserId) {
+        return new Response(JSON.stringify({ error: "clerkUserId mangler for internt kald" }), {
+          status: 400,
+        });
+      }
+      clerkUserId = providedUserId;
+    } else {
+      clerkToken = getBearerToken(req);
+      clerkUserId = await requireUserIdFromJWT(req);
+    }
+
     const supabaseUserId = await fetchSupabaseUserId(clerkUserId);
     const persona = await fetchPersona(supabaseUserId);
     const automation = await fetchAutomation(supabaseUserId);
     const gmailToken = await getGmailAccessToken(clerkUserId);
 
-    const body = await (async () => { try { return await req.json(); } catch { return {}; } })();
     const messageId = typeof body?.messageId === "string" ? body.messageId : null;
     if (!messageId) return new Response(JSON.stringify({ error: "messageId mangler" }), { status: 400 });
 
@@ -360,7 +431,11 @@ Deno.serve(async (req) => {
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
 
     // Try to fetch Shopify orders by email. If none found, fetch recent orders and try to match locally
-  let shopContext = await fetchShopifyContext(clerkToken, fromEmail);
+  let shopContext = await fetchShopifyContext({
+    clerkToken,
+    supabaseUserId,
+    email: fromEmail,
+  });
   let orders = Array.isArray(shopContext?.orders) ? shopContext.orders : [];
   let matchedSubjectNumber: string | null = null;
 
@@ -368,7 +443,7 @@ Deno.serve(async (req) => {
 
     if ((!orders || orders.length === 0) && fromEmail) {
       // Retry without email filter to fetch recent orders and try to match by customer email fields
-      const fallbackContext = await fetchShopifyContext(clerkToken);
+      const fallbackContext = await fetchShopifyContext({ clerkToken, supabaseUserId });
       const fallbackOrders = Array.isArray(fallbackContext?.orders) ? fallbackContext.orders : [];
       emitDebugLog("gmail-create-draft-ai: fetched fallback recent orders length:", fallbackOrders.length);
 
@@ -404,7 +479,7 @@ Deno.serve(async (req) => {
       emitDebugLog("gmail-create-draft-ai: subjectNumber:", subjectNumber, "subject:", subject);
 
       if (subjectNumber) {
-        const fallbackContext2 = await fetchShopifyContext(clerkToken);
+        const fallbackContext2 = await fetchShopifyContext({ clerkToken, supabaseUserId });
         const fallbackOrders2 = Array.isArray(fallbackContext2?.orders) ? fallbackContext2.orders : [];
         emitDebugLog("gmail-create-draft-ai: fetched recent orders for subject-matching length:", fallbackOrders2.length);
 
@@ -576,6 +651,54 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: message }), { status });
   }
 });
+// Bruges kun af interne kald hvor vi allerede kører med service role
+async function fetchShopifyContextDirect(userId: string, email?: string) {
+  if (!supabase || !SHOPIFY_TOKEN_KEY) return null;
+  let credentials: ShopCredentials | null = null;
+  try {
+    const { data, error } = await supabase
+      .rpc<ShopCredentials>("get_shop_credentials_for_user", {
+        p_owner_user_id: userId,
+        p_secret: SHOPIFY_TOKEN_KEY,
+      })
+      .single();
+    if (error || !data) {
+      console.warn("gmail-create-draft-ai: kunne ikke hente Shopify credentials", error);
+      return null;
+    }
+    credentials = data;
+  } catch (err) {
+    console.warn("gmail-create-draft-ai: rpc get_shop_credentials_for_user fejlede", err);
+    return null;
+  }
+
+  if (!credentials) return null;
+
+  try {
+    const domain = credentials.shop_domain.replace(/^https?:\/\//, "");
+    const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json`);
+    url.searchParams.set("limit", "5");
+    if (email) url.searchParams.set("email", email);
+
+    const res = await fetch(url.toString(), {
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": credentials.access_token,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.warn("gmail-create-draft-ai: Shopify orders slog fejl", res.status, text);
+      return null;
+    }
+    return await res.json().catch(() => null);
+  } catch (err) {
+    console.warn("gmail-create-draft-ai: Shopify fetch exception", err);
+    return null;
+  }
+}
+
 // Finder Supabase-user-id via profils-tabellen så vi kan slå persona og automation op
 async function fetchSupabaseUserId(clerkUserId: string): Promise<string | null> {
   if (!supabase) return null;

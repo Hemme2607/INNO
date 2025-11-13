@@ -14,8 +14,15 @@ export default function AgentHero({
   badgeLabel = "Driftsklar",
   onPrimaryActionPress,
   primaryActionLabel = "Aktivér agent",
+  primaryActionDisabled = false,
+  primaryActionIcon = "rocket-outline",
+  primaryActionColors = [COLORS.primaryDark, COLORS.primary],
   stats = DEFAULT_STATS,
 }) {
+  // Props styrer om knappen skal vise aktiver/deaktiver-tilstand
+  const actionColors = primaryActionColors;
+  const actionTextColor = primaryActionDisabled ? "#E2E8F0" : "#F5F8FF";
+
   return (
     <LinearGradient
       colors={["#1F2B45", "#141B2D"]}
@@ -54,15 +61,20 @@ export default function AgentHero({
         ))}
       </View>
 
-      <TouchableOpacity style={styles.primaryAction} onPress={onPrimaryActionPress} activeOpacity={0.9}>
+      <TouchableOpacity
+        style={[styles.primaryAction, primaryActionDisabled && styles.primaryActionDisabled]}
+        onPress={onPrimaryActionPress}
+        activeOpacity={0.9}
+        disabled={primaryActionDisabled || typeof onPrimaryActionPress !== "function"}
+      >
         <LinearGradient
-          colors={[COLORS.primaryDark, COLORS.primary]}
+          colors={actionColors}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.primaryActionGradient}
+          style={[styles.primaryActionGradient, primaryActionDisabled && styles.primaryActionGradientDisabled]}
         >
-          <Ionicons name="rocket-outline" size={18} color="#F5F8FF" />
-          <Text style={styles.primaryActionText}>{primaryActionLabel}</Text>
+          <Ionicons name={primaryActionIcon} size={18} color={actionTextColor} />
+          <Text style={[styles.primaryActionText, { color: actionTextColor }]}>{primaryActionLabel}</Text>
         </LinearGradient>
       </TouchableOpacity>
     </LinearGradient>
@@ -175,6 +187,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: "hidden",
   },
+  primaryActionDisabled: {
+    opacity: 0.85,
+  },
   primaryActionGradient: {
     flexDirection: "row",
     alignItems: "center",
@@ -182,6 +197,10 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 14,
     paddingHorizontal: 24,
+  },
+  primaryActionGradientDisabled: {
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.4)",
   },
   primaryActionText: {
     color: "#F5F8FF",
