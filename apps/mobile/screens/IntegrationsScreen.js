@@ -18,13 +18,13 @@ const sections = [
         id: "gmail",
         name: "Gmail",
         description: "Importer labels, tråd-historik og vedhæftede filer.",
-        logo: require("../assets/google-logo.png"),
+        logo: require("../../../assets/google-logo.png"),
       },
       {
         id: "outlook",
         name: "Outlook",
         description: "Synkroniser indbakker og send svar via Microsoft 365.",
-        logo: require("../assets/Microsoft-logo.png"),
+        logo: require("../../../assets/Microsoft-logo.png"),
       },
     ],
   },
@@ -38,7 +38,7 @@ const sections = [
         id: "shopify",
         name: "Shopify",
         description: "Hent ordre, returneringer og kundesegmenter automatisk.",
-        logo: require("../assets/Shopify-Logo.png"),
+        logo: require("../../../assets/Shopify-Logo.png"),
         logoStyle: GlobalStyles.integrationIconImageLarge,
       },
     ],
@@ -332,7 +332,7 @@ export default function IntegrationsScreen() {
               <View style={GlobalStyles.integrationCardHeader}>
                 <View style={GlobalStyles.integrationIconWrapper}>
                   <Image
-                    source={require("../assets/Shopify-Logo.png")}
+                    source={require("../../../assets/Shopify-Logo.png")}
                     style={[
                       GlobalStyles.integrationIconImage,
                       GlobalStyles.integrationIconImageLarge,

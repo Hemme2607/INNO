@@ -1,16 +1,14 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSignUp, useOAuth } from "@clerk/clerk-expo";
+import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
-
-// Funktion til at kunne oprette bruger i systemet med Clerk
-export default function Signup() {
+// Login funktion til at logge ind med Clerk
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const { signUp, setActive, isLoaded } = useSignUp();
+  const { signIn, setActive: setActiveSession, isLoaded } = useSignIn();
   const { startOAuthFlow: startGoogleOAuth } = useOAuth({
     strategy: "oauth_google",
   });
@@ -18,76 +16,46 @@ export default function Signup() {
     strategy: "oauth_microsoft",
   });
 
-  const handleSignup = async () => {
-    if (!isLoaded) {
-      Alert.alert("Vent venligst", "Clerk er ikke klar endnu");
-      return;
-    }
-
-    // Validering
-    if (!email.trim()) {
-      Alert.alert("Fejl", "Email er påkrævet");
-      return;
-    }
-    if (!password || password.length < 8) {
-      Alert.alert("Fejl", "Adgangskode skal være mindst 8 tegn");
-      return;
-    }
-    if (!name.trim()) {
-      Alert.alert("Fejl", "Navn er påkrævet");
-      return;
-    }
+  const handleLogin = async () => {
+    if (!isLoaded) return;
 
     try {
-      const result = await signUp.create({
-        emailAddress: email.trim(),
+      const result = await signIn.create({
+        identifier: email.trim(),
         password: password,
-        firstName: name.trim(),
       });
 
       if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
-        Alert.alert("Konto oprettet", "Velkommen til Lently!");
-      } else if (result.status === "missing_requirements") {
-        // Hvis der mangler verificering
-        Alert.alert("Verificering påkrævet", "Tjek din email for verificeringslink");
+        await setActiveSession({ session: result.createdSessionId });
+        Alert.alert("Velkommen tilbage!");
       }
     } catch (error) {
-      const errorMessage = error.errors?.[0]?.message || error.message || "Ukendt fejl";
-      Alert.alert("Noget gik galt", errorMessage);
+      Alert.alert("Login fejlede", error.errors?.[0]?.message || error.message);
     }
   };
 
-  const handleOAuthSignup = async (providerLabel, startOAuth) => {
+  const handleOAuthLogin = async (providerLabel, startOAuth) => {
     try {
-      const { createdSessionId, setActive: setOAuthActive } = await startOAuth();
+      const { createdSessionId, setActive } = await startOAuth();
 
-      if (createdSessionId && setOAuthActive) {
-        await setOAuthActive({ session: createdSessionId });
-        Alert.alert("Velkommen!", `Din konto er oprettet med ${providerLabel}`);
+      if (createdSessionId && setActive) {
+        await setActive({ session: createdSessionId });
+        Alert.alert("Velkommen!", `Du er nu logget ind med ${providerLabel}`);
       }
     } catch (error) {
       const message = error.errors?.[0]?.message || error.message || "Ukendt fejl";
-      Alert.alert(`${providerLabel} signup fejlede`, message);
+      Alert.alert(`${providerLabel} login fejlede`, message);
     }
   };
 
-  // Opstætning og reference til styling for signup komponent fra GlobalStyles
+  // Opstætning og reference til styling for login komponent fra GlobalStyles
   return (
     <View>
       <View style={GlobalStyles.cardHeader}>
-        <Text style={GlobalStyles.heading}>Kom i gang gratis</Text>
-      </View>
-
-      <View style={GlobalStyles.inputGroup}>
-        <Text style={GlobalStyles.label}>Navn</Text>
-        <TextInput
-          placeholder="Dit fulde navn"
-          placeholderTextColor="rgba(228, 234, 255, 0.4)"
-          style={GlobalStyles.input}
-          value={name}
-          onChangeText={setName}
-        />
+        <Text style={GlobalStyles.heading}>Velkommen</Text>
+        <Text style={GlobalStyles.subheading}>
+          Indtast dine oplysninger for at logge ind
+        </Text>
       </View>
 
       <View style={GlobalStyles.inputGroup}>
@@ -106,7 +74,7 @@ export default function Signup() {
       <View style={GlobalStyles.inputGroup}>
         <Text style={GlobalStyles.label}>Adgangskode</Text>
         <TextInput
-          placeholder="Min. 8 tegn"
+          placeholder="********"
           placeholderTextColor="rgba(228, 234, 255, 0.4)"
           style={GlobalStyles.input}
           value={password}
@@ -115,15 +83,19 @@ export default function Signup() {
         />
       </View>
 
-      <TouchableOpacity style={GlobalStyles.button} onPress={handleSignup}>
+      <TouchableOpacity style={GlobalStyles.button} onPress={handleLogin}>
         <LinearGradient
           colors={[COLORS.primaryDark, COLORS.primary]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={GlobalStyles.buttonGradient}
         >
-          <Text style={GlobalStyles.buttonText}>Opret konto</Text>
+          <Text style={GlobalStyles.buttonText}>Log ind</Text>
         </LinearGradient>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={GlobalStyles.ghostButton}>
+        <Text style={GlobalStyles.ghostButtonText}>Glemt adgangskode?</Text>
       </TouchableOpacity>
 
       <View style={GlobalStyles.divider}>
@@ -135,31 +107,31 @@ export default function Signup() {
       <View style={GlobalStyles.socialStack}>
         <TouchableOpacity
           style={GlobalStyles.socialButtonFull}
-          onPress={() => handleOAuthSignup("Google", startGoogleOAuth)}
+          onPress={() => handleOAuthLogin("Google", startGoogleOAuth)}
         >
           <View style={GlobalStyles.socialButtonContent}>
             <View style={GlobalStyles.socialIconBadge}>
               <Image
-                source={require("../assets/google-logo.png")}
+                source={require("../../../assets/google-logo.png")}
                 style={GlobalStyles.socialIconImage}
               />
             </View>
-            <Text style={GlobalStyles.socialButtonLabel}>Opret med Google</Text>
+            <Text style={GlobalStyles.socialButtonLabel}>Log ind med Google</Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity
           style={GlobalStyles.socialButtonFull}
-          onPress={() => handleOAuthSignup("Microsoft", startMicrosoftOAuth)}
+          onPress={() => handleOAuthLogin("Microsoft", startMicrosoftOAuth)}
         >
           <View style={GlobalStyles.socialButtonContent}>
             <View style={GlobalStyles.socialIconBadge}>
               <Image
-                source={require("../assets/Microsoft-logo.png")}
+                source={require("../../../assets/Microsoft-logo.png")}
                 style={GlobalStyles.socialIconImage}
               />
             </View>
             <Text style={GlobalStyles.socialButtonLabel}>
-              Opret med Microsoft
+              Log ind med Microsoft
             </Text>
           </View>
         </TouchableOpacity>

@@ -1,8 +1,8 @@
 // supabaseClient.js
 import { createClient } from "@supabase/supabase-js";
-import * as SecureStore from "expo-secure-store";
 import { useAuth } from "@clerk/clerk-expo";
 import { useEffect, useRef } from "react";
+import { supabaseStorageAdapter } from "./storage/tokenStorage";
 
 export function useClerkSupabase() {
   const { getToken } = useAuth();
@@ -49,11 +49,7 @@ export function useClerkSupabase() {
     clientRef.current = createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
         persistSession: true,
-        storage: {
-          getItem: SecureStore.getItemAsync,
-          setItem: SecureStore.setItemAsync,
-          removeItem: SecureStore.deleteItemAsync,
-        },
+        storage: supabaseStorageAdapter,
       },
       // Brug Clerk-token til Supabase RLS for hver request uden at re-instantiere klienten
       accessToken: resolveAccessToken,
