@@ -12,4 +12,15 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
+config.resolver.extraNodeModules = new Proxy(
+  {},
+  {
+    get: (_target, name) => {
+      return path.join(workspaceRoot, "node_modules", name);
+    },
+  }
+);
+
+config.resolver.disableHierarchicalLookup = true;
+
 module.exports = config;

@@ -3,20 +3,18 @@
 import * as React from "react"
 import {
   ArrowUpCircleIcon,
-  BarChartIcon,
-  CameraIcon,
+  BookOpenIcon,
+  BotIcon,
+  CableIcon,
   ClipboardListIcon,
-  DatabaseIcon,
-  FileCodeIcon,
   FileIcon,
-  FileTextIcon,
-  FolderIcon,
   HelpCircleIcon,
+  InboxIcon,
   LayoutDashboardIcon,
-  ListIcon,
   SearchIcon,
   SettingsIcon,
-  UsersIcon,
+  UserRoundPenIcon,
+  WorkflowIcon,
 } from "lucide-react"
 
 import { NavDocuments } from "@/components/nav-documents"
@@ -48,65 +46,26 @@ const baseData = {
       icon: LayoutDashboardIcon,
     },
     {
-      title: "Agent",
-      url: "/agent",
-      icon: UsersIcon,
-    },
-    {
       title: "Inbox",
       url: "/inbox",
-      icon: ListIcon,
+      icon: InboxIcon,
     },
     {
-      title: "Integrations",
-      url: "/integrations",
-      icon: FolderIcon,
-    },
-  ],
-  navClouds: [
-    {
-      title: "Capture",
-      icon: CameraIcon,
-      isActive: true,
-      url: "#",
-      items: [
+      title: "Agent",
+      url: "/agent",
+      icon: BotIcon,
+      children: [
         {
-          title: "Active Proposals",
-          url: "#",
+          title: "Persona",
+          url: "/agent/persona"
         },
         {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Proposal",
-      icon: FileTextIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
+          title: "Automation",
+          url: "/agent/automation"
         },
         {
-          title: "Archived",
-          url: "#",
-        },
-      ],
-    },
-    {
-      title: "Prompts",
-      icon: FileCodeIcon,
-      url: "#",
-      items: [
-        {
-          title: "Active Proposals",
-          url: "#",
-        },
-        {
-          title: "Archived",
-          url: "#",
+          title: "Knowledge",
+          url: "/integrations/knowledge"
         },
       ],
     },
@@ -130,20 +89,15 @@ const baseData = {
   ],
   documents: [
     {
-      name: "Data Library",
-      url: "#",
-      icon: DatabaseIcon,
+      name: "Integrations",
+      url: "/integrations",
+      icon: CableIcon,
     },
     {
-      name: "Reports",
-      url: "#",
-      icon: ClipboardListIcon,
-    },
-    {
-      name: "Word Assistant",
-      url: "#",
+      name: "Documents",
+      url: "/documents",
       icon: FileIcon,
-    },
+    }
   ],
 }
 

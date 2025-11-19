@@ -20,6 +20,8 @@ Next.js-baseret web-ui bygget med Tailwind + Shadcn/TailArk komponenter, nu med 
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Del samme nøgle som mobilappen så login matcher. |
 | `CLERK_SECRET_KEY` | Bruges af `clerkMiddleware` til server-side verificering. |
 | `NEXT_PUBLIC_CLERK_FRONTEND_API` | Valgfrit, hvis du bruger custom Clerk domain. |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL til Supabase-projektet (kan deles med Expo). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key til Supabase (samme som mobilen bruger). |
 
 ## Tilgængelige sider
 - `/dashboard` – samme demo-boards som mobilens overview.

@@ -1,4 +1,4 @@
-import { tokenCache } from "./lib/storage/tokenStorage";
+import { tokenCache } from "../../shared/storage/tokenStorage";
 import {
   CLERK_PUBLISHABLE_KEY,
   buildBaseClerkConfig,

@@ -1,13 +1,12 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { ShopifyConnectCard } from "@/components/integrations/ShopifyConnectCard";
 
 
-export default async function IntegrationsPage() {
+export default async function DocumentPage() {
   const { userId } = await auth();
 
   if (!userId) {
-    redirect("/sign-in?redirect_url=/integrations");
+    redirect("/sign-in?redirect_url=/documents");
   }
 
   return (
@@ -15,12 +14,11 @@ export default async function IntegrationsPage() {
       <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm uppercase tracking-widest text-muted-foreground">
-            Integrations
+            Documents
           </p>
-          <h1 className="text-3xl font-semibold">Forbind dine systemer</h1>
+          <h1 className="text-3xl font-semibold">Upload dine dokumenter til Sona</h1>
         </div>
       </header>
-      <ShopifyConnectCard />
     </main>
   );
 }
