@@ -6,7 +6,7 @@ import { PersonaPageHeader } from "@/components/agent/PersonaPageHeader";
 export default async function AgentPersonaPage() {
   const { userId } = await auth();
   if (!userId) {
-    redirect("/sign-in?redirect_url=/agent/persona");
+    redirect("/sign-in?redirect_url=/persona");
   }
 
   return (

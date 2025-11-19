@@ -1,7 +1,10 @@
 "use client"
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { FolderIcon, MoreHorizontalIcon, ShareIcon } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,28 +21,38 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 
-export function NavDocuments({
+export function NavNewsletter({
   items
 }) {
   const { isMobile } = useSidebar()
+  const pathname = usePathname()
+
+  const linkActive = (url) =>
+    pathname === url || pathname.startsWith(`${url}/`);
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <SidebarGroupLabel>Documents</SidebarGroupLabel>
+      <SidebarGroupLabel>Newsletter</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
-              <a href={item.url}>
-                <item.icon />
+            <SidebarMenuButton
+              asChild
+              className={cn(
+                "justify-start",
+                linkActive(item.url) &&
+                  "bg-accent text-accent-foreground hover:bg-accent hover:text-accent-foreground"
+              )}
+            >
+              <Link href={item.url} className="flex w-full items-center gap-2">
+                <item.icon className="h-4 w-4" />
                 <span>{item.name}</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <SidebarMenuAction showOnHover className="rounded-sm data-[state=open]:bg-accent">
                   <MoreHorizontalIcon />
-                  <span className="sr-only">More</span>
                 </SidebarMenuAction>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -58,12 +71,6 @@ export function NavDocuments({
             </DropdownMenu>
           </SidebarMenuItem>
         ))}
-        <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
-            <MoreHorizontalIcon className="text-sidebar-foreground/70" />
-            <span>More</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>
   );

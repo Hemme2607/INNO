@@ -8,6 +8,7 @@ import {
   CableIcon,
   ClipboardListIcon,
   FileIcon,
+  HeartHandshake,
   HelpCircleIcon,
   InboxIcon,
   LayoutDashboardIcon,
@@ -15,9 +16,12 @@ import {
   SettingsIcon,
   UserRoundPenIcon,
   WorkflowIcon,
+  HeartHandshakeIcon,
+  DocumentIcon,
 } from "lucide-react"
 
-import { NavDocuments } from "@/components/nav-documents"
+import { NavNewsletter } from "@/components/nav-newsletter"
+import { NavAgent } from "@/components/nav-agent"
 import { NavMain } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
@@ -50,53 +54,47 @@ const baseData = {
       url: "/inbox",
       icon: InboxIcon,
     },
-    {
-      title: "Agent",
-      url: "/agent",
-      icon: BotIcon,
-      children: [
-        {
-          title: "Persona",
-          url: "/agent/persona"
-        },
-        {
-          title: "Automation",
-          url: "/agent/automation"
-        },
-        {
-          title: "Knowledge",
-          url: "/integrations/knowledge"
-        },
-      ],
-    },
   ],
   navSecondary: [
+    {
+      title: "Integrations",
+      url: "/integrations",
+      icon: CableIcon,
+    },
     {
       title: "Settings",
       url: "#",
       icon: SettingsIcon,
     },
-    {
-      title: "Get Help",
-      url: "#",
-      icon: HelpCircleIcon,
-    },
-    {
-      title: "Search",
-      url: "#",
-      icon: SearchIcon,
-    },
   ],
-  documents: [
+  agent: [
+     {
+          name: "Persona",
+          url: "/persona",
+          icon: UserRoundPenIcon,
+
+        },
+        {
+          name: "Automation",
+          url: "/automation",
+          icon: BotIcon
+        },
+        {
+          name: "Knowledge",
+          url: "/knowledge",
+          icon: BookOpenIcon,
+        },
+  ],
+  newsletter: [
     {
-      name: "Integrations",
-      url: "/integrations",
-      icon: CableIcon,
+      name: "Campaigns",
+      url: "/marketing/campaigns",
+      icon: ClipboardListIcon,
     },
     {
-      name: "Documents",
-      url: "/documents",
-      icon: FileIcon,
+      name: "Retention Flows",
+      url: "/marketing/retention-flows",
+      icon: HeartHandshakeIcon,
     }
   ],
 }
@@ -126,7 +124,8 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavDocuments items={data.documents} />
+        <NavAgent items={data.agent} />
+        <NavNewsletter items={data.newsletter} />
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
