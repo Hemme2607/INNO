@@ -66,6 +66,7 @@ export function ShopifyConnectCard() {
   }, [supabase]);
 
   const isConnected = Boolean(connection);
+  const connectedDomain = connection?.shop_domain || connection?.store_domain;
   const statusLabel = loading
     ? "Henter..."
     : isConnected
@@ -73,10 +74,11 @@ export function ShopifyConnectCard() {
     : "Ikke tilsluttet";
 
   const badgeVariant = isConnected ? "default" : "secondary";
+  const buttonLabel = isConnected ? "Manage" : "Connect Shopify Store";
 
   return (
-    <Card className="w-full max-w-sm border bg-card/60 shadow-sm">
-      <CardHeader className="flex items-start gap-3">
+    <Card className="flex h-full max-w-sm flex-col border bg-card/60 shadow-sm">
+      <CardHeader className="flex items-start gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-muted/40">
           <Image
             src={shopifyLogo}
@@ -93,22 +95,22 @@ export function ShopifyConnectCard() {
           </CardDescription>
         </div>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <p>
-          Når Shopify er tilsluttet, kan agenten slå ordrer op, følge returprocesser
-          og gemme noter direkte fra browseren.
-        </p>
-        {isConnected && connection?.store_domain && (
-          <p className="text-xs text-muted-foreground">
-            Tilsluttet til {connection.store_domain}
-          </p>
-        )}
+      <CardContent className="flex-1 text-sm">
+        {isConnected && connectedDomain ? (
+          <div
+            className="flex min-w-0 items-center gap-2 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs font-medium text-slate-600"
+            title={connectedDomain}
+          >
+            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="truncate">{connectedDomain}</span>
+          </div>
+        ) : null}
       </CardContent>
-      <CardFooter className="items-center justify-between">
+      <CardFooter className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 p-4">
         <Badge variant={badgeVariant}>{statusLabel}</Badge>
         <Sheet>
           <SheetTrigger asChild>
-            <Button size="sm">Connect Shopify Store</Button>
+            <Button size="sm">{buttonLabel}</Button>
           </SheetTrigger>
           <SheetContent side="right" className="sm:max-w-md">
             <SheetHeader>

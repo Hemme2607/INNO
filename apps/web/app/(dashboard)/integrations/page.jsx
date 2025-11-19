@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { ShopifyConnectCard } from "@/components/integrations/ShopifyConnectCard";
+import { FreshdeskConnectCard } from "@/components/integrations/FreshdeskConnectCard";
 
 
 export default async function IntegrationsPage() {
@@ -20,7 +21,10 @@ export default async function IntegrationsPage() {
           <h1 className="text-3xl font-semibold">Forbind dine systemer</h1>
         </div>
       </header>
-      <ShopifyConnectCard />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <ShopifyConnectCard />
+        <FreshdeskConnectCard />
+      </div>
     </main>
   );
 }
