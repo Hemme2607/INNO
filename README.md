@@ -1,17 +1,24 @@
-Link til videogennemgang: [https://www.loom.com/share/e95f8c2a52ef4f4ebddf6945bee9d96c](https://www.loom.com/share/79072bcd832d4f08b6e7c7078bca20c2?sid=7549b123-8618-4a9d-9764-5c44f5fc4cd1&fbclid=IwY2xjawNi9m1leHRuA2FlbQIxMABicmlkETAzRHlCMkdscEczQlVyaFg4AR6qMkh0vZJ_EoghIIDXbpgJKaqSHRJbyfmI2KNmaVkVLmWApk_FWRXERhN2eg_aem_ictz2-PBpptJfed334ZDSg)
+# INNO monorepo
 
+Det her repository er nu bygget som et lille workspace med en `apps`-mappe. Hver app lever i sin egen undermappe, så vi kan have både mobil og web sammen uden at blande deres konfigurationer.
 
-Link til Github: [https://github.com/Hemme2607/GK1](https://github.com/Hemme2607/INNO/)
+## Struktur
+- `apps/mobile` – den eksisterende Expo/React Native app (Android/iOS/Web via Expo)
+- `apps/web` – Next.js-baseret webapp med dashboard, agent- og integration-sider bygget med Shadcn/Tailwind komponenter
+- `assets` – fælles billeder/ikoner der kan genbruges af både web og mobil
+- `supabase` – Edge Functions og databasedefinitioner der ikke er bundet til en bestemt app
+- `shared` – konfigurationer og kode der skal bruges af flere apps (fx Clerk/Supabase opsætning)
 
+## Kom i gang
+1. Kør `npm install` i roden for at installere alle workspaces (eller `cd apps/mobile && npm install` hvis du kun vil opdatere mobilappen).
+2. Brug scripts fra roden til at starte apps:
+   - `npm run mobile` (Expo start)
+   - `npm run mobile:android`
+   - `npm run mobile:ios`
+   - `npm run mobile:web`
+   - `npm run web` (Next.js dev-server)
+   - `npm run web:build`
+   - `npm run web:start`
+3. Miljøvariabler ligger pr. app (`apps/mobile/.env`, `apps/web/.env.local`).
 
-Guide til at starte appen:
-1. npm install i terminalen
-2. Kør npx expo start
-
-
-Hvem der har lavet hvad:
-- Oliver = Homescreen.js og inboxscreen.js
-- Philip = IntegrationScreen.js og ProfileScreen.js
-- Cornelius = LoginComponent.js og SignUpComponent.js
-- Jonas = Clerk-config.js og AuthScreen.js (implmenteret clerk)
-- Vi alle har bidraget til styles og app.js
+Fælles Clerk- og Supabase-konfiguration findes i `shared/`, så web og mobil deler samme nøgler og databaseadgang.
