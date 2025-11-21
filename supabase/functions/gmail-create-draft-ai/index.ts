@@ -10,6 +10,7 @@ import {
 import { AutomationAction, executeAutomationActions } from "../_shared/automation-actions.ts";
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
+import { buildMailPrompt } from "../_shared/prompt.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
@@ -299,20 +300,14 @@ Deno.serve(async (req) => {
 
     const orderSummary = buildOrderSummary(orders);
 
-    // Build prompt for OpenAI (if configured)
-    let prompt = `Skriv et høfligt og professionelt svar på dansk til denne kundemail:\n\n---KUNDENS EMAIL---\n${plain}\n\n---KONTEKST---\n${orderSummary}\n`;
-    if (persona.scenario?.trim()) {
-      prompt += `\nPersona-scenario: ${persona.scenario.trim()}\n`;
-    }
-    if (persona.instructions?.trim()) {
-      prompt += `\nPersona-instruktioner: ${persona.instructions.trim()}\n`;
-    }
-    if (matchedSubjectNumber) {
-      prompt += `NB: Kunden nævnte ordrenummer #${matchedSubjectNumber} i e-mail-emnet — brug dette som reference og spørg IKKE efter ordrenummer igen.\n`;
-    }
-    prompt +=
-      "Skriv et kort svar (3-6 sætninger) som inkluderer den relevante ordreinfo hvis den findes. Hvis ordren er fundet, sig direkte hvilken ordre (ordre #X) og undlad at bede om ordrenummer. Hvis ordren ikke findes, bed om præcist ordrenummer eller kundeoplysninger der kan hjælpe.\n" +
-      "Returner altid JSON hvor 'actions' beskriver konkrete handlinger du udfører i Shopify. Brug orderId (det numeriske id i parentes) når du udfylder actions. udfyld altid payload.shipping_address (brug nuværende adresse hvis den ikke ændres) og sæt payload.note og payload.tag til tom streng hvis de ikke bruges. Hvis kunden beder om adresseændring, udfyld shipping_address med alle felter (name, address1, address2, zip, city, country, phone). Hvis en handling ikke er tilladt i automationsreglerne, lad actions listen være tom og forklar brugeren at du sender sagen videre.";
+    const prompt = buildMailPrompt({
+      emailBody: plain,
+      orderSummary,
+      personaInstructions: persona.instructions,
+      matchedSubjectNumber,
+      extraContext:
+        "Returner altid JSON hvor 'actions' beskriver konkrete handlinger du udfører i Shopify. Brug orderId (det numeriske id i parentes) når du udfylder actions. udfyld altid payload.shipping_address (brug nuværende adresse hvis den ikke ændres) og sæt payload.note og payload.tag til tom streng hvis de ikke bruges. Hvis kunden beder om adresseændring, udfyld shipping_address med alle felter (name, address1, address2, zip, city, country, phone). Hvis en handling ikke er tilladt i automationsreglerne, lad actions listen være tom og forklar brugeren at du sender sagen videre.",
+    });
 
     let aiText: string | null = null;
     let automationActions: AutomationAction[] = [];

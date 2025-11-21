@@ -12,6 +12,7 @@ import {
 } from "../_shared/automation-actions.ts";
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
+import { buildMailPrompt } from "../_shared/prompt.ts";
 
 /**
  * Freshdesk -> Supabase webhook relay.
@@ -226,22 +227,13 @@ async function generateDraftBody(options: {
     ? options.persona.instructions.trim()
     : "Hold tonen venlig og effektiv.";
 
-  const prompt = [
-    `Kunden med email ${options.contactEmail || "ukendt"} har oprettet en Freshdesk-ticket.`,
-    `Emne: ${subject}`,
-    `Beskrivelse:\n${description}`,
-    "",
-    "Kontekst:",
+  const prompt = buildMailPrompt({
+    emailBody: `Emne: ${subject}\n${description}`,
     orderSummary,
-    options.persona.scenario?.trim() ? `Persona-scenario: ${options.persona.scenario.trim()}` : "",
-    `Instruktioner: ${personaNotes}`,
-    options.matchedSubjectNumber
-      ? `NB: Kunden nævnte ordrenummer #${options.matchedSubjectNumber}. Brug dette som reference hvis du omtaler konkrete ordrer og spørg ikke efter ordrenummer igen.`
-      : "",
-    "Skriv et kort svar (3-6 sætninger) på dansk der kan gemmes som intern note/draft. Svar må gerne nævne relevante ordredetaljer.",
-  ]
-    .filter(Boolean)
-    .join("\n");
+    personaInstructions: personaNotes,
+    matchedSubjectNumber: options.matchedSubjectNumber,
+    extraContext: "Svar skal kunne sendes direkte til kunden via Freshdesk.",
+  });
 
   const system = [
     "Du er en dansk kundeservice-agent for INNO Desk.",
