@@ -1,0 +1,139 @@
+import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+export type Persona = {
+  signature: string;
+  scenario: string;
+  instructions: string;
+};
+
+export type Automation = {
+  order_updates: boolean;
+  cancel_orders: boolean;
+  automatic_refunds: boolean;
+  historic_inbox_access: boolean;
+};
+
+export const DEFAULT_PERSONA: Persona = {
+  signature: "Venlig hilsen\nDin agent",
+  scenario: "",
+  instructions: "",
+};
+
+export const DEFAULT_AUTOMATION: Automation = {
+  order_updates: true,
+  cancel_orders: true,
+  automatic_refunds: false,
+  historic_inbox_access: false,
+};
+
+export async function resolveSupabaseUserId(
+  supabase: SupabaseClient | null,
+  clerkUserId: string,
+): Promise<string> {
+  if (!supabase) {
+    throw Object.assign(new Error("Supabase klient ikke initialiseret (resolveSupabaseUserId)."), {
+      status: 500,
+    });
+  }
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+
+  if (error) {
+    throw Object.assign(
+      new Error(`Kunne ikke slå Supabase userId op fra Clerk userId: ${error.message}`),
+      { status: 500 },
+    );
+  }
+
+  if (!data?.user_id) {
+    throw Object.assign(
+      new Error("Der findes ingen Supabase bruger for den angivne Clerk userId."),
+      { status: 404 },
+    );
+  }
+
+  return data.user_id;
+}
+
+export async function fetchPersona(
+  supabase: SupabaseClient | null,
+  userId: string | null,
+): Promise<Persona> {
+  if (!supabase || !userId) return DEFAULT_PERSONA;
+  const { data, error } = await supabase
+    .from("agent_persona")
+    .select("signature,scenario,instructions")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.warn("agent-context: kunne ikke hente persona", error);
+  }
+  return {
+    signature:
+      data?.signature?.trim()?.length ? data.signature : DEFAULT_PERSONA.signature,
+    scenario: data?.scenario ?? DEFAULT_PERSONA.scenario,
+    instructions: data?.instructions ?? DEFAULT_PERSONA.instructions,
+  };
+}
+
+export async function fetchAutomation(
+  supabase: SupabaseClient | null,
+  userId: string | null,
+): Promise<Automation> {
+  if (!supabase || !userId) return DEFAULT_AUTOMATION;
+  const { data, error } = await supabase
+    .from("agent_automation")
+    .select("order_updates,cancel_orders,automatic_refunds,historic_inbox_access")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) {
+    console.warn("agent-context: kunne ikke hente automation", error);
+  }
+  return {
+    order_updates:
+      typeof data?.order_updates === "boolean"
+        ? data.order_updates
+        : DEFAULT_AUTOMATION.order_updates,
+    cancel_orders:
+      typeof data?.cancel_orders === "boolean"
+        ? data.cancel_orders
+        : DEFAULT_AUTOMATION.cancel_orders,
+    automatic_refunds:
+      typeof data?.automatic_refunds === "boolean"
+        ? data.automatic_refunds
+        : DEFAULT_AUTOMATION.automatic_refunds,
+    historic_inbox_access:
+      typeof data?.historic_inbox_access === "boolean"
+        ? data.historic_inbox_access
+        : DEFAULT_AUTOMATION.historic_inbox_access,
+  };
+}
+
+export function buildAutomationGuidance(automation: Automation) {
+  const lines = [];
+  lines.push(
+    automation.order_updates
+      ? "- Du må opdatere adresse/kontaktinfo direkte i Shopify."
+      : "- Du må ikke love at ændre adresse/kontaktinfo uden manuel bekræftelse.",
+  );
+  lines.push(
+    automation.cancel_orders
+      ? "- Du må annullere åbne ordrer uden ekstra godkendelse."
+      : "- Du må ikke love at annullere en ordre automatisk.",
+  );
+  lines.push(
+    automation.automatic_refunds
+      ? "- Du må gennemføre refunderinger, hvis kundens ønske er rimeligt."
+      : "- Du må ikke love refundering uden at nævne manuel kontrol.",
+  );
+  lines.push(
+    automation.historic_inbox_access
+      ? "- Du har adgang til historik og kan henvise til tidligere henvendelser."
+      : "- Hvis historik mangler, så bed om ekstra detaljer.",
+  );
+  return lines.join("\n");
+}

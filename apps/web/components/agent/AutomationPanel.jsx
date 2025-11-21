@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Package, XCircle, DollarSign, Archive } from "lucide-react";
 import { useAgentAutomation } from "@/hooks/useAgentAutomation";
 
+// Definition af de tilstande vi lader brugeren styre fra automation-panelet.
 const toggles = [
   {
     key: "orderUpdates",
@@ -45,13 +46,16 @@ export function useAutomationPanelActions() {
 
 export function AutomationPanel({ children = null }) {
   const { settings, loading, saving, error, save } = useAgentAutomation();
+  // Lokalt spejl af Supabase settings så vi kan optimistisk toggle switches.
   const [local, setLocal] = useState(settings || {});
+  // Skjult input i UI (ikke gemt endnu), placeholder for fremtidig funktionalitet.
   const [refundMax, setRefundMax] = useState("500");
 
   useEffect(() => {
     setLocal(settings || {});
   }, [settings]);
 
+  // Hver switch får sin egen change handler der opdaterer lokale state felter.
   const handleToggle = useCallback(
     (key) => (next) => {
       setLocal((s) => ({ ...(s || {}), [key]: Boolean(next) }));
@@ -61,6 +65,7 @@ export function AutomationPanel({ children = null }) {
 
   const handleSave = useCallback(async () => {
     try {
+      // Sender kun de kendte boolean felter til hooken for at undgå utilsigtede updates.
       await save({
         orderUpdates: Boolean(local?.orderUpdates),
         cancelOrders: Boolean(local?.cancelOrders),
@@ -72,10 +77,12 @@ export function AutomationPanel({ children = null }) {
     }
   }, [local, save]);
 
+  // dirty bruges både af header knappen og lokale CTA'er.
   const dirty = useMemo(() => {
     return toggles.some(({ key }) => Boolean(local?.[key]) !== Boolean(settings?.[key]));
   }, [local, settings]);
 
+  // Samlet API der deles via context så headeren kan gengemme ændringer.
   const contextValue = useMemo(
     () => ({
       save: handleSave,
