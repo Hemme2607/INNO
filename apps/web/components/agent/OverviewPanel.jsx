@@ -16,8 +16,10 @@ import { Badge } from "@/components/ui/badge";
 export function AgentOverviewPanel() {
   const router = useRouter();
   const { settings, saving, save } = useAgentAutomation();
+  // Agenten aktiveres når autoDraftEnabled flaget er sandt.
   const enabled = Boolean(settings?.autoDraftEnabled);
 
+  // Slår automationen til/fra og ignorerer fejl i UI (hooken håndterer dem).
   const toggleAgent = () => {
     save({ autoDraftEnabled: !enabled }).catch(() => null);
   };
@@ -45,6 +47,7 @@ export function AgentOverviewPanel() {
           </div>
         </div>
         <div className="flex gap-2">
+          {/* Hurtige genvejsknapper til Agent undersider */}
           <Button variant="outline" onClick={() => router.push("/agent/persona")}>
             Redigér persona
           </Button>

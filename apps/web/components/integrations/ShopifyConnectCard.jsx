@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
-import { Badge } from "@/components/ui/badge";
+import { useCallback, useEffect, useState } from "react";
 import {
   Card,
   CardContent,
@@ -12,72 +11,59 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useClerkSupabase } from "@/lib/useClerkSupabase";
+import { CheckCircle2 } from "lucide-react";
 import shopifyLogo from "../../../../assets/Shopify-Logo.png";
+import { ShopifySheet } from "./ShopifySheet";
 
 export function ShopifyConnectCard() {
   const supabase = useClerkSupabase();
+  // Holder den seneste shop connection så vi kan vise status og bruge den i sheetet.
   const [connection, setConnection] = useState(null);
+  // Bruges til at vise "Henter..." badge og blokere knapper hvis Supabase klienten mangler.
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadConnection() {
-      if (!supabase) return;
-      setLoading(true);
-      // Supabase RLS sørger for at brugeren kun ser sin egen shop, fordi tokenet kommer fra Clerk.
-      const { data, error } = await supabase
-        .from("shops")
-        .select("shop_domain, owner_user_id")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!isMounted) {
-        return;
-      }
-
-      if (error) {
-        console.warn("Kunne ikke hente Shopify connection:", error);
-        setConnection(null);
-      } else {
-        setConnection(data);
-      }
+  // Henter butikkens domæne og ejer via Supabase RLS.
+  const loadConnection = useCallback(async () => {
+    if (!supabase) {
       setLoading(false);
+      return;
     }
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("shops")
+      .select("shop_domain, owner_user_id")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    loadConnection();
-
-    return () => {
-      isMounted = false;
-    };
+    if (error) {
+      console.warn("Kunne ikke hente Shopify connection:", error);
+      setConnection(null);
+    } else {
+      setConnection(data);
+    }
+    setLoading(false);
   }, [supabase]);
+
+  // Når supabase klienten er klar henter vi forbindelsen én gang og når onConnected kaldes.
+  useEffect(() => {
+    loadConnection();
+  }, [loadConnection]);
 
   const isConnected = Boolean(connection);
   const connectedDomain = connection?.shop_domain || connection?.store_domain;
+  // Status badges skal vise loading/aktiv/inaktiv baseret på Supabase record.
   const statusLabel = loading
     ? "Henter..."
     : isConnected
     ? "Aktiv"
     : "Ikke tilsluttet";
 
-  const badgeVariant = isConnected ? "default" : "secondary";
   const buttonLabel = isConnected ? "Manage" : "Connect Shopify Store";
 
   return (
-    <Card className="flex h-full max-w-sm flex-col border bg-card/60 shadow-sm">
+    <Card className="flex h-full flex-col border bg-card/60 shadow-sm">
       <CardHeader className="flex items-start gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl border bg-muted/40">
           <Image
@@ -95,53 +81,43 @@ export function ShopifyConnectCard() {
           </CardDescription>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 text-sm">
+      {/* Når butikken er forbundet viser vi domænet + grøn indikator. */}
+      <CardContent className="flex-1">
         {isConnected && connectedDomain ? (
           <div
-            className="flex min-w-0 items-center gap-2 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs font-medium text-slate-600"
+            className="mt-2 flex min-w-0 items-center gap-2 rounded-md bg-muted/40 px-3 py-2 font-mono text-xs text-muted-foreground"
             title={connectedDomain}
           >
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="h-2 w-2 flex-shrink-0 rounded-full bg-green-500 animate-pulse" />
             <span className="truncate">{connectedDomain}</span>
           </div>
-        ) : null}
+        ) : (
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Forbind din Shopify store og synkroniser ordrer og kunder med Sona.
+          </p>
+        )}
       </CardContent>
+      {/* Foden viser status og åbner ShopifySheet hvor man kan forbinde/frakoble */}
       <CardFooter className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/50 p-4">
-        <Badge variant={badgeVariant}>{statusLabel}</Badge>
-        <Sheet>
-          <SheetTrigger asChild>
-            <Button size="sm">{buttonLabel}</Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="sm:max-w-md">
-            <SheetHeader>
-              <SheetTitle>Connect Shopify</SheetTitle>
-              <SheetDescription>
-                Indtast domæne og en API-nøgle med adgang til ordrer og kunder.
-              </SheetDescription>
-            </SheetHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="shopify-domain">Shopify domæne</Label>
-                <Input
-                  id="shopify-domain"
-                  placeholder="din-butik.myshopify.com"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shopify-api">Admin API key</Label>
-                <Input
-                  id="shopify-api"
-                  placeholder="shpat_..."
-                  autoComplete="off"
-                />
-              </div>
-            </div>
-            <SheetFooter>
-              <Button className="w-full">Connect</Button>
-            </SheetFooter>
-          </SheetContent>
-        </Sheet>
+        {isConnected ? (
+          <div className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            {statusLabel}
+          </div>
+        ) : (
+          <span className="text-xs font-medium text-muted-foreground">
+            {statusLabel}
+          </span>
+        )}
+        {/* ShopifySheet abstraherer formularlogik + disconnect ligesom Freshdesk */}
+        <ShopifySheet
+          onConnected={loadConnection}
+          initialConnection={connection}
+        >
+          <Button size="sm" variant={isConnected ? "outline" : "default"}>
+            {buttonLabel}
+          </Button>
+        </ShopifySheet>
       </CardFooter>
     </Card>
   );

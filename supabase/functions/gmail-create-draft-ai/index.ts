@@ -1,6 +1,15 @@
 import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildAutomationGuidance,
+  fetchAutomation,
+  fetchPersona,
+  resolveSupabaseUserId,
+} from "../_shared/agent-context.ts";
+import { AutomationAction, executeAutomationActions } from "../_shared/automation-actions.ts";
+import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
+import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
@@ -42,65 +51,9 @@ const JWKS = CLERK_JWT_ISSUER
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
-const DEFAULT_PERSONA = {
-  signature: "Venlig hilsen\nDin agent",
-  scenario: "",
-  instructions: "",
-};
-
-const DEFAULT_AUTOMATION = {
-  order_updates: true,
-  cancel_orders: true,
-  automatic_refunds: false,
-  historic_inbox_access: false,
-};
-
-// Beskriver automationsreglerne i klar tekst til system-promten
-const buildAutomationGuidance = (automation: typeof DEFAULT_AUTOMATION) => {
-  const lines = [];
-  lines.push(
-    automation.order_updates
-      ? "- Du må opdatere adresse/kontaktinfo direkte i Shopify."
-      : "- Du må ikke love at ændre adresse/kontaktinfo; informer kunden om manuel håndtering."
-  );
-  lines.push(
-    automation.cancel_orders
-      ? "- Du må annullere åbne ordrer uden ekstra godkendelse."
-      : "- Du må ikke love at annullere en ordre automatisk."
-  );
-  lines.push(
-    automation.automatic_refunds
-      ? "- Du må gennemføre refunderinger, hvis kundens ønske er rimeligt."
-      : "- Du må ikke love refundering uden at nævne manuel kontrol."
-  );
-  lines.push(
-    automation.historic_inbox_access
-      ? "- Du har adgang til tidligere mails og kan henvise til historik."
-      : "- Du skal spørge efter ekstra detaljer hvis historik mangler."
-  );
-  return lines.join("\n");
-};
-
-type AutomationAction = {
-  type: string;
-  orderId?: number;
-  payload?: Record<string, unknown>;
-};
-
-type AutomationResult = {
-  type: string;
-  ok: boolean;
-  error?: string;
-};
-
 type OpenAIResult = {
   reply: string | null;
   actions: AutomationAction[];
-};
-
-type ShopCredentials = {
-  shop_domain: string;
-  access_token: string;
 };
 
 function getBearerToken(req: Request): string {
@@ -216,35 +169,6 @@ async function createGmailDraft(rawMessage: string, token: string, threadId?: st
   return json;
 }
 
-// Henter ordrer via frontend-token eller falder tilbage til direkte Shopify-kald
-async function fetchShopifyContext(options: {
-  clerkToken?: string | null;
-  supabaseUserId?: string | null;
-  email?: string | null;
-}) {
-  const email = options.email ?? undefined;
-  if (options.clerkToken && PROJECT_URL) {
-    const url = new URL(`${PROJECT_URL}${SHOPIFY_ORDERS_FN}`);
-    if (email) url.searchParams.set("email", email);
-    url.searchParams.set("limit", "5");
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${options.clerkToken}` },
-    });
-    if (!res.ok) return null;
-    try {
-      return await res.json();
-    } catch {
-      return null;
-    }
-  }
-
-  if (options.supabaseUserId) {
-    return await fetchShopifyContextDirect(options.supabaseUserId, email);
-  }
-
-  return null;
-}
-
 async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
   if (!OPENAI_API_KEY) return { reply: null, actions: [] };
   const messages: any[] = [];
@@ -256,56 +180,7 @@ async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult
     messages,
     response_format: {
       type: "json_schema",
-      json_schema: {
-        name: "persona_reply",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            reply: { type: "string" },
-            actions: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: ["update_shipping_address", "cancel_order", "add_note", "add_tag"],
-                  },
-                  orderId: { type: "number" },
-                  payload: {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                      shipping_address: {
-                        type: "object",
-                        additionalProperties: false,
-                        properties: {
-                          name: { type: "string" },
-                          address1: { type: "string" },
-                          address2: { type: "string" },
-                          zip: { type: "string" },
-                          city: { type: "string" },
-                          country: { type: "string" },
-                          phone: { type: "string" },
-                        },
-                        required: ["name", "address1", "address2", "zip", "city", "country", "phone"],
-                      },
-                      note: { type: "string" },
-                      tag: { type: "string" },
-                    },
-                    required: ["shipping_address", "note", "tag"],
-                  },
-                },
-                required: ["type", "orderId", "payload"],
-              },
-            },
-          },
-          required: ["reply", "actions"],
-        },
-      },
+      json_schema: PERSONA_REPLY_JSON_SCHEMA,
     },
     max_tokens: 800,
   };
@@ -330,59 +205,6 @@ async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult
   } catch (_err) {
     return { reply: null, actions: [] };
   }
-}
-
-async function executeAutomationActions(options: {
-  clerkUserId: string;
-  supabaseUserId: string | null;
-  clerkToken?: string | null;
-  actions: AutomationAction[];
-}): Promise<AutomationResult[]> {
-  const results: AutomationResult[] = [];
-  if (!options.actions.length || !PROJECT_URL || !options.clerkToken) {
-    return results;
-  }
-  const clerkToken = options.clerkToken;
-  const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/shopify-order-update`;
-
-  for (const action of options.actions) {
-    if (!action || typeof action.type !== "string") {
-      continue;
-    }
-    try {
-      const body = {
-        action: action.type,
-        orderId: action.orderId,
-        payload: action.payload ?? {},
-        clerkUserId: options.clerkUserId,
-        supabaseUserId: options.supabaseUserId,
-      };
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${clerkToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        const error =
-          (typeof payload?.error === "string" && payload.error) ||
-          `shopify-order-update svarede ${response.status}`;
-        results.push({ type: action.type, ok: false, error });
-      } else {
-        results.push({ type: action.type, ok: true });
-      }
-    } catch (err) {
-      results.push({
-        type: action.type,
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-  return results;
 }
 
 Deno.serve(async (req) => {
@@ -412,9 +234,19 @@ Deno.serve(async (req) => {
       clerkUserId = await requireUserIdFromJWT(req);
     }
 
-    const supabaseUserId = await fetchSupabaseUserId(clerkUserId);
-    const persona = await fetchPersona(supabaseUserId);
-    const automation = await fetchAutomation(supabaseUserId);
+    let supabaseUserId: string | null = null;
+    if (supabase) {
+      try {
+        supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
+      } catch (err) {
+        console.warn(
+          "gmail-create-draft-ai: kunne ikke hente supabase user id",
+          err?.message || err,
+        );
+      }
+    }
+    const persona = await fetchPersona(supabase, supabaseUserId);
+    const automation = await fetchAutomation(supabase, supabaseUserId);
     const gmailToken = await getGmailAccessToken(clerkUserId);
 
     const messageId = typeof body?.messageId === "string" ? body.messageId : null;
@@ -430,136 +262,42 @@ Deno.serve(async (req) => {
     const emailMatch = from.match(/<([^>]+)>/);
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
 
-    // Try to fetch Shopify orders by email. If none found, fetch recent orders and try to match locally
-  let shopContext = await fetchShopifyContext({
-    clerkToken,
-    supabaseUserId,
-    email: fromEmail,
-  });
-  let orders = Array.isArray(shopContext?.orders) ? shopContext.orders : [];
-  let matchedSubjectNumber: string | null = null;
-
-    emitDebugLog("gmail-create-draft-ai: initial fetch orders length:", orders?.length ?? 0, "for email:", fromEmail);
-
-    if ((!orders || orders.length === 0) && fromEmail) {
-      // Retry without email filter to fetch recent orders and try to match by customer email fields
-      const fallbackContext = await fetchShopifyContext({ clerkToken, supabaseUserId });
-      const fallbackOrders = Array.isArray(fallbackContext?.orders) ? fallbackContext.orders : [];
-      emitDebugLog("gmail-create-draft-ai: fetched fallback recent orders length:", fallbackOrders.length);
-
-      if (fallbackOrders.length) {
-        const matched = fallbackOrders.filter((o: any) => {
-          const candidates = [
-            (o?.email ?? "") ,
-            (o?.customer?.email ?? ""),
-            (o?.billing_address?.email ?? ""),
-            (o?.shipping_address?.email ?? ""),
-          ].filter(Boolean).map((s: string) => String(s).toLowerCase());
-          const matchedResult = matchedAny(candidates, String(fromEmail).toLowerCase());
-          if (matchedResult) {
-            emitDebugLog("gmail-create-draft-ai: matched order by email candidate:", {
-              orderId: o?.id ?? o?.name ?? o?.order_number,
-              candidates,
-            });
+    const fetchOrdersWithFrontendToken =
+      clerkToken && PROJECT_URL
+        ? async (email?: string | null) => {
+            try {
+              const url = new URL(`${PROJECT_URL}${SHOPIFY_ORDERS_FN}`);
+              if (email?.trim()) url.searchParams.set("email", email.trim());
+              url.searchParams.set("limit", "5");
+              const res = await fetch(url.toString(), {
+                headers: { Authorization: `Bearer ${clerkToken}` },
+              });
+              if (!res.ok) return null;
+              const json = await res.json().catch(() => null);
+              return Array.isArray(json?.orders) ? json.orders : null;
+            } catch (err) {
+              console.warn("gmail-create-draft-ai: shopify-orders fetch fejlede", err);
+              return null;
+            }
           }
-          return matchedResult;
-        });
-        if (matched.length) {
-          orders = matched;
-          shopContext = fallbackContext;
-        }
-      }
-    }
+        : null;
 
-    // If still no orders, try to extract an order number from the subject and match by name/order_number
-    if ((!orders || orders.length === 0) && subject) {
-      // Find a number sequence in subject (e.g., "ordre 1001", "#1001", "order 1001")
-      const numMatch = subject.match(/(?:ordre|order)?\s*#?\s*(\d{3,})/i) ?? subject.match(/(\d{3,})/);
-      const subjectNumber = numMatch ? numMatch[1] : null;
-      emitDebugLog("gmail-create-draft-ai: subjectNumber:", subjectNumber, "subject:", subject);
+    const { orders, matchedSubjectNumber } = await resolveOrderContext({
+      supabase,
+      userId: supabaseUserId,
+      email: fromEmail,
+      subject,
+      tokenSecret: SHOPIFY_TOKEN_KEY,
+      apiVersion: SHOPIFY_API_VERSION,
+      fetcher: fetchOrdersWithFrontendToken ?? undefined,
+    });
+    emitDebugLog("gmail-create-draft-ai: order context", {
+      email: fromEmail,
+      orders: orders.length,
+      matchedSubjectNumber,
+    });
 
-      if (subjectNumber) {
-        const fallbackContext2 = await fetchShopifyContext({ clerkToken, supabaseUserId });
-        const fallbackOrders2 = Array.isArray(fallbackContext2?.orders) ? fallbackContext2.orders : [];
-        emitDebugLog("gmail-create-draft-ai: fetched recent orders for subject-matching length:", fallbackOrders2.length);
-
-        const matchedByNumber = fallbackOrders2.filter((o: any) => {
-          const check = (val: any) => {
-            if (!val && val !== 0) return false;
-            const s = String(val).toLowerCase();
-            if (s.includes(subjectNumber)) return true;
-            // strip non-digits and compare numeric suffix
-            const digits = s.replace(/\D/g, "");
-            if (digits && digits.includes(subjectNumber)) return true;
-            return false;
-          };
-          const candidates = [o?.name, o?.order_number, o?.id, o?.legacy_order?.order_number, o?.number];
-          const matched = candidates.some(check);
-          if (matched) {
-            emitDebugLog("gmail-create-draft-ai: matched order by subject number", {
-              orderId: o?.id ?? o?.name ?? o?.order_number,
-              candidates,
-            });
-          }
-          return matched;
-        });
-
-        if (matchedByNumber.length) {
-          orders = matchedByNumber;
-          shopContext = fallbackContext2;
-          matchedSubjectNumber = subjectNumber;
-        }
-      }
-    }
-
-    function matchedAny(list: string[], target: string) {
-      if (!target) return false;
-      for (const item of list) {
-        if (!item) continue;
-        if (item === target) return true;
-        try {
-          // loosened match: startsWith or contains
-          if (item.includes(target) || target.includes(item)) return true;
-        } catch {}
-      }
-      return false;
-    }
-
-    // Build an order summary (human-friendly) that we always attach to the prompt / fallback
-    let orderSummary = "";
-    if (orders.length) {
-      orderSummary += `Kunden har følgende ordrer (seneste ${orders.length}):\n`;
-      for (const o of orders.slice(0, 5)) {
-        // Prefer a human-friendly order number/name over the internal id
-        const friendlyId = o?.order_number ?? o?.name ?? (o?.id ? String(o.id) : "ukendt");
-        const status = o?.fulfillment_status ?? o?.status ?? "ukendt";
-        const total = o?.total_price ?? o?.current_total_price ?? o?.price ?? "ukendt";
-        orderSummary += `- Ordre ${friendlyId} (id:${o?.id ?? "ukendt"}) — status: ${status} — total: ${total}\n`;
-        if (o?.shipping_address) {
-          orderSummary += `  Aktuel adresse: ${[
-            o.shipping_address?.name,
-            o.shipping_address?.address1,
-            o.shipping_address?.address2,
-            o.shipping_address?.zip,
-            o.shipping_address?.city,
-            o.shipping_address?.country,
-          ]
-            .filter(Boolean)
-            .join(", ")}\n`;
-        }
-        // If we have line items, include a very short summary (1-2 items)
-        try {
-          const items = Array.isArray(o?.line_items) ? o.line_items.slice(0, 2).map((li: any) => `${li.quantity ?? 1}× ${li.title ?? li.name ?? ''}`) : [];
-          if (items.length) {
-            orderSummary += `  Varer: ${items.join(', ')}${o?.line_items?.length && o.line_items.length > items.length ? ` (+${o.line_items.length - items.length} flere)` : ''}\n`;
-          }
-        } catch (e) {
-          // ignore malformed line_items
-        }
-      }
-    } else {
-      orderSummary = "Ingen relaterede ordrer fundet.\n";
-    }
+    const orderSummary = buildOrderSummary(orders);
 
     // Build prompt for OpenAI (if configured)
     let prompt = `Skriv et høfligt og professionelt svar på dansk til denne kundemail:\n\n---KUNDENS EMAIL---\n${plain}\n\n---KONTEKST---\n${orderSummary}\n`;
@@ -634,10 +372,12 @@ Deno.serve(async (req) => {
 
     const draft = await createGmailDraft(rawMessage, gmailToken, threadId ?? undefined);
     const automationResults = await executeAutomationActions({
-      clerkUserId,
+      supabase,
       supabaseUserId,
-      clerkToken,
       actions: automationActions,
+      automation,
+      tokenSecret: SHOPIFY_TOKEN_KEY,
+      apiVersion: SHOPIFY_API_VERSION,
     });
     emitDebugLog("gmail-create-draft-ai: automation results", automationResults);
 
@@ -651,110 +391,3 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: message }), { status });
   }
 });
-// Bruges kun af interne kald hvor vi allerede kører med service role
-async function fetchShopifyContextDirect(userId: string, email?: string) {
-  if (!supabase || !SHOPIFY_TOKEN_KEY) return null;
-  let credentials: ShopCredentials | null = null;
-  try {
-    const { data, error } = await supabase
-      .rpc<ShopCredentials>("get_shop_credentials_for_user", {
-        p_owner_user_id: userId,
-        p_secret: SHOPIFY_TOKEN_KEY,
-      })
-      .single();
-    if (error || !data) {
-      console.warn("gmail-create-draft-ai: kunne ikke hente Shopify credentials", error);
-      return null;
-    }
-    credentials = data;
-  } catch (err) {
-    console.warn("gmail-create-draft-ai: rpc get_shop_credentials_for_user fejlede", err);
-    return null;
-  }
-
-  if (!credentials) return null;
-
-  try {
-    const domain = credentials.shop_domain.replace(/^https?:\/\//, "");
-    const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json`);
-    url.searchParams.set("limit", "5");
-    if (email) url.searchParams.set("email", email);
-
-    const res = await fetch(url.toString(), {
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": credentials.access_token,
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      console.warn("gmail-create-draft-ai: Shopify orders slog fejl", res.status, text);
-      return null;
-    }
-    return await res.json().catch(() => null);
-  } catch (err) {
-    console.warn("gmail-create-draft-ai: Shopify fetch exception", err);
-    return null;
-  }
-}
-
-// Finder Supabase-user-id via profils-tabellen så vi kan slå persona og automation op
-async function fetchSupabaseUserId(clerkUserId: string): Promise<string | null> {
-  if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("user_id")
-    .eq("clerk_user_id", clerkUserId)
-    .maybeSingle();
-  if (error) {
-    console.warn("gmail-create-draft-ai: kunne ikke hente supabase user id", error);
-    return null;
-  }
-  return typeof data?.user_id === "string" && data.user_id.length ? data.user_id : null;
-}
-
-// Returnerer den lagrede persona eller et sæt sikre standardværdier
-async function fetchPersona(userId: string | null) {
-  if (!supabase || !userId) return DEFAULT_PERSONA;
-  const { data, error } = await supabase
-    .from("agent_persona")
-    .select("signature, scenario, instructions")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) {
-    console.warn("gmail-create-draft-ai: kunne ikke hente persona", error);
-  }
-  return {
-    signature: data?.signature?.trim()?.length ? data.signature : DEFAULT_PERSONA.signature,
-    scenario: data?.scenario ?? DEFAULT_PERSONA.scenario,
-    instructions: data?.instructions ?? DEFAULT_PERSONA.instructions,
-  };
-}
-
-// Henter automations så AI ved hvad den må
-async function fetchAutomation(userId: string | null) {
-  if (!supabase || !userId) return DEFAULT_AUTOMATION;
-  const { data, error } = await supabase
-    .from("agent_automation")
-    .select("order_updates, cancel_orders, automatic_refunds, historic_inbox_access")
-    .eq("user_id", userId)
-    .maybeSingle();
-  if (error) {
-    console.warn("gmail-create-draft-ai: kunne ikke hente automation", error);
-  }
-  return {
-    order_updates:
-      typeof data?.order_updates === "boolean" ? data.order_updates : DEFAULT_AUTOMATION.order_updates,
-    cancel_orders:
-      typeof data?.cancel_orders === "boolean" ? data.cancel_orders : DEFAULT_AUTOMATION.cancel_orders,
-    automatic_refunds:
-      typeof data?.automatic_refunds === "boolean"
-        ? data.automatic_refunds
-        : DEFAULT_AUTOMATION.automatic_refunds,
-    historic_inbox_access:
-      typeof data?.historic_inbox_access === "boolean"
-        ? data.historic_inbox_access
-        : DEFAULT_AUTOMATION.historic_inbox_access,
-  };
-}

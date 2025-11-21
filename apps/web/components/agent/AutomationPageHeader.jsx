@@ -5,6 +5,7 @@ import { Save } from "lucide-react";
 import { useAutomationPanelActions } from "./AutomationPanel";
 
 export function AutomationPageHeader() {
+  // Header knapper bruger context fra AutomationPanel til at trigge gem.
   const { save, saving, loading, dirty } = useAutomationPanelActions();
 
   return (

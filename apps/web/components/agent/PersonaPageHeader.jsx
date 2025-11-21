@@ -5,6 +5,7 @@ import { RefreshCw, Save } from "lucide-react";
 import { usePersonaPanelActions } from "./PersonaPanel";
 
 export function PersonaPageHeader() {
+  // Button actions leveres af PersonaPanel context så headeren holder sig "dum".
   const { refresh, save, loading, saving, dirty } = usePersonaPanelActions();
 
   return (

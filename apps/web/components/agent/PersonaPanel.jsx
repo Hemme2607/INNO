@@ -16,6 +16,7 @@ import {
   Underline,
 } from "lucide-react";
 
+// Dummy toolbar data – ren kosmetik men hjælper med at beskrive editoren.
 const TOOLBAR_BUTTONS = [
   { icon: Bold, label: "Fed" },
   { icon: Italic, label: "Kursiv" },
@@ -37,17 +38,22 @@ export function usePersonaPanelActions() {
 export function PersonaPanel({ children }) {
   const { persona, loading, saving, error, save, refresh, test, testPersona } =
     useAgentPersonaConfig();
+  // Formularstate for signatur/instruktioner hentes og lagres via hooken.
   const [form, setForm] = useState({
     signature: "",
     instructions: "",
   });
+  // Dirty flag styrer hvornår gem-knappen skal aktiveres.
   const [dirty, setDirty] = useState(false);
+  // Playground input til test endpointet.
   const [scenarioInput, setScenarioInput] = useState("");
+  // Konverterer test hookens error til en streng til UI.
   const testErrorMessage = useMemo(() => {
     if (!test?.error) return null;
     return test.error instanceof Error ? test.error.message : String(test.error);
   }, [test?.error]);
 
+  // Når persona data ændrer sig synker vi formularen og rydder dirty flag.
   useEffect(() => {
     setForm({
       signature: persona?.signature ?? "",
@@ -57,22 +63,27 @@ export function PersonaPanel({ children }) {
     setDirty(false);
   }, [persona?.signature, persona?.scenario, persona?.instructions]);
 
+  // Generisk onChange der opdaterer form state.
   const handleChange = (key) => (event) => {
     const value = event.target.value;
     setDirty(true);
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  // Wrapper save hooken og nulstiller dirty når kaldet lykkes.
   const handleSave = useCallback(() => {
     save(form).then(() => setDirty(false)).catch(() => null);
   }, [form, save]);
 
+  // Sender midlertidige felter til backend test-funktionen.
   const handleTest = () => {
     testPersona({ ...form, scenario: scenarioInput }).catch(() => null);
   };
 
+  // Force reload af persona fra backend.
   const handleRefresh = useCallback(() => refresh().catch(() => null), [refresh]);
 
+  // Contextens API bruges af headeren til at trigge refresh/save.
   const contextValue = useMemo(
     () => ({
       refresh: handleRefresh,
