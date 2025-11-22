@@ -1,3 +1,4 @@
+// Samler promptet så alle kanaler får samme tone og regler.
 type MailPromptOptions = {
   emailBody: string;
   orderSummary: string; // Antager dette er en streng med JSON eller tekst-data om ordren
@@ -13,8 +14,8 @@ export function buildMailPrompt({
   matchedSubjectNumber,
   extraContext,
 }: MailPromptOptions): string {
-  
-  // 1. Definition af Rollen og Opgaven
+
+  // 1. Definition af rollen og opgaven så modellen ved hvilket perspektiv svaret skal skrives fra.
   let prompt = `
 ROLLEN:
 Du er en erfaren, empatisk og kundeservice-medarbejder (Human-in-the-loop).
@@ -35,7 +36,7 @@ ${extraContext ? `Ekstra viden: ${extraContext}` : ""}
 ${personaInstructions ? `Specifik instruks: ${personaInstructions}` : "Vær venlig, professionel, men 'nede på jorden'. Undgå kancellisprog."}
 `;
 
-  // 2. De hårde regler (Guardrails)
+  // 2. Guardrails – kort og tydeligt så ensartede svar kan produceres på tværs af kanaler.
   prompt += `
 INSTRUKTIONER TIL SVARET:
 1. **Hilsen:** Start med "Hej [Navn]" (hvis navnet fremgår af data, ellers bare "Hej").

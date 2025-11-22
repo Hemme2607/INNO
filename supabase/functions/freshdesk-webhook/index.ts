@@ -11,6 +11,7 @@ import {
   executeAutomationActions,
 } from "../_shared/automation-actions.ts";
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
+import { fetchTrackingSummariesForOrders } from "../_shared/tracking.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 
@@ -154,6 +155,32 @@ function stripExistingSignoff(text: string): string {
   return lines.join("\n").trim();
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function buildNoteHtml(body: string): string {
+  const escapedBody = escapeHtml(body).replace(/\n/g, "<br>");
+  return `
+    <div style="background-color:#f0f9ff;border-left:4px solid #3b82f6;padding:12px;font-family:sans-serif;color:#1e293b;">
+      <div style="font-weight:bold;color:#1e40af;margin-bottom:8px;display:flex;align-items:center;gap:5px;">
+        Sona.ai forslag
+      </div>
+      <div style="font-size:14px;line-height:1.6;">
+        ${escapedBody}
+      </div>
+      <div style="margin-top:12px;padding-top:8px;border-top:1px solid #bfdbfe;font-size:12px;color:#64748b;">
+        <em>Kopier teksten ovenfor og send som svar.</em>
+      </div>
+    </div>
+  `.trim();
+}
+
 type OpenAIResult = {
   reply: string | null;
   actions: AutomationAction[];
@@ -218,7 +245,9 @@ async function generateDraftBody(options: {
   contactEmail?: string | null;
   matchedSubjectNumber?: string | null;
 }): Promise<{ body: string; actions: AutomationAction[] }> {
-  const orderSummary = buildOrderSummary(options.orders);
+  // Saml trackingdata (pt. GLS) så Freshdesk-svar kan inkludere den aktuelle status.
+  const trackingSummaries = await fetchTrackingSummariesForOrders(options.orders);
+  const orderSummary = buildOrderSummary(options.orders, trackingSummaries);
   const description =
     options.description?.trim()?.length ? options.description.trim() : "Ingen beskrivelse angivet.";
   const subject = options.subject?.trim() ?? "Ticket";
@@ -268,9 +297,12 @@ async function createFreshdeskDraftNote(options: {
   apiKey: string;
   ticketId: number;
   body: string;
+  bodyHtml?: string;
 }) {
-  const { domain, apiKey, ticketId, body } = options;
+  const { domain, apiKey, ticketId, body, bodyHtml } = options;
   const url = `https://${domain}/api/v2/tickets/${ticketId}/notes`;
+
+  const payloadBody = bodyHtml ?? body;
 
   const response = await fetch(url, {
     method: "POST",
@@ -279,7 +311,7 @@ async function createFreshdeskDraftNote(options: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      body,
+      body: payloadBody,
       private: true,
       incoming: false,
     }),
@@ -375,11 +407,14 @@ Deno.serve(async (req) => {
       matchedSubjectNumber,
     });
 
+    const formattedHtml = buildNoteHtml(draftBody);
+
     await createFreshdeskDraftNote({
       domain: integration.config.domain,
       apiKey,
       ticketId,
       body: draftBody,
+      bodyHtml: formattedHtml,
     });
 
     const automationResults = await executeAutomationActions({
