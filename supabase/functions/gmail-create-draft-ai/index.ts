@@ -11,6 +11,7 @@ import { AutomationAction, executeAutomationActions } from "../_shared/automatio
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
+import { fetchTrackingSummariesForOrders } from "../_shared/tracking.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
@@ -298,7 +299,10 @@ Deno.serve(async (req) => {
       matchedSubjectNumber,
     });
 
-    const orderSummary = buildOrderSummary(orders);
+    // Tilføj GLS trackingstatus til konteksten så modellen kan svare på "hvor er min pakke?".
+    const trackingSummaries = await fetchTrackingSummariesForOrders(orders);
+
+    const orderSummary = buildOrderSummary(orders, trackingSummaries);
 
     const prompt = buildMailPrompt({
       emailBody: plain,

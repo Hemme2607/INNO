@@ -83,7 +83,18 @@ export function matchesOrderNumber(order: any, candidate: string): boolean {
   });
 }
 
-export function buildOrderSummary(orders: ShopifyOrder[]): string {
+function buildTrackingKey(order: ShopifyOrder) {
+  return (
+    (order?.id ? String(order.id) : null) ||
+    (order?.order_number ? String(order.order_number) : null) ||
+    (order?.name ? String(order.name) : null)
+  );
+}
+
+export function buildOrderSummary(
+  orders: ShopifyOrder[],
+  trackingSummaries?: Record<string, string>,
+): string {
   if (!orders?.length) {
     return "Ingen relaterede ordrer fundet.\n";
   }
@@ -119,6 +130,10 @@ export function buildOrderSummary(orders: ShopifyOrder[]): string {
         const extra = order.line_items.length > lines.length ? ` (+${order.line_items.length - lines.length} flere)` : "";
         summary += `  Varer: ${lines.join(", ")}${extra}\n`;
       }
+    }
+    const trackingKey = buildTrackingKey(order);
+    if (trackingKey && trackingSummaries?.[trackingKey]) {
+      summary += `  Tracking: ${trackingSummaries[trackingKey]}\n`;
     }
   }
   return summary;
