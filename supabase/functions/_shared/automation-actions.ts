@@ -31,6 +31,7 @@ type ExecuteOptions = {
   automation: AutomationSettings;
   tokenSecret?: string | null;
   apiVersion: string;
+  orderIdMap?: Record<string | number, number>;
 };
 
 async function getShopCredentials(
@@ -58,7 +59,6 @@ function ensureActionAllowed(action: string, automation: AutomationSettings) {
     });
   switch (action) {
     case "update_shipping_address":
-    case "add_note":
     case "add_tag":
       if (!automation.order_updates) {
         throw deny("ordreopdateringer er deaktiveret.");
@@ -248,8 +248,6 @@ async function handleAction(
       return updateShippingAddress(shop, apiVersion, orderId, action.payload);
     case "cancel_order":
       return cancelOrder(shop, apiVersion, orderId, action.payload);
-    case "add_note":
-      return addNote(shop, apiVersion, orderId, action.payload);
     case "add_tag":
       return addTag(shop, apiVersion, orderId, action.payload);
     default:
@@ -266,6 +264,7 @@ export async function executeAutomationActions({
   automation,
   tokenSecret,
   apiVersion,
+  orderIdMap = {},
 }: ExecuteOptions): Promise<AutomationResult[]> {
   const results: AutomationResult[] = [];
   if (!actions?.length) return results;
@@ -280,6 +279,11 @@ export async function executeAutomationActions({
   let shop: ShopCredentials | null = null;
   try {
     shop = await getShopCredentials(supabase, supabaseUserId, tokenSecret);
+    console.log("automation: shop credentials resolved", {
+      shop_domain: shop?.shop_domain,
+      supabaseUserId,
+    });
+    console.log("automation: orderId map", orderIdMap);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return actions.map((action) => ({
@@ -291,9 +295,37 @@ export async function executeAutomationActions({
 
   for (const action of actions) {
     if (!action || typeof action.type !== "string") continue;
+    if (action.type === "add_note") {
+      console.log("automation: skipping add_note action indtil funktionen aktiveres");
+      continue;
+    }
     try {
+      const normalizedKey = String(action.orderId ?? "").replace("#", "");
+      const resolvedId =
+        orderIdMap[normalizedKey] ?? orderIdMap[String(action.orderId ?? "")];
+      const orderIdToUse = resolvedId ?? action.orderId;
+
+      if (!orderIdToUse || Number.isNaN(Number(orderIdToUse))) {
+        console.warn("automation: missing order id mapping", {
+          action,
+          normalizedKey,
+          availableKeys: Object.keys(orderIdMap),
+        });
+        throw new Error(
+          `Order id mangler eller er ugyldigt for handlingen ${action.type}.`,
+        );
+      }
+
+      console.log("automation: executing action", {
+        type: action.type,
+        orderId: orderIdToUse,
+        shop_domain: shop?.shop_domain,
+      });
       ensureActionAllowed(action.type, automation);
-      await handleAction(shop, apiVersion, action);
+      await handleAction(shop, apiVersion, {
+        ...action,
+        orderId: Number(orderIdToUse),
+      });
       results.push({ type: action.type, ok: true });
     } catch (err) {
       results.push({

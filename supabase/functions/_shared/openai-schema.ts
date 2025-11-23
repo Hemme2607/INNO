@@ -12,10 +12,10 @@ export const PERSONA_REPLY_JSON_SCHEMA = {
                 type: "object",
                 additionalProperties: false,
                 properties: {
-                  type: {
-                    type: "string",
-                    enum: ["update_shipping_address", "cancel_order", "add_note", "add_tag"],
-                  },
+            type: {
+              type: "string",
+              enum: ["update_shipping_address", "cancel_order", "add_tag"],
+            },
                   orderId: { type: "number" },
                   payload: {
                     type: "object",

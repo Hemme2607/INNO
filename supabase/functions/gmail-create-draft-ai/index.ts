@@ -11,7 +11,6 @@ import { AutomationAction, executeAutomationActions } from "../_shared/automatio
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
-import { fetchTrackingSummariesForOrders } from "../_shared/tracking.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
@@ -299,10 +298,7 @@ Deno.serve(async (req) => {
       matchedSubjectNumber,
     });
 
-    // Tilføj GLS trackingstatus til konteksten så modellen kan svare på "hvor er min pakke?".
-    const trackingSummaries = await fetchTrackingSummariesForOrders(orders);
-
-    const orderSummary = buildOrderSummary(orders, trackingSummaries);
+    const orderSummary = buildOrderSummary(orders);
 
     const prompt = buildMailPrompt({
       emailBody: plain,
@@ -311,6 +307,7 @@ Deno.serve(async (req) => {
       matchedSubjectNumber,
       extraContext:
         "Returner altid JSON hvor 'actions' beskriver konkrete handlinger du udfører i Shopify. Brug orderId (det numeriske id i parentes) når du udfylder actions. udfyld altid payload.shipping_address (brug nuværende adresse hvis den ikke ændres) og sæt payload.note og payload.tag til tom streng hvis de ikke bruges. Hvis kunden beder om adresseændring, udfyld shipping_address med alle felter (name, address1, address2, zip, city, country, phone). Hvis en handling ikke er tilladt i automationsreglerne, lad actions listen være tom og forklar brugeren at du sender sagen videre.",
+      signature: persona.signature,
     });
 
     let aiText: string | null = null;
@@ -330,7 +327,7 @@ Deno.serve(async (req) => {
           automationGuidance,
           "Ud over forventet svar skal du returnere JSON med 'reply' og 'actions'.",
           "Hvis en handling udføres (f.eks. opdater adresse, annuller ordre, tilføj note/tag), skal actions-listen indeholde et objekt med type, orderId og payload.",
-          "Tilladte actions: update_shipping_address, cancel_order, add_note, add_tag. Brug kun actions hvis automationsreglerne tillader det – ellers lad listen være tom og forklar kunden at handlingen udføres manuelt.",
+          "Tilladte actions: update_shipping_address, cancel_order, add_tag. Brug kun actions hvis automationsreglerne tillader det – ellers lad listen være tom og forklar kunden at handlingen udføres manuelt.",
           "For update_shipping_address skal payload.shipping_address mindst indeholde name, address1, city, zip/postal_code og country.",
           "Afslut ikke med signatur – signaturen tilføjes automatisk senere.",
         ].join("\n");
@@ -350,11 +347,15 @@ Deno.serve(async (req) => {
 
     if (!aiText) {
       aiText = `Hej ${from.split(" <")[0] || "kunde"},\n\nTak for din besked. Jeg har kigget på din sag${
-        orders.length ? ` og fundet ${orders.length} ordre(r) relateret til din e-mail.` : "."
-      }\n\n${orderSummary}\nVi vender tilbage hurtigst muligt med en opdatering.\n\n${persona.signature}`;
-    } else {
-      aiText = `${aiText.trim()}\n\n${persona.signature}`;
+        orders.length ? ` og fandt ${orders.length} ordre(r) relateret til din e-mail.` : "."
+      }\n\n${orderSummary}\nVi vender tilbage hurtigst muligt med en opdatering.`;
     }
+    let finalText = aiText.trim();
+    const signature = persona.signature?.trim();
+    if (signature && signature.length && !finalText.includes(signature)) {
+      finalText = `${finalText}\n\n${signature}`;
+    }
+    aiText = finalText;
 
     // Create draft in Gmail
     const rawLines = [] as string[];

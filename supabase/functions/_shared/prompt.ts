@@ -5,6 +5,7 @@ type MailPromptOptions = {
   personaInstructions?: string | null;
   matchedSubjectNumber?: string | null;
   extraContext?: string | null;
+  signature?: string | null;
 };
 
 export function buildMailPrompt({
@@ -13,6 +14,7 @@ export function buildMailPrompt({
   personaInstructions,
   matchedSubjectNumber,
   extraContext,
+  signature,
 }: MailPromptOptions): string {
 
   // 1. Definition af rollen og opgaven så modellen ved hvilket perspektiv svaret skal skrives fra.
@@ -47,6 +49,7 @@ INSTRUKTIONER TIL SVARET:
    - Hvis ordren IKKE findes i dataen: Beklag og bed venligt om ordrenummeret (medmindre det allerede står i mailen/emnet).
 4. **Længde:** Hold det kort og præcist (3-5 sætninger). Ingen lange salgstaler.
 5. **Next Steps:** Fortæl kunden præcis, hvad der sker nu, eller hvad de skal gøre.
+${signature ? `6. **Signatur:** Afslut mailen med præcis denne signatur (og tilføj ikke andre hilsner): ${signature}` : ""}
 
 NEJ-LISTE (Gør ALDRIG dette):
 - Brug ALDRIG placeholders som "[Indsæt dato]" eller "[Dine initialer]". Hvis du mangler info, så skriv generelt.

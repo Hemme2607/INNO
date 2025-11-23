@@ -5,7 +5,7 @@ type ShopifyCredentials = {
   access_token: string;
 };
 
-export type ShopifyOrder = Record<string, unknown>;
+export type ShopifyOrder = Record<string, any>;
 
 type ShopifyOrderFetcher = (email?: string | null) => Promise<ShopifyOrder[] | null>;
 
@@ -35,6 +35,7 @@ export async function fetchShopifyOrders(options: {
     const domain = data.shop_domain.replace(/^https?:\/\//, "");
     const url = new URL(`https://${domain}/admin/api/${apiVersion}/orders.json`);
     url.searchParams.set("limit", String(limit));
+    url.searchParams.set("status", "any");
     if (email?.trim()) {
       url.searchParams.set("email", email.trim());
     }
@@ -91,10 +92,7 @@ function buildTrackingKey(order: ShopifyOrder) {
   );
 }
 
-export function buildOrderSummary(
-  orders: ShopifyOrder[],
-  trackingSummaries?: Record<string, string>,
-): string {
+export function buildOrderSummary(orders: ShopifyOrder[]): string {
   if (!orders?.length) {
     return "Ingen relaterede ordrer fundet.\n";
   }
@@ -131,12 +129,52 @@ export function buildOrderSummary(
         summary += `  Varer: ${lines.join(", ")}${extra}\n`;
       }
     }
-    const trackingKey = buildTrackingKey(order);
-    if (trackingKey && trackingSummaries?.[trackingKey]) {
-      summary += `  Tracking: ${trackingSummaries[trackingKey]}\n`;
+    const fulfilText = formatFulfillmentStatus(order);
+    if (fulfilText) {
+      summary += `  Levering: ${fulfilText}\n`;
     }
   }
   return summary;
+}
+
+function formatFulfillmentStatus(order: ShopifyOrder) {
+  const status = String(order?.fulfillment_status ?? "").toLowerCase();
+  const fulfillments = Array.isArray(order?.fulfillments) ? order.fulfillments : [];
+  const firstFulfillment = fulfillments[0];
+  const timestamp = formatShopifyTimestamp(firstFulfillment?.updated_at || firstFulfillment?.created_at);
+  const location = firstFulfillment?.destination?.city || firstFulfillment?.tracking_company;
+
+  if (status === "fulfilled") {
+    return `Markeret som leveret${timestamp ? ` (${timestamp})` : ""}${location ? ` – ${location}` : ""}`;
+  }
+  if (status === "in_transit" || status === "partial") {
+    return `Undervejs${timestamp ? ` (senest opdateret ${timestamp})` : ""}`;
+  }
+  if (!status || status === "null" || status === "unfulfilled") {
+    if (firstFulfillment?.status === "success") {
+      return `Fulfillment succesfuld${timestamp ? ` (${timestamp})` : ""}`;
+    }
+    return "Ikke sendt endnu";
+  }
+  return status;
+}
+
+function formatShopifyTimestamp(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  try {
+    return date.toLocaleString("da-DK", {
+      timeZone: "Europe/Copenhagen",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return date.toISOString();
+  }
 }
 
 export async function resolveOrderContext(options: {
@@ -148,7 +186,11 @@ export async function resolveOrderContext(options: {
   apiVersion: string;
   fetcher?: ShopifyOrderFetcher | null;
   limit?: number;
-}): Promise<{ orders: ShopifyOrder[]; matchedSubjectNumber: string | null }> {
+}): Promise<{
+  orders: ShopifyOrder[];
+  matchedSubjectNumber: string | null;
+  orderIdMap: Record<string, number>;
+}> {
   const {
     supabase,
     userId,
@@ -204,7 +246,23 @@ export async function resolveOrderContext(options: {
     }
   }
 
-  return { orders, matchedSubjectNumber };
+  const orderIdMap: Record<string, number> = {};
+  for (const order of orders) {
+    const internalId = typeof order?.id === "number" ? order.id : Number(order?.id);
+    if (!internalId || Number.isNaN(internalId)) continue;
+    const keys = new Set<string>();
+    if (order?.order_number) keys.add(String(order.order_number));
+    if (order?.name) keys.add(String(order.name).replace("#", ""));
+    if (order?.legacy_order?.order_number) keys.add(String(order.legacy_order.order_number));
+    keys.add(String(internalId));
+    for (const key of keys) {
+      if (!orderIdMap[key]) {
+        orderIdMap[key] = internalId;
+      }
+    }
+  }
+
+  return { orders, matchedSubjectNumber, orderIdMap };
 }
 
 function matchesOrderEmail(order: any, targetEmail: string): boolean {

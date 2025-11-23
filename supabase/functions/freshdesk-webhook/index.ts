@@ -11,7 +11,6 @@ import {
   executeAutomationActions,
 } from "../_shared/automation-actions.ts";
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
-import { fetchTrackingSummariesForOrders } from "../_shared/tracking.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 
@@ -127,34 +126,6 @@ function buildBasicAuthHeader(apiKey: string): string {
   return `Basic ${token}`;
 }
 
-function stripExistingSignoff(text: string): string {
-  if (!text) return "";
-  const lines = text.trimEnd().split(/\r?\n/);
-  const signoffPrefixes = [
-    "venlig hilsen",
-    "med venlig hilsen",
-    "bedste hilsner",
-    "bedste hilsen",
-    "mvh",
-    "vh",
-  ];
-  while (lines.length) {
-    const candidate = lines[lines.length - 1].trim();
-    if (!candidate) {
-      lines.pop();
-      continue;
-    }
-    const normalized = candidate.toLowerCase();
-    const matches = signoffPrefixes.some((prefix) => normalized.startsWith(prefix));
-    if (matches) {
-      lines.pop();
-      continue;
-    }
-    break;
-  }
-  return lines.join("\n").trim();
-}
-
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -245,9 +216,7 @@ async function generateDraftBody(options: {
   contactEmail?: string | null;
   matchedSubjectNumber?: string | null;
 }): Promise<{ body: string; actions: AutomationAction[] }> {
-  // Saml trackingdata (pt. GLS) så Freshdesk-svar kan inkludere den aktuelle status.
-  const trackingSummaries = await fetchTrackingSummariesForOrders(options.orders);
-  const orderSummary = buildOrderSummary(options.orders, trackingSummaries);
+  const orderSummary = buildOrderSummary(options.orders);
   const description =
     options.description?.trim()?.length ? options.description.trim() : "Ingen beskrivelse angivet.";
   const subject = options.subject?.trim() ?? "Ticket";
@@ -262,6 +231,7 @@ async function generateDraftBody(options: {
     personaInstructions: personaNotes,
     matchedSubjectNumber: options.matchedSubjectNumber,
     extraContext: "Svar skal kunne sendes direkte til kunden via Freshdesk.",
+    signature: options.persona.signature,
   });
 
   const system = [
@@ -287,8 +257,11 @@ async function generateDraftBody(options: {
     .filter(Boolean)
     .join("\n\n");
 
-  const withoutSignoff = stripExistingSignoff(reply || fallback);
-  const body = `${withoutSignoff.trim()}\n\n${options.persona.signature}`;
+  let body = (reply || fallback || "").trim();
+  const signature = options.persona.signature?.trim();
+  if (signature && signature.length && !body.includes(signature)) {
+    body = `${body}\n\n${signature}`;
+  }
   return { body, actions };
 }
 

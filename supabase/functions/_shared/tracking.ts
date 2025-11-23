@@ -47,16 +47,43 @@ function pickOrderKey(order: any): string | null {
 }
 
 // Slår status op direkte hos GLS – returværdi er et kort resume der kan sættes i prompten.
+function formatTimestamp(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  try {
+    return parsed.toLocaleString("da-DK", {
+      timeZone: "Europe/Copenhagen",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return parsed.toISOString();
+  }
+}
+
 async function fetchGLSStatus(
   trackingNumber: string,
 ): Promise<TrackingSummary | null> {
   const url = `${GLS_TRACKING_ENDPOINT}${encodeURIComponent(trackingNumber)}`;
   try {
-    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: "https://gls-group.eu/",
+      },
+    });
     const payload = await response.json().catch(() => null);
     if (!response.ok || !payload) {
       return {
-        status: "Tracking info utilgængelig (GLS API fejl).",
+        status: "Kunne ikke hente live tracking. Brug linket til GLS Tracking.",
         trackingNumber,
         url: `https://gls-group.eu/EU/en/parcel-tracking?match=${trackingNumber}`,
       };
@@ -76,7 +103,7 @@ async function fetchGLSStatus(
       payload?.historyEvent ??
       null;
 
-    const status =
+    const baseStatus =
       latest?.statusDescription ??
       latest?.statusText ??
       latest?.description ??
@@ -88,11 +115,22 @@ async function fetchGLSStatus(
       latest?.city ??
       payload?.tuStatus?.depot ??
       null;
-    const timestamp =
+    const timestampRaw =
       latest?.dateTime ?? latest?.date ?? latest?.eventTime ?? null;
+    const timestamp = formatTimestamp(timestampRaw);
+
+    const lowerStatus = String(baseStatus).toLowerCase();
+    let statusText = baseStatus;
+    if (lowerStatus.includes("deliver")) {
+      statusText = `Leveret${timestamp ? ` ${timestamp}` : ""}`;
+    } else if (lowerStatus.includes("in transit") || lowerStatus.includes("transit")) {
+      statusText = `På vej${timestamp ? ` (sidst opdateret ${timestamp})` : ""}`;
+    } else if (lowerStatus.includes("pickup") || lowerStatus.includes("parcel center")) {
+      statusText = `Hos GLS (${baseStatus})${timestamp ? ` – ${timestamp}` : ""}`;
+    }
 
     return {
-      status,
+      status: statusText,
       location,
       timestamp,
       trackingNumber,
@@ -168,6 +206,11 @@ export async function fetchTrackingSummariesForOrders(
 
     const candidate = candidates[0];
     const status = await fetchGLSStatus(candidate.trackingNumber);
+    console.log("tracking: GLS status", {
+      orderKey: key,
+      trackingNumber: candidate.trackingNumber,
+      status,
+    });
     if (!status) continue;
 
     const pieces = [

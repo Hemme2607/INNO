@@ -14,7 +14,7 @@ export type Automation = {
 };
 
 export const DEFAULT_PERSONA: Persona = {
-  signature: "Venlig hilsen\nDin agent",
+  signature: "",
   scenario: "",
   instructions: "",
 };
