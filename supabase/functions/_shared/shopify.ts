@@ -9,16 +9,33 @@ export type ShopifyOrder = Record<string, any>;
 
 type ShopifyOrderFetcher = (email?: string | null) => Promise<ShopifyOrder[] | null>;
 
-export async function fetchShopifyOrders(options: {
+type FetchOrdersOptions = {
   supabase: SupabaseClient | null;
   userId?: string | null;
   email?: string | null;
   limit?: number;
   tokenSecret?: string | null;
   apiVersion: string;
-}): Promise<ShopifyOrder[]> {
-  const { supabase, userId, email, limit = 5, tokenSecret, apiVersion } = options;
-  if (!supabase || !tokenSecret || !userId) return [];
+  pageInfo?: string | null;
+};
+
+async function fetchShopifyOrdersPage(options: FetchOrdersOptions): Promise<{
+  orders: ShopifyOrder[];
+  nextPageInfo: string | null;
+}> {
+  const {
+    supabase,
+    userId,
+    email,
+    limit = 5,
+    tokenSecret,
+    apiVersion,
+    pageInfo = null,
+  } = options;
+
+  if (!supabase || !tokenSecret || !userId) {
+    return { orders: [], nextPageInfo: null };
+  }
 
   try {
     const { data, error } = await supabase
@@ -29,14 +46,16 @@ export async function fetchShopifyOrders(options: {
       .single();
     if (error || !data) {
       console.warn("shopify-shared: kunne ikke hente credentials", error);
-      return [];
+      return { orders: [], nextPageInfo: null };
     }
 
     const domain = data.shop_domain.replace(/^https?:\/\//, "");
     const url = new URL(`https://${domain}/admin/api/${apiVersion}/orders.json`);
     url.searchParams.set("limit", String(limit));
     url.searchParams.set("status", "any");
-    if (email?.trim()) {
+    if (pageInfo) {
+      url.searchParams.set("page_info", pageInfo);
+    } else if (email?.trim()) {
       url.searchParams.set("email", email.trim());
     }
 
@@ -50,14 +69,26 @@ export async function fetchShopifyOrders(options: {
     if (!response.ok) {
       const text = await response.text();
       console.warn("shopify-shared: orders slog fejl", response.status, text);
-      return [];
+      return { orders: [], nextPageInfo: null };
     }
     const payload = await response.json().catch(() => null);
-    return Array.isArray(payload?.orders) ? payload.orders : [];
+    const linkHeader = response.headers.get("link") ?? "";
+    const nextPageInfo = extractNextPageInfo(linkHeader);
+    return {
+      orders: Array.isArray(payload?.orders) ? payload.orders : [],
+      nextPageInfo,
+    };
   } catch (err) {
     console.warn("shopify-shared: fetch exception", err);
-    return [];
+    return { orders: [], nextPageInfo: null };
   }
+}
+
+export async function fetchShopifyOrders(
+  options: FetchOrdersOptions,
+): Promise<ShopifyOrder[]> {
+  const { orders } = await fetchShopifyOrdersPage(options);
+  return orders;
 }
 
 export function extractSubjectNumber(subject?: string | null): string | null {
@@ -90,6 +121,24 @@ function buildTrackingKey(order: ShopifyOrder) {
     (order?.order_number ? String(order.order_number) : null) ||
     (order?.name ? String(order.name) : null)
   );
+}
+
+function extractNextPageInfo(linkHeader: string): string | null {
+  if (!linkHeader) return null;
+  const parts = linkHeader.split(",");
+  for (const part of parts) {
+    if (part.includes('rel="next"')) {
+      const match = part.match(/<([^>]+)>/);
+      if (!match?.[1]) continue;
+      try {
+        const url = new URL(match[1]);
+        return url.searchParams.get("page_info");
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
 }
 
 export function buildOrderSummary(orders: ShopifyOrder[]): string {
@@ -227,18 +276,27 @@ export async function resolveOrderContext(options: {
   let matchedSubjectNumber: string | null = null;
 
   if ((!orders || orders.length === 0) && email) {
-    const fallback = await fetchOrders(null);
-    const matched = fallback.filter((order) => matchesOrderEmail(order, email));
-    if (matched.length) {
-      orders = matched;
-    }
+    orders = await fetchAcrossPages({
+      supabase,
+      userId,
+      tokenSecret,
+      apiVersion,
+      predicate: (order) => matchesOrderEmail(order, email),
+      limit,
+    });
   }
 
   if ((!orders || orders.length === 0) && subject) {
     const subjectNumber = extractSubjectNumber(subject);
     if (subjectNumber) {
-      const fallback = await fetchOrders(null);
-      const matched = fallback.filter((order) => matchesOrderNumber(order, subjectNumber));
+      const matched = await fetchAcrossPages({
+        supabase,
+        userId,
+        tokenSecret,
+        apiVersion,
+        predicate: (order) => matchesOrderNumber(order, subjectNumber),
+        limit,
+      });
       if (matched.length) {
         orders = matched;
         matchedSubjectNumber = subjectNumber;
@@ -281,4 +339,46 @@ function collectOrderEmails(order: any): string[] {
     .filter(Boolean)
     .map((value: string) => value.toLowerCase());
   return Array.from(new Set(emails));
+}
+
+type FetchAcrossPagesOptions = {
+  supabase: SupabaseClient | null;
+  userId?: string | null;
+  tokenSecret?: string | null;
+  apiVersion: string;
+  predicate: (order: ShopifyOrder) => boolean;
+  limit?: number;
+  maxPages?: number;
+};
+
+async function fetchAcrossPages(options: FetchAcrossPagesOptions): Promise<ShopifyOrder[]> {
+  const {
+    supabase,
+    userId,
+    tokenSecret,
+    apiVersion,
+    predicate,
+    limit = 250,
+    maxPages = 40,
+  } = options;
+  let pageInfo: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const { orders, nextPageInfo } = await fetchShopifyOrdersPage({
+      supabase,
+      userId,
+      tokenSecret,
+      apiVersion,
+      limit,
+      pageInfo,
+    });
+    const matched = orders.filter(predicate);
+    if (matched.length) {
+      return matched;
+    }
+    if (!nextPageInfo) {
+      break;
+    }
+    pageInfo = nextPageInfo;
+  }
+  return [];
 }
