@@ -58,8 +58,8 @@ export default function ProcessingDemo() {
         <Image
           src={shopifyLogo}
           alt="Shopify logo"
-          width={28}
-          height={28}
+          width={54}
+          height={54}
           className="object-contain"
         />
       ),

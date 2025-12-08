@@ -1,6 +1,5 @@
 'use client'
 import Link from 'next/link'
-import { Logo } from '@/components/logo'
 import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React from 'react'
@@ -38,7 +37,7 @@ export const HeroHeader = () => {
                         className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
                         <div className="flex w-full justify-between lg:w-auto">
                             <Link href="/" aria-label="home" className="flex items-center space-x-2">
-                                <Logo />
+                                <span className="text-lg font-semibold text-foreground">Sona</span>
                             </Link>
 
                             <button
@@ -107,7 +106,7 @@ export const HeroHeader = () => {
                                     </SignUpButton>
                                 </SignedOut>
                                 <SignedIn>
-                                    <Button asChild size="sm" variant="ghost">
+                                    <Button asChild size="sm" className="bg-white text-black hover:bg-white/95 shadow-sm">
                                         <Link href="/dashboard">Dashboard</Link>
                                     </Button>
                                     <UserButton afterSignOutUrl="/" />
