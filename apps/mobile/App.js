@@ -1,3 +1,4 @@
+// App entrypunkt der sætter navigation og Clerk-provider op i mobilklienten.
 import React from "react";
 import { ActivityIndicator, View, Text } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
@@ -20,7 +21,7 @@ import { COLORS } from "./styles/GlobalStyles";
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// De forskellige tabs i applikation
+// Tabs og ikoner for hovednavigationen
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const tabIcons = {
@@ -111,7 +112,7 @@ function MainTabs() {
 
 
 
-// Komponent der håndterer authentication state
+// Wrapper der viser auth-flow eller hovedapp afhængig af Clerk-session
 function AppContent() {
   const { isLoaded, isSignedIn } = useAuth();
 
@@ -159,6 +160,7 @@ function AppContent() {
   );
 }
 
+// Rodkomponenten der pakker appen ind i Clerk og SafeAreaProvider
 export default function App() {
   if (!CLERK_PUBLISHABLE_KEY) {
     return (

@@ -1,3 +1,4 @@
+// Hook der afklarer shop-domæne og ejer ved at læse Clerk-token og Supabase-data.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useClerkSupabase } from "../supabaseClient";
@@ -63,6 +64,7 @@ const decodeJwtPayload = (token) => {
   }
 };
 
+// Forsøger at finde shopdomæne og ejer ved at læse Clerk-token og Supabase
 export function useShopDomain() {
   const supabase = useClerkSupabase();
   const { user } = useUser();
@@ -84,6 +86,7 @@ export function useShopDomain() {
     }
   }, [user?.publicMetadata?.supabase_uuid]);
 
+  // Henter status fra edge-funktionen som fallback til profilopslag
   const fetchStatusFromEdge = useCallback(async () => {
     if (!SHOPIFY_STATUS_ENDPOINT || typeof getToken !== "function") {
       return null;
@@ -145,6 +148,7 @@ export function useShopDomain() {
     }
   }, [getToken, user?.id, setSupabaseUserIdHint]);
 
+  // Finder Supabase user_id via profiler-tabellen hvis Clerk ikke har det
   const fetchProfileUserId = useCallback(async () => {
     if (!supabase || !user?.id) {
       return null;
@@ -182,6 +186,7 @@ export function useShopDomain() {
     return null;
   }, [supabase, user?.id]);
 
+  // Prioriterer cached metadata eller Clerk-token til at afgøre brugerens Supabase-id
   const resolveSupabaseUserId = useCallback(async () => {
     if (isValidUuid(supabaseUserIdHint)) {
       return supabaseUserIdHint;

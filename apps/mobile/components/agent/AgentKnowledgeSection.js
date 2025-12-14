@@ -1,3 +1,4 @@
+// UI-sektion til at åbne standardsvar og dokumenter for agentens vidensbase.
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AgentSection from "./AgentSection";
@@ -7,6 +8,7 @@ export default function AgentKnowledgeSection({
   onOpenTemplates = () => {},
   onOpenDocuments = () => {},
 }) {
+  // Viser CTA-knapper til at åbne templates og dokumenter
   return (
     <AgentSection
       title="Viden & datakilder"

@@ -1,3 +1,4 @@
+// UI-sektion der lader brugeren styre agentens automatiserings-toggles.
 import { View, Text, Switch, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
@@ -49,6 +50,7 @@ export default function AgentAutomationSection({
     ...(settings ?? {}),
   };
 
+  // Viser en bekræftelse før et toggle ændrer kritiske agent-handlinger
   const handleToggle = (controlId, nextValue) => {
     const control = CONTROL_DEFINITIONS.find((item) => item.id === controlId);
     if (!control) return;

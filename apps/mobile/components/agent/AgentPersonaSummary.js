@@ -1,3 +1,4 @@
+// Viser et overblik over agentens persona, signatur og seneste scenarie.
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AgentSection from "./AgentSection";
@@ -12,6 +13,7 @@ export default function AgentPersonaSummary({
   scenario,
   instructions,
 }) {
+  // Beregn visninger og fallback-tekster til persona-overblikket
   const resolvedSignature = (signature && signature.trim()) || defaultSignature || "";
   const signatureLines = resolvedSignature
     ? resolvedSignature.split("\n").filter((line) => line.trim().length > 0)

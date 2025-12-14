@@ -1,3 +1,4 @@
+// Skærm der lister og opretter standardsvar for agenten.
 import { ScrollView, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";

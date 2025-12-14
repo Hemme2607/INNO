@@ -1,3 +1,4 @@
+// Hook der indlæser og gemmer automationsindstillinger og finder korrekt bruger-id.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useClerkSupabase } from "../supabaseClient";
 import { useAuth, useUser } from "@clerk/clerk-expo";

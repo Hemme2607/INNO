@@ -1,3 +1,4 @@
+// Hook der læser og gemmer agentens persona-opsætning med Clerk/Supabase-id.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useClerkSupabase } from "../supabaseClient";
 import { useAuth, useUser } from "@clerk/clerk-expo";
@@ -82,6 +83,7 @@ export function useAgentPersonaConfig(options = {}) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Sikrer at vi får et Supabase user_id uanset om det ligger i metadata eller profil
   const ensureUserId = useCallback(async () => {
     if (providedUserId) {
       return providedUserId;

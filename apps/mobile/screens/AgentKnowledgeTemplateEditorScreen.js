@@ -1,3 +1,4 @@
+// Skærm til at redigere indholdet i et valgt standardsvar.
 import { useState } from "react";
 import {
   ScrollView,

@@ -1,3 +1,4 @@
+// Skærm der viser login- og signup-flowet styret af Clerk.
 import React, { useState } from "react";
 import {
   View,

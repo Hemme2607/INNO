@@ -1,7 +1,9 @@
+// Grundlæggende layout-beholder for agentsektioner med titel, indhold og footer.
 import { View, Text, StyleSheet } from "react-native";
 import { COLORS } from "../../styles/GlobalStyles";
 
 export default function AgentSection({ title, subtitle, children, footer }) {
+  // Standard kort-layout for agentens sektioner
   return (
     <View style={styles.container}>
       <View style={styles.header}>

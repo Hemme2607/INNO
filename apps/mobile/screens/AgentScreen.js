@@ -1,3 +1,4 @@
+// Hovedskærm for agenten der samler hero, persona, viden og automation.
 import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { Alert } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -32,6 +33,7 @@ const MAIL_PROVIDERS = [
 ];
 
 export default function AgentScreen() {
+  // Samler hooks og navigation til agentens forskellige skærme
   const displayName = useDisplayName();
   const { shopDomain } = useShopDomain();
   const { getToken, sessionId } = useAuth();

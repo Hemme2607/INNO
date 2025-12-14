@@ -1,3 +1,4 @@
+// Hook der vælger bedste visningsnavn ved at kombinere Clerk-bruger og Supabase-profil.
 import { useEffect, useMemo, useState } from "react";
 import { useUser } from "@clerk/clerk-expo";
 import { useClerkSupabase } from "../supabaseClient";

@@ -1,3 +1,4 @@
+// Skærm der viser mail-indbakke med AI-kladder og handlinger.
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";

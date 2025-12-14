@@ -1,3 +1,4 @@
+// Hjælpefunktioner til at hente profiloplysninger og fornavn fra Supabase.
 const PROFILE_TABLE = "profiles";
 const PROFILE_COLUMNS = "id, clerk_id, first_name";
 
@@ -10,6 +11,7 @@ async function fetchSingleProfile(supabase, filters) {
     .maybeSingle();
 }
 
+// Finder profil via intern id
 export async function fetchProfileById(supabase, id) {
   if (!id) {
     return { data: null, error: new Error("Profil-id mangler") };
@@ -18,6 +20,7 @@ export async function fetchProfileById(supabase, id) {
   return fetchSingleProfile(supabase, { id });
 }
 
+// Finder profil via Clerk-id
 export async function fetchProfileByClerkId(supabase, clerkId) {
   if (!clerkId) {
     return { data: null, error: new Error("Clerk-id mangler") };
@@ -26,6 +29,7 @@ export async function fetchProfileByClerkId(supabase, clerkId) {
   return fetchSingleProfile(supabase, { clerk_id: clerkId });
 }
 
+// Returnerer fornavn fra profil baseret på profil-id eller Clerk-id
 export async function resolveProfileFirstName(supabase, { profileId, clerkId }) {
   if (!supabase) {
     return { data: null, error: new Error("Supabase klient mangler") };

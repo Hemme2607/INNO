@@ -1,3 +1,4 @@
+// Expo-specifik Clerk-konfiguration og eksport af publishable key.
 import { tokenCache } from "../../shared/storage/tokenStorage";
 import {
   CLERK_PUBLISHABLE_KEY,

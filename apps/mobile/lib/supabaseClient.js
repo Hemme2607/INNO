@@ -1,8 +1,10 @@
+// Opretter Supabase-klienten med Clerk tokens og lokal token-cache til mobilen.
 import { useAuth } from "@clerk/clerk-expo";
 import { useEffect, useRef } from "react";
 import { createClerkSupabaseClient } from "../../../shared/supabase/createClient";
 import { supabaseStorageAdapter } from "../../../shared/storage/tokenStorage";
 
+// Returnerer en memoiseret Supabase-klient bundet til Clerk-tokenet
 export function useClerkSupabase() {
   const { getToken } = useAuth();
   const getTokenRef = useRef(getToken);

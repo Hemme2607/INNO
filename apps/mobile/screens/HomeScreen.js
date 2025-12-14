@@ -1,3 +1,4 @@
+// Home-skærm med hurtige CTA'er til indbakke, integrationer og profil.
 import { View, Text, TouchableOpacity } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
@@ -8,6 +9,7 @@ import { useDisplayName } from "../lib/hooks/useDisplayName";
 export default function HomeScreen({ navigation }) {
   const displayName = useDisplayName();
 
+  // Navigationsgenveje til bundfanerne
   const handleGoToInbox = () => {
     navigation.navigate("Inbox");
   };

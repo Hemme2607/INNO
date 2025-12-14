@@ -1,3 +1,4 @@
+// Skærm til at redigere agentens persona, scenarier og instruktioner.
 import { ScrollView, StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 import AgentPersonaSection from "../components/agent/AgentPersonaSection";

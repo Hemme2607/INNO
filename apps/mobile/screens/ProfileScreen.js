@@ -1,3 +1,4 @@
+// Skærm for brugerprofil og generelle indstillinger.
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@clerk/clerk-expo";

@@ -1,3 +1,4 @@
+// Login-komponent der bruger Clerk og tilbyder e-mail eller OAuth.
 import React, { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -16,6 +17,7 @@ export default function Login() {
     strategy: "oauth_microsoft",
   });
 
+  // Logger ind med e-mail/password via Clerk
   const handleLogin = async () => {
     if (!isLoaded) return;
 
@@ -34,6 +36,7 @@ export default function Login() {
     }
   };
 
+  // Starter OAuth-flow for valgt udbyder (Google/Microsoft)
   const handleOAuthLogin = async (providerLabel, startOAuth) => {
     try {
       const { createdSessionId, setActive } = await startOAuth();

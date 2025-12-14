@@ -1,3 +1,4 @@
+// Formularsektion til at redigere agentens signatur, scenarie og instruktioner.
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from "react-native";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
@@ -15,7 +16,7 @@ export default function AgentPersonaSection({
   isTesting,
   testError,
 }) {
-
+  // Bygger formularsektionerne til signatur, scenarie og instruktioner
   return (
     <AgentSection
       title="Signatur & prompt"

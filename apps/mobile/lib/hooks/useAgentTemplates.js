@@ -1,3 +1,4 @@
+// Hook der styrer hentning og CRUD for agentens standardsvar-templates i Supabase.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useClerkSupabase } from "../supabaseClient";
 
@@ -15,6 +16,7 @@ function mapTemplate(row) {
   };
 }
 
+// CRUD-wrapper omkring agent_templates-tabellen med lokal state
 export function useAgentTemplates(options = {}) {
   const { lazy = false, userId: providedUserId } = options;
   const supabase = useClerkSupabase();

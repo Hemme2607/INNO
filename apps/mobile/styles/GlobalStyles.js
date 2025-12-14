@@ -1,3 +1,4 @@
+// Samling af fælles farver og stilregler til mobilappen.
 import { StyleSheet } from "react-native";
 
 const COLORS = {

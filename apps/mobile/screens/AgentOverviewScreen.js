@@ -1,3 +1,4 @@
+// Skærm med samlet overblik over agentstatus, persona og data.
 import { ScrollView, StyleSheet } from "react-native";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 import AgentHero from "../components/agent/AgentHero";

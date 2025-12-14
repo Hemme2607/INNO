@@ -1,3 +1,4 @@
+// Skærm hvor brugeren kan uploade, se og fjerne vidensdokumenter.
 import { ScrollView, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";

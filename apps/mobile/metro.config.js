@@ -1,3 +1,4 @@
+// Metro bundler-konfiguration der deler node_modules i monorepoet.
 const path = require("path");
 const { getDefaultConfig } = require("expo/metro-config");
 

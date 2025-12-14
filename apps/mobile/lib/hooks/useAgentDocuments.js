@@ -1,3 +1,4 @@
+// Hook til at hente, oprette og slette agentdokumenter med status-håndtering.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClerkSupabase } from "../supabaseClient";
 
@@ -14,6 +15,7 @@ function mapDocument(row) {
   };
 }
 
+// Håndterer hentning, oprettelse og sletning af vidensdokumenter
 export function useAgentDocuments(options = {}) {
   const { lazy = false, userId: providedUserId } = options;
   const supabase = useClerkSupabase();

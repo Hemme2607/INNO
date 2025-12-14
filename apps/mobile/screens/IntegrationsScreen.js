@@ -1,3 +1,4 @@
+// Skærm der beskriver og håndterer appens integrationer.
 import { useState, useCallback } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import { View, Text, TouchableOpacity, ScrollView, Image, Modal, TextInput, ActivityIndicator, Alert } from "react-native";

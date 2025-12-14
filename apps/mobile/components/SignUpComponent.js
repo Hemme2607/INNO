@@ -1,3 +1,4 @@
+// Signup-komponent der håndterer Clerk-registrering og visning.
 import { useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,6 +19,7 @@ export default function Signup() {
     strategy: "oauth_microsoft",
   });
 
+  // Opretter konto via e-mail/password med basic validering
   const handleSignup = async () => {
     if (!isLoaded) {
       Alert.alert("Vent venligst", "Clerk er ikke klar endnu");
@@ -58,6 +60,7 @@ export default function Signup() {
     }
   };
 
+  // Starter OAuth-signup for en given udbyder
   const handleOAuthSignup = async (providerLabel, startOAuth) => {
     try {
       const { createdSessionId, setActive: setOAuthActive } = await startOAuth();

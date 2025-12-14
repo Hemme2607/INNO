@@ -1,3 +1,4 @@
+// Konfiguration til TypeScript-kompiler i Expo-mobilprojektet.
 {
   "compilerOptions": {},
   "extends": "expo/tsconfig.base"
