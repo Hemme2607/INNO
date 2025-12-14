@@ -22,12 +22,21 @@ Next.js-baseret web-ui bygget med Tailwind + Shadcn/TailArk komponenter, nu med 
 | `NEXT_PUBLIC_CLERK_FRONTEND_API` | Valgfrit, hvis du bruger custom Clerk domain. |
 | `NEXT_PUBLIC_SUPABASE_URL` | URL til Supabase-projektet (kan deles med Expo). |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key til Supabase (samme som mobilen bruger). |
+| `OUTLOOK_WEBHOOK_HOST` | Offentlig base-URL hvor Graph sender webhooks (fx https://api.sona.ai). |
+| `OUTLOOK_CLIENT_STATE_SECRET` | Hemmelig streng til at signere `clientState` i Graph subscriptions. |
+| `MICROSOFT_OAUTH_PROVIDER` | Clerk provider-navn for Outlook login (default `oauth_microsoft`). |
 
 ## Tilgængelige sider
 - `/dashboard` – samme demo-boards som mobilens overview.
 - `/agent` – persona, automation og knowledge base.
 - `/integrations` – Shopify/Gmail/Outlook status og workflows.
 - `/inbox` – (placeholder) webversion af indbakken.
+
+## Outlook overvågning (auto-draft)
+- Aktivér Microsoft OIDC i Clerk med scopes `Mail.Read`, `Mail.ReadWrite`, `offline_access`.
+- Sæt `OUTLOOK_WEBHOOK_HOST` til den offentlige base-URL og `OUTLOOK_CLIENT_STATE_SECRET` til en stærk nøgle.
+- Kald `POST /api/outlook/subscriptions` efter login for at oprette/forny Graph subscription på brugerens indbakke.
+- Graph sender events til `/api/outlook/webhook`, som henter mailen med brugerens token og gemmer en kladde-svar.
 
 ## Shadcn UI (JSX)
 - CLI er allerede initialiseret – tilføj nye komponenter med:

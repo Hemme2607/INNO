@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
 import { Package, XCircle, DollarSign, Archive } from "lucide-react";
 import { useAgentAutomation } from "@/hooks/useAgentAutomation";
 
@@ -79,7 +80,11 @@ export function AutomationPanel({ children = null }) {
 
   // dirty bruges både af header knappen og lokale CTA'er.
   const dirty = useMemo(() => {
-    return toggles.some(({ key }) => Boolean(local?.[key]) !== Boolean(settings?.[key]));
+    const baseDirty = toggles.some(
+      ({ key }) => Boolean(local?.[key]) !== Boolean(settings?.[key])
+    );
+    const draftDirty = Boolean(local?.autoDraftEnabled) !== Boolean(settings?.autoDraftEnabled);
+    return baseDirty || draftDirty;
   }, [local, settings]);
 
   // Samlet API der deles via context så headeren kan gengemme ændringer.
@@ -93,9 +98,50 @@ export function AutomationPanel({ children = null }) {
     [handleSave, saving, loading, dirty]
   );
 
+  const handleToggleAutoDraft = useCallback(async () => {
+    const next = !Boolean(local?.autoDraftEnabled);
+    setLocal((s) => ({ ...(s || {}), autoDraftEnabled: next }));
+    try {
+      await save({ autoDraftEnabled: next });
+    } catch (_) {
+      // error already handled by hook
+    }
+  }, [local?.autoDraftEnabled, save]);
+
   return (
     <AutomationPanelContext.Provider value={contextValue}>
       {children}
+
+      <Card className="mb-4 rounded-xl border border-border bg-white shadow-sm">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Auto-draft agent</p>
+            <p className="text-sm text-muted-foreground">
+              Slå AI-kladder til/fra. Når den er aktiv, danner agenten automatisk kladder i din indbakke.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span
+              className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                local?.autoDraftEnabled
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-slate-100 text-slate-600"
+              }`}
+            >
+              {local?.autoDraftEnabled ? "Aktiv" : "Deaktiveret"}
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleToggleAutoDraft}
+              disabled={loading || saving}
+              variant={local?.autoDraftEnabled ? "outline" : "default"}
+            >
+              {local?.autoDraftEnabled ? "Deaktiver" : "Aktivér"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="rounded-xl border border-border bg-white shadow-sm">
         <CardContent className="p-0">
