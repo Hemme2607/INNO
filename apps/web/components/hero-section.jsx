@@ -1,225 +1,74 @@
 "use client";
 
-import React from 'react'
-import Link from 'next/link'
-import { ArrowRight, ChevronRight } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import Image from 'next/image'
-import { TextEffect } from '@/components/ui/text-effect'
-import { AnimatedGroup } from '@/components/ui/animated-group'
-import { HeroHeader } from './header'
-import { SignedIn, SignedOut, SignInButton, SignUpButton } from "@clerk/nextjs";
+import React from "react";
+import { ArrowRight, Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import ProcessingDemo from "@/components/processing-demo";
+import { HeroHeader } from "./header";
+import { AnimatedGroup } from "@/components/ui/animated-group";
 
-// Standard animation setup så vi kan genbruge samme fade-in effekt flere steder.
-const transitionVariants = {
-    item: {
-        hidden: {
-            opacity: 0,
-            filter: 'blur(12px)',
-            y: 12,
-        },
-        visible: {
-            opacity: 1,
-            filter: 'blur(0px)',
-            y: 0,
-            transition: {
-                type: 'spring',
-                bounce: 0.3,
-                duration: 1.5,
-            },
-        },
-    },
-}
-
-const heroScreens = {
-    dark: "https://dummyimage.com/2700x1440/0f172a/ffffff.png&text=INBOX",
-    light: "https://dummyimage.com/2700x1440/f8fafc/0f172a.png&text=INBOX",
-}
+const fadeIn = {
+  item: {
+    hidden: { opacity: 0, y: 18 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } },
+  },
+};
 
 export default function HeroSection() {
-    return (
-        <>
-            <HeroHeader />
-            <main className="overflow-hidden">
-                <div
-                    aria-hidden
-                    className="absolute inset-0 isolate hidden opacity-65 contain-strict lg:block">
-                    <div
-                        className="w-140 h-320 -translate-y-87.5 absolute left-0 top-0 -rotate-45 rounded-full bg-[radial-gradient(68.54%_68.72%_at_55.02%_31.46%,hsla(0,0%,85%,.08)_0,hsla(0,0%,55%,.02)_50%,hsla(0,0%,45%,0)_80%)]" />
-                    <div
-                        className="h-320 absolute left-0 top-0 w-60 -rotate-45 rounded-full bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.06)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)] [translate:5%_-50%]" />
-                    <div
-                        className="h-320 -translate-y-87.5 absolute left-0 top-0 w-60 -rotate-45 bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.04)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)]" />
-                </div>
-                <section>
-                    <div className="relative pt-24 md:pt-36">
-                        {/* Intro hero med baggrundsanimation */}
-                        <AnimatedGroup
-                            variants={{
-                                container: {
-                                    visible: {
-                                        transition: {
-                                            delayChildren: 1,
-                                        },
-                                    },
-                                },
-                                item: {
-                                    hidden: {
-                                        opacity: 0,
-                                        y: 20,
-                                    },
-                                    visible: {
-                                        opacity: 1,
-                                        y: 0,
-                                        transition: {
-                                            type: 'spring',
-                                            bounce: 0.3,
-                                            duration: 2,
-                                        },
-                                    },
-                                },
-                            }}
-                            className="mask-b-from-35% mask-b-to-90% absolute inset-0 top-56 -z-20 lg:top-32">
-                            <Image
-                                src="https://ik.imagekit.io/lrigu76hy/tailark/night-background.jpg?updatedAt=1745733451120"
-                                alt="background"
-                                className="hidden size-full dark:block"
-                                width="3276"
-                                height="4095" />
-                        </AnimatedGroup>
+  return (
+    <section className="relative overflow-hidden bg-slate-950">
+      <HeroHeader />
 
-                        <div
-                            aria-hidden
-                            className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,var(--color-background)_75%)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute -left-16 top-0 h-72 w-72 bg-sky-500/20 blur-3xl" />
+        <div className="absolute right-0 top-10 h-64 w-64 bg-cyan-400/15 blur-3xl" />
+        <div className="absolute inset-0 bg-[radial-gradient(70%_70%_at_20%_20%,rgba(56,189,248,0.08),transparent),radial-gradient(60%_60%_at_80%_10%,rgba(129,140,248,0.12),transparent)]" />
+      </div>
 
-                        <div className="mx-auto max-w-7xl px-6">
-                            <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-                                <AnimatedGroup variants={transitionVariants}>
-                                    <Link
-                                        href="#link"
-                                        className="hover:bg-background dark:hover:border-t-border bg-muted group mx-auto flex w-fit items-center gap-4 rounded-full border p-1 pl-4 shadow-md shadow-zinc-950/5 transition-colors duration-300 dark:border-t-white/5 dark:shadow-zinc-950">
-                                        <span className="text-foreground text-sm">Introducing Support for AI Models</span>
-                                        <span
-                                            className="dark:border-background block h-4 w-0.5 border-l bg-white dark:bg-zinc-700"></span>
+      <AnimatedGroup
+        variants={fadeIn}
+        className="mx-auto max-w-6xl px-6 pb-16 pt-28 lg:px-8 lg:pb-24 lg:pt-32 min-h-[820px] lg:min-h-[900px]">
+        <div className="grid items-start gap-12 lg:grid-cols-[1.05fr_1fr]">
+          <div className="space-y-7">
 
-                                        <div
-                                            className="bg-background group-hover:bg-muted size-6 overflow-hidden rounded-full duration-500">
-                                            <div
-                                                className="flex w-12 -translate-x-1/2 duration-500 ease-in-out group-hover:translate-x-0">
-                                                <span className="flex size-6">
-                                                    <ArrowRight className="m-auto size-3" />
-                                                </span>
-                                                <span className="flex size-6">
-                                                    <ArrowRight className="m-auto size-3" />
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </Link>
-                                </AnimatedGroup>
+            <div className="space-y-4">
+              <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
+                Gør din kundeservice{" "}
+                <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">
+                  selvkørende
+                </span>{" "}
+                med Sona
+              </h1>
+              <p className="max-w-2xl text-lg text-slate-300">
+                Vi kobler AI med dine webshop-data, så du automatisk finder ordren, tjekker status og sender det rigtige svar – uden manuel håndtering.
+              </p>
+            </div>
 
-                                <TextEffect
-                                    preset="fade-in-blur"
-                                    speedSegment={0.3}
-                                    as="h1"
-                                    className="mx-auto mt-8 max-w-4xl text-balance text-5xl max-md:font-semibold md:text-7xl lg:mt-16 xl:text-[5.25rem]">
-                                    AI customer support for ecommerce
-                                </TextEffect>
-                                <TextEffect
-                                    per="line"
-                                    preset="fade-in-blur"
-                                    speedSegment={0.3}
-                                    delay={0.5}
-                                    as="p"
-                                    className="mx-auto mt-8 max-w-2xl text-balance text-lg">
-                                    Boost your customer support with AI-powered agents that handle inquiries 24/7, delivering instant and accurate responses to enhance customer satisfaction and streamline operations.
-                                </TextEffect>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Input
+                  type="email"
+                  placeholder="Din e-mail"
+                  className="h-11 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 sm:h-12"
+                />
+                <Button className="h-11 gap-2 bg-sky-500 px-5 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400 sm:h-12">
+                  Få tidlig adgang
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
 
-                                <AnimatedGroup
-                                    variants={{
-                                        container: {
-                                            visible: {
-                                                transition: {
-                                                    staggerChildren: 0.05,
-                                                    delayChildren: 0.75,
-                                                },
-                                            },
-                                        },
-                                        ...transitionVariants,
-                                    }}
-                                    className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
-                                    <SignedOut>
-                                        <div
-                                            key={1}
-                                            className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5">
-                                            <SignUpButton mode="modal">
-                                                <Button size="lg" className="rounded-xl px-5 text-base">
-                                                    <span className="text-nowrap">Get Started</span>
-                                                </Button>
-                                            </SignUpButton>
-                                        </div>
-                                        <SignInButton mode="modal">
-                                            <Button
-                                                key={2}
-                                                size="lg"
-                                                variant="ghost"
-                                                className="h-10.5 rounded-xl px-5">
-                                                <span className="text-nowrap">Log in</span>
-                                            </Button>
-                                        </SignInButton>
-                                    </SignedOut>
-                                    <SignedIn>
-                                        <div
-                                            className="bg-foreground/10 rounded-[calc(var(--radius-xl)+0.125rem)] border p-0.5">
-                                            <Button asChild size="lg" className="rounded-xl px-5 text-base">
-                                                <Link href="/dashboard">
-                                                    <span className="text-nowrap">Gå til dashboard</span>
-                                                </Link>
-                                            </Button>
-                                        </div>
-                                    </SignedIn>
-                                </AnimatedGroup>
-                            </div>
-                        </div>
-
-                        {/* Showcase screenshots */}
-                        <AnimatedGroup
-                            variants={{
-                                container: {
-                                    visible: {
-                                        transition: {
-                                            staggerChildren: 0.05,
-                                            delayChildren: 0.75,
-                                        },
-                                    },
-                                },
-                                ...transitionVariants,
-                            }}>
-                            <div
-                                className="mask-b-from-55% relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-                                <div
-                                    className="inset-shadow-2xs ring-background dark:inset-shadow-white/20 bg-background relative mx-auto max-w-6xl overflow-hidden rounded-2xl border p-4 shadow-lg shadow-zinc-950/15 ring-1">
-                                    <Image
-                                        className="bg-background aspect-15/8 relative hidden rounded-2xl dark:block"
-                                        src={heroScreens.dark}
-                                        alt="Indbakke eksempel"
-                                        width={2700}
-                                        height={1440}
-                                        priority
-                                    />
-                                    <Image
-                                        className="z-2 border-border/25 aspect-15/8 relative rounded-2xl border dark:hidden"
-                                        src={heroScreens.light}
-                                        alt="Indbakke eksempel"
-                                        width={2700}
-                                        height={1440}
-                                        priority
-                                    />
-                                </div>
-                            </div>
-                        </AnimatedGroup>
-                    </div>
-                </section>
-            </main>
-        </>
-    );
+          <div className="relative">
+            <div className="absolute -left-4 -top-4 h-24 w-24 rounded-full bg-sky-500/15 blur-3xl" />
+            <div className="absolute right-4 top-1/3 h-28 w-28 rounded-full bg-indigo-500/15 blur-3xl" />
+            <div className="relative rounded-2xl border border-white/10 bg-slate-900/70 p-4 shadow-2xl shadow-sky-950/40 backdrop-blur">
+              <ProcessingDemo />
+            </div>
+          </div>
+        </div>
+      </AnimatedGroup>
+    </section>
+  );
 }
