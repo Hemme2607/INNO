@@ -33,6 +33,7 @@ const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
 const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
 const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
+const OPENAI_EMBEDDING_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
 
 if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
@@ -57,6 +58,55 @@ type OpenAIResult = {
   reply: string | null;
   actions: AutomationAction[];
 };
+
+async function embedText(input: string): Promise<number[]> {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_EMBEDDING_MODEL,
+      input,
+    }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.error?.message || `OpenAI embedding error ${res.status}`);
+  }
+  const vector = json?.data?.[0]?.embedding;
+  if (!Array.isArray(vector)) throw new Error("OpenAI embedding missing");
+  return vector;
+}
+
+async function fetchProductContext(
+  supabaseClient: ReturnType<typeof createClient> | null,
+  userId: string | null,
+  text: string,
+) {
+  if (!supabaseClient || !userId || !text?.trim()) return "";
+  try {
+    const embedding = await embedText(text.slice(0, 4000));
+    const { data, error } = await supabaseClient.rpc("match_products", {
+      query_embedding: embedding,
+      match_threshold: 0.2,
+      match_count: 5,
+      filter_shop_id: userId,
+    });
+    if (error || !Array.isArray(data) || !data.length) return "";
+    return data
+      .map((item: any) => {
+        const price = item?.price ? `Price: ${item.price}.` : "";
+        return `Product: ${item?.title ?? "Unknown"}. ${price} Details: ${item?.description ?? ""}`;
+      })
+      .join("\n");
+  } catch (err) {
+    console.warn("gmail-create-draft-ai: product context failed", err);
+    return "";
+  }
+}
 
 function getBearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
@@ -301,8 +351,13 @@ Deno.serve(async (req) => {
     });
 
     const orderSummary = buildOrderSummary(orders);
+    const productContext = await fetchProductContext(
+      supabase,
+      supabaseUserId,
+      plain || subject || ""
+    );
 
-    const prompt = buildMailPrompt({
+    const promptBase = buildMailPrompt({
       emailBody: plain,
       orderSummary,
       personaInstructions: persona.instructions,
@@ -312,6 +367,9 @@ Deno.serve(async (req) => {
       signature: persona.signature,
       policies,
     });
+    const prompt = productContext
+      ? `${promptBase}\n\nPRODUKTKONTEKST:\n${productContext}`
+      : promptBase;
 
     let aiText: string | null = null;
     let automationActions: AutomationAction[] = [];

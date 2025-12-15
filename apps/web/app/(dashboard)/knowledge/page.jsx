@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { KnowledgePageClient } from "@/components/knowledge/KnowledgePageClient";
+import { ProductKnowledgeCard } from "@/components/knowledge/ProductKnowledgeCard";
 
 export default async function KnowledgePage() {
   const { userId } = await auth();
@@ -21,7 +22,10 @@ export default async function KnowledgePage() {
         </div>
       </header>
 
-      <KnowledgePageClient />
+      <div className="space-y-6">
+        <ProductKnowledgeCard />
+        <KnowledgePageClient />
+      </div>
     </main>
   );
 }

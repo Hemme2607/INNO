@@ -31,6 +31,16 @@ if (!INTERNAL_AGENT_SECRET)
 if (!GMAIL_POLL_SECRET)
   console.warn("GMAIL_POLL_SECRET mangler – gmail-poll er ikke beskyttet mod offentlige kald.");
 
+console.log(
+  "gmail-poll startup",
+  JSON.stringify({
+    projectUrl: PROJECT_URL,
+    edgeDebugLogs: EDGE_DEBUG_LOGS,
+    gmailPollSecret: maskSecret(GMAIL_POLL_SECRET),
+    cronHeaderExpected: ["x-cron-secret", "x-internal-secret"],
+  }),
+);
+
 const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
@@ -58,7 +68,11 @@ denoAssertConfig();
 Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-    if (!isAuthorized(req)) return new Response("Unauthorized", { status: 401 });
+    const auth = authorize(req);
+    if (!auth.ok) {
+      console.warn("gmail-poll unauthorized request", auth.reason, auth.meta);
+      return new Response(JSON.stringify({ error: auth.reason }), { status: 401 });
+    }
 
     const body = await readJson(req);
     const explicitUsers: string[] | null = Array.isArray(body?.clerkUserIds)
@@ -159,6 +173,8 @@ async function triggerDraft(clerkUserId: string, messageId: string) {
   if (!PROJECT_URL) throw new Error("PROJECT_URL mangler");
   if (!INTERNAL_AGENT_SECRET)
     throw new Error("INTERNAL_AGENT_SECRET mangler – kan ikke kalde gmail-create-draft-ai");
+  if (!SERVICE_ROLE_KEY)
+    throw new Error("SERVICE_ROLE_KEY mangler – kan ikke autorisere gmail-create-draft-ai");
 
   const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/gmail-create-draft-ai`;
   const res = await fetch(endpoint, {
@@ -166,6 +182,7 @@ async function triggerDraft(clerkUserId: string, messageId: string) {
     headers: {
       "Content-Type": "application/json",
       "x-internal-secret": INTERNAL_AGENT_SECRET,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
     },
     body: JSON.stringify({ clerkUserId, messageId }),
   });
@@ -304,14 +321,53 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
   return json as T;
 }
 
-function isAuthorized(req: Request) {
-  if (!GMAIL_POLL_SECRET) return false;
+function authorize(req: Request): {
+  ok: boolean;
+  reason?: string;
+  meta?: Record<string, unknown>;
+} {
+  if (!GMAIL_POLL_SECRET) {
+    return { ok: false, reason: "GMAIL_POLL_SECRET missing" };
+  }
+
+  const headerName = ["x-cron-secret", "x-internal-secret"].find((key) => req.headers.has(key));
   const header =
     req.headers.get("x-cron-secret") ??
     req.headers.get("X-Cron-Secret") ??
     req.headers.get("x-internal-secret") ??
     req.headers.get("X-Internal-Secret");
-  return header === GMAIL_POLL_SECRET;
+
+  if (!header) {
+    return {
+      ok: false,
+      reason: "Missing auth header",
+      meta: {
+        headerName,
+        headersSeen: Array.from(req.headers.keys()),
+        expectedSecret: maskSecret(GMAIL_POLL_SECRET),
+      },
+    };
+  }
+  if (header !== GMAIL_POLL_SECRET) {
+    return {
+      ok: false,
+      reason: "Invalid secret",
+      meta: {
+        provided: maskSecret(header),
+        expected: maskSecret(GMAIL_POLL_SECRET),
+        providedLength: header.length,
+        expectedLength: GMAIL_POLL_SECRET.length,
+        headerName,
+      },
+    };
+  }
+  return { ok: true };
+}
+
+function maskSecret(secret: string | null) {
+  if (!secret) return "(missing)";
+  if (secret.length <= 4) return "*".repeat(secret.length);
+  return `${secret.slice(0, 2)}...${secret.slice(-2)} (len:${secret.length})`;
 }
 
 async function readJson(req: Request) {

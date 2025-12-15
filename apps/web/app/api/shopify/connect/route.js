@@ -183,6 +183,7 @@ export async function POST(request) {
           policy_refund: policies.refund || null,
           policy_shipping: policies.shipping || null,
           policy_terms: policies.terms || null,
+          platform: "shopify",
         })
         .eq("owner_user_id", supabaseUserId)
         .eq("shop_domain", domain);

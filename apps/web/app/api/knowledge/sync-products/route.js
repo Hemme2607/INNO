@@ -1,0 +1,208 @@
+"use server";
+
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL =
+  (process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.EXPO_PUBLIC_SUPABASE_URL ||
+    "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  "";
+const SHOPIFY_API_VERSION = process.env.SHOPIFY_API_VERSION || "2024-07";
+const SHOPIFY_TOKEN_KEY = process.env.SHOPIFY_TOKEN_KEY || "";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const OPENAI_EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small";
+
+function stripHtml(value = "") {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function createServiceClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function resolveSupabaseUserId(serviceClient, clerkUserId) {
+  const { data, error } = await serviceClient
+    .from("profiles")
+    .select("user_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.user_id) throw new Error("Supabase user not found for this Clerk user.");
+  return data.user_id;
+}
+
+async function fetchShop(serviceClient, ownerUserId) {
+  const { data, error } = await serviceClient
+    .from("shops")
+    .select("id, shop_domain, platform")
+    .eq("owner_user_id", ownerUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("No shop found for this user.");
+  return data;
+}
+
+async function fetchShopifyCredentials(serviceClient, ownerUserId) {
+  if (!SHOPIFY_TOKEN_KEY) throw new Error("SHOPIFY_TOKEN_KEY missing.");
+  const { data, error } = await serviceClient
+    .rpc("get_shop_credentials_for_user", {
+      p_owner_user_id: ownerUserId,
+      p_secret: SHOPIFY_TOKEN_KEY,
+    })
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data?.shop_domain || !data?.access_token) {
+    throw new Error("Missing Shopify credentials.");
+  }
+  return data;
+}
+
+async function fetchShopifyProducts({ domain, accessToken }) {
+  const products = [];
+  let pageInfo = null;
+  const limit = 50;
+  for (let i = 0; i < 5; i++) {
+    const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/products.json`);
+    url.searchParams.set("status", "active");
+    url.searchParams.set("limit", String(limit));
+    if (pageInfo) url.searchParams.set("page_info", pageInfo);
+    const res = await fetch(url.toString(), {
+      headers: {
+        Accept: "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(text || `Shopify products returned ${res.status}`);
+    }
+    const payload = await res.json().catch(() => null);
+    const items = Array.isArray(payload?.products) ? payload.products : [];
+    products.push(...items);
+    const linkHeader = res.headers.get("link") ?? "";
+    const next = extractNextPageInfo(linkHeader);
+    if (!next) break;
+    pageInfo = next;
+  }
+  return products;
+}
+
+function extractNextPageInfo(linkHeader = "") {
+  const parts = linkHeader.split(",");
+  for (const part of parts) {
+    if (part.includes('rel="next"')) {
+      const match = part.match(/<([^>]+)>/);
+      if (!match?.[1]) continue;
+      try {
+        const url = new URL(match[1]);
+        return url.searchParams.get("page_info");
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+async function embedText(text) {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing.");
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: text,
+      model: OPENAI_EMBEDDING_MODEL,
+    }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = json?.error?.message || `OpenAI returned ${res.status}`;
+    throw new Error(message);
+  }
+  const vector = json?.data?.[0]?.embedding;
+  if (!Array.isArray(vector)) throw new Error("Embedding not returned.");
+  return vector;
+}
+
+async function syncShopify({ supabaseUserId, serviceClient }) {
+  const creds = await fetchShopifyCredentials(serviceClient, supabaseUserId);
+  const domain = creds.shop_domain.replace(/^https?:\/\//, "");
+  const products = await fetchShopifyProducts({ domain, accessToken: creds.access_token });
+
+  const rows = [];
+  for (const product of products) {
+    const title = product?.title ?? "Untitled product";
+    const descriptionRaw =
+      product?.body_html || product?.body || product?.description || product?.body_text || "";
+    const description = stripHtml(descriptionRaw);
+    const variant = Array.isArray(product?.variants) ? product.variants[0] : null;
+    const price = variant?.price ?? variant?.compare_at_price ?? "";
+    const context = `Product: ${title}. Price: ${price || "N/A"}. Details: ${description || "No details."}`;
+    const embedding = await embedText(context);
+    rows.push({
+      shop_id: supabaseUserId,
+      external_id: String(product?.id ?? ""),
+      platform: "shopify",
+      title,
+      description,
+      price: price || null,
+      embedding,
+    });
+  }
+
+  if (rows.length) {
+    const { error } = await serviceClient.from("shop_products").upsert(rows, {
+      onConflict: "shop_id,external_id,platform",
+    });
+    if (error) throw new Error(error.message);
+  }
+
+  return { synced: rows.length };
+}
+
+export async function POST() {
+  const { userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json({ error: "Supabase service key missing" }, { status: 500 });
+  }
+
+  const serviceClient = createServiceClient();
+  try {
+    const supabaseUserId = await resolveSupabaseUserId(serviceClient, userId);
+    const shop = await fetchShop(serviceClient, supabaseUserId);
+
+    if (shop.platform && shop.platform !== "shopify") {
+      throw new Error("Platform not supported yet");
+    }
+
+    const result = await syncShopify({ supabaseUserId, serviceClient });
+    return NextResponse.json({ success: true, platform: "shopify", ...result }, { status: 200 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Sync failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
