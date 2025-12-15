@@ -39,6 +39,68 @@ async function getSupabaseUserId(client, clerkUserId) {
   return data?.user_id ?? null;
 }
 
+function stripHtml(value = "") {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function mapPolicies(policies = []) {
+  const result = {
+    refund: "",
+    shipping: "",
+    terms: "",
+  };
+
+  policies.forEach((policy) => {
+    const rawType = policy?.policy_type || policy?.handle || policy?.title || "";
+    const normalized = String(rawType).toLowerCase();
+    const body = stripHtml(policy?.body_html || policy?.body || "");
+    if (!body) return;
+    if (normalized.includes("refund")) {
+      result.refund = body;
+    } else if (normalized.includes("shipping")) {
+      result.shipping = body;
+    } else if (normalized.includes("terms")) {
+      result.terms = body;
+    }
+  });
+
+  return result;
+}
+
+async function fetchShopifyPolicies({ domain, accessToken }) {
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/policies.json`;
+  const res = await fetch(url, {
+    headers: {
+      "X-Shopify-Access-Token": accessToken,
+      Accept: "application/json",
+    },
+  });
+  const payload = await res.json().catch(async () => {
+    const txt = await res.text().catch(() => "");
+    return txt ? { error: txt } : {};
+  });
+  if (!res.ok) {
+    const msg =
+      payload?.errors ||
+      payload?.error ||
+      payload?.error_description ||
+      res.statusText ||
+      `Shopify policies gav status ${res.status}`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
+  }
+  const policies = Array.isArray(payload?.policies) ? payload.policies : [];
+  return mapPolicies(policies);
+}
+
 export async function POST(request) {
   const { userId } = auth();
   if (!userId) {
@@ -111,8 +173,25 @@ export async function POST(request) {
       return NextResponse.json({ error: upsertError.message || "Kunne ikke gemme Shopify forbindelse." }, { status: 500 });
     }
 
+    // Hent politikker med det samme og gem dem i shops.
+    let policies = null;
+    try {
+      policies = await fetchShopifyPolicies({ domain, accessToken });
+      await supabase
+        .from("shops")
+        .update({
+          policy_refund: policies.refund || null,
+          policy_shipping: policies.shipping || null,
+          policy_terms: policies.terms || null,
+        })
+        .eq("owner_user_id", supabaseUserId)
+        .eq("shop_domain", domain);
+    } catch (policyError) {
+      console.warn("Kunne ikke hente/gemme Shopify policies ved connect:", policyError);
+    }
+
     return NextResponse.json(
-      { success: true, domain, shop: shopPayload?.shop ?? null },
+      { success: true, domain, shop: shopPayload?.shop ?? null, policies },
       { status: 200 }
     );
   } catch (error) {

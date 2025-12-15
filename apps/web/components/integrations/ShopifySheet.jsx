@@ -161,9 +161,7 @@ export function ShopifySheet({
     ? hasExistingConnection
       ? "Opdaterer..."
       : "Forbinder..."
-    : hasExistingConnection
-    ? "Opdater konfiguration"
-    : "Connect Shopify";
+    : "Opdater";
 
   // Separat label til disconnect knappen for tydelig statusfeedback.
   const disconnectLabel = disconnecting

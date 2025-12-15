@@ -4,6 +4,7 @@ import {
   buildAutomationGuidance,
   fetchAutomation,
   fetchPersona,
+  fetchPolicies,
   resolveSupabaseUserId,
 } from "../_shared/agent-context.ts";
 import {
@@ -215,6 +216,7 @@ async function generateDraftBody(options: {
   orders: any[];
   contactEmail?: string | null;
   matchedSubjectNumber?: string | null;
+  policies: Awaited<ReturnType<typeof fetchPolicies>>;
 }): Promise<{ body: string; actions: AutomationAction[] }> {
   const orderSummary = buildOrderSummary(options.orders);
   const description =
@@ -232,6 +234,7 @@ async function generateDraftBody(options: {
     matchedSubjectNumber: options.matchedSubjectNumber,
     extraContext: "Svar skal kunne sendes direkte til kunden via Freshdesk.",
     signature: options.persona.signature,
+    policies: options.policies,
   });
 
   const system = [
@@ -359,8 +362,9 @@ Deno.serve(async (req) => {
       );
     }
 
-    const persona = await fetchPersona(integration.user_id);
-    const automation = await fetchAutomation(integration.user_id);
+    const persona = await fetchPersona(supabase, integration.user_id);
+    const automation = await fetchAutomation(supabase, integration.user_id);
+    const policies = await fetchPolicies(supabase, integration.user_id);
     const { orders, matchedSubjectNumber } = await resolveOrderContext({
       supabase,
       userId: integration.user_id,
@@ -378,6 +382,7 @@ Deno.serve(async (req) => {
       orders,
       contactEmail: webhook?.ticket_contact_email,
       matchedSubjectNumber,
+      policies,
     });
 
     const formattedHtml = buildNoteHtml(draftBody);

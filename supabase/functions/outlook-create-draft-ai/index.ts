@@ -6,6 +6,7 @@ import {
   buildAutomationGuidance,
   fetchAutomation,
   fetchPersona,
+  fetchPolicies,
   resolveSupabaseUserId,
 } from "../_shared/agent-context.ts";
 import { AutomationAction, executeAutomationActions } from "../_shared/automation-actions.ts";
@@ -322,6 +323,7 @@ Deno.serve(async (req) => {
     const supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
     const persona = await fetchPersona(supabase, supabaseUserId);
     const automation = await fetchAutomation(supabase, supabaseUserId);
+    const policies = await fetchPolicies(supabase, supabaseUserId);
 
     const { orders, matchedSubjectNumber } = await resolveOrderContext({
       supabase,
@@ -343,6 +345,7 @@ Deno.serve(async (req) => {
       extraContext:
         "Returner altid JSON hvor 'actions' beskriver konkrete handlinger du udfører i Shopify. Brug orderId (det numeriske id i parentes) når du udfylder actions. udfyld altid payload.shipping_address (brug nuværende adresse hvis den ikke ændres) og sæt payload.note og payload.tag til tom streng hvis de ikke bruges. Hvis kunden beder om adresseændring, udfyld shipping_address med alle felter (name, address1, address2, zip, city, country, phone). Hvis en handling ikke er tilladt i automationsreglerne, lad actions listen være tom og forklar brugeren at du sender sagen videre.",
       signature: persona.signature,
+      policies,
     });
 
     let aiText: string | null = null;

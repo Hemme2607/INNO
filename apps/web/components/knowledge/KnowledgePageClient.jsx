@@ -207,17 +207,17 @@ export function KnowledgePageClient() {
       <Card className="border border-gray-200 shadow-sm">
         <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-xl">Politikker & regler</CardTitle>
+            <CardTitle className="text-xl">Policies & rules</CardTitle>
             <CardDescription>
-              Retur, levering, handelsbetingelser og interne instrukser sendes til AI-agenten.
+              Refunds, shipping, terms and internal notes are sent to the AI agent.
             </CardDescription>
             {shopDomain ? (
               <p className="text-xs text-muted-foreground">
-                Forbundet til: <span className="font-mono">{shopDomain}</span>
+                Connected to: <span className="font-mono">{shopDomain}</span>
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Ingen Shopify butik fundet. Indtast domæne og access token for at hente direkte, eller forbind via Integrations.
+                No Shopify store found. Enter domain and access token to fetch directly, or connect via Integrations.
               </p>
             )}
           </div>
@@ -232,12 +232,12 @@ export function KnowledgePageClient() {
               {importing ? (
                 <>
                   <RefreshCcw className="h-4 w-4 animate-spin" />
-                  Henter...
+                  Opdaterer...
                 </>
               ) : (
                 <>
                   <DownloadCloud className="h-4 w-4" />
-                  Hent fra Shopify
+                  Update
                 </>
               )}
             </Button>
@@ -245,12 +245,12 @@ export function KnowledgePageClient() {
               {saving ? (
                 <>
                   <RefreshCcw className="h-4 w-4 animate-spin" />
-                  Gemmer...
+                  Saving...
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Gem ændringer
+                  Save changes
         </>
               )}
             </Button>
@@ -261,15 +261,15 @@ export function KnowledgePageClient() {
       {!shopDomain ? (
         <Card className="border border-gray-200 bg-gray-50 shadow-sm">
           <CardHeader>
-            <CardTitle className="text-base">Hent uden gemt forbindelse</CardTitle>
+            <CardTitle className="text-base">Fetch without saved connection</CardTitle>
             <CardDescription className="text-sm">
-              Brug dit Shopify-domæne og Admin API adgangsnøgle for at hente politikker én gang. (Gemmer ikke værdierne.)
+              Use your Shopify domain and Admin API access token to fetch policies once. (Does not save the credentials.)
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-3 lg:grid-cols-2">
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shopify domæne</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shopify domain</p>
                 <input
                   type="text"
                   value={manualDomain}
@@ -292,7 +292,7 @@ export function KnowledgePageClient() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Tip: Find token under Shopify Admin → Apps → Develop apps → Admin API access token.
+              Tip: Find the token under Shopify Admin → Apps → Develop apps → Admin API access token.
             </p>
           </CardContent>
         </Card>

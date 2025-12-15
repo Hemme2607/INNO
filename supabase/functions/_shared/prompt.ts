@@ -6,6 +6,12 @@ type MailPromptOptions = {
   matchedSubjectNumber?: string | null;
   extraContext?: string | null;
   signature?: string | null;
+  policies?: {
+    policy_refund?: string;
+    policy_shipping?: string;
+    policy_terms?: string;
+    internal_tone?: string;
+  } | null;
 };
 
 export function buildMailPrompt({
@@ -15,7 +21,13 @@ export function buildMailPrompt({
   matchedSubjectNumber,
   extraContext,
   signature,
+  policies,
 }: MailPromptOptions): string {
+
+  const refundPolicy = policies?.policy_refund?.trim();
+  const shippingPolicy = policies?.policy_shipping?.trim();
+  const termsPolicy = policies?.policy_terms?.trim();
+  const internalTone = policies?.internal_tone?.trim();
 
   // 1. Definition af rollen og opgaven så modellen ved hvilket perspektiv svaret skal skrives fra.
   let prompt = `
@@ -33,6 +45,8 @@ Læs kundens mail og den medfølgende ordre-data. Skriv et svar der løser probl
 Ordre Data: ${orderSummary || "Ingen ordredata fundet."}
 ${matchedSubjectNumber ? `Note: Kunden har nævnt ordrenummer #${matchedSubjectNumber} i emnefeltet. Spørg IKKE efter det igen.` : ""}
 ${extraContext ? `Ekstra viden: ${extraContext}` : ""}
+${refundPolicy || shippingPolicy || termsPolicy ? `POLITIKKER:\n- Retur: ${refundPolicy || "ukendt"}\n- Fragt: ${shippingPolicy || "ukendt"}\n- Handelsbetingelser: ${termsPolicy || "ukendt"}` : "POLITIKKER: ingen angivet – lav et standard svar uden at love noget konkret."}
+${internalTone ? `INTERNE REGLER (DEL IKKE ORDRET): ${internalTone}` : ""}
 
 --- TONEN (VIGTIGT) ---
 ${personaInstructions ? `Specifik instruks: ${personaInstructions}` : "Vær venlig, professionel, men 'nede på jorden'. Undgå kancellisprog."}
@@ -55,6 +69,7 @@ NEJ-LISTE (Gør ALDRIG dette):
 - Brug ALDRIG placeholders som "[Indsæt dato]" eller "[Dine initialer]". Hvis du mangler info, så skriv generelt.
 - Skriv IKKE en signatur (f.eks. "Mvh..."). Den indsættes automatisk af systemet.
 - Opfind IKKE politikker (f.eks. "Du får pengene tilbage i morgen"), medmindre det står i "Ekstra viden".
+- Del IKKE interne regler ordret; omsæt dem til venlig forklaring.
 
 DIT UDKAST (Kun selve brødteksten):
 `;

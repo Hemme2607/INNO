@@ -80,7 +80,7 @@ const baseData = {
           icon: BotIcon
         },
         {
-          name: "Knowledge",
+          name: "Policies",
           url: "/knowledge",
           icon: BookOpenIcon,
         },

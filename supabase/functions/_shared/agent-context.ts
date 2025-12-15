@@ -13,6 +13,13 @@ export type Automation = {
   historic_inbox_access: boolean;
 };
 
+export type Policies = {
+  policy_refund: string;
+  policy_shipping: string;
+  policy_terms: string;
+  internal_tone: string;
+};
+
 export const DEFAULT_PERSONA: Persona = {
   signature: "",
   scenario: "",
@@ -24,6 +31,13 @@ export const DEFAULT_AUTOMATION: Automation = {
   cancel_orders: true,
   automatic_refunds: false,
   historic_inbox_access: false,
+};
+
+export const DEFAULT_POLICIES: Policies = {
+  policy_refund: "",
+  policy_shipping: "",
+  policy_terms: "",
+  internal_tone: "",
 };
 
 export async function resolveSupabaseUserId(
@@ -136,4 +150,27 @@ export function buildAutomationGuidance(automation: Automation) {
       : "- Hvis historik mangler, så bed om ekstra detaljer.",
   );
   return lines.join("\n");
+}
+
+export async function fetchPolicies(
+  supabase: SupabaseClient | null,
+  userId: string | null,
+): Promise<Policies> {
+  if (!supabase || !userId) return DEFAULT_POLICIES;
+  const { data, error } = await supabase
+    .from("shops")
+    .select("policy_refund,policy_shipping,policy_terms,internal_tone")
+    .eq("owner_user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("agent-context: kunne ikke hente policies", error);
+  }
+  return {
+    policy_refund: data?.policy_refund ?? DEFAULT_POLICIES.policy_refund,
+    policy_shipping: data?.policy_shipping ?? DEFAULT_POLICIES.policy_shipping,
+    policy_terms: data?.policy_terms ?? DEFAULT_POLICIES.policy_terms,
+    internal_tone: data?.internal_tone ?? DEFAULT_POLICIES.internal_tone,
+  };
 }
