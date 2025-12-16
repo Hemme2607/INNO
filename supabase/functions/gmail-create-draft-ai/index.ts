@@ -13,6 +13,22 @@ import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 
+/**
+ * Gmail Create Draft AI
+ * ---------------------
+ * Edge function der henter en Gmail-besked, kører AI for at generere et
+ * udkast (baseret på persona, automation-regler og ordre-kontekst) og
+ * opretter et draft i brugerens Gmail via Gmail API.
+ *
+ * Flowet:
+ * - Valider auth / intern caller
+ * - Hent supabase context (persona, automation, policies)
+ * - Hent besked fra Gmail
+ * - Reslover ordrer og produktkontekst
+ * - Kald OpenAI for at generere reply + handlinger
+ * - Opret draft i Gmail og returner metadata
+ */
+
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
 const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
@@ -326,6 +342,8 @@ Deno.serve(async (req) => {
     const emailMatch = from.match(/<([^>]+)>/);
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
 
+    // Hvis vi har et Clerk-token tilgængeligt kan vi bruge en intern frontend
+    // proxy til at hente ordrer (bruges som fallback når direkte shopify access mangler).
     const fetchOrdersWithFrontendToken =
       clerkToken && PROJECT_URL
         ? async (email?: string | null) => {
@@ -368,7 +386,8 @@ Deno.serve(async (req) => {
       plain || subject || ""
     );
 
-    const promptBase = buildMailPrompt({
+  // Byg base prompt til OpenAI: med email-tekst, ordre-resume, persona-instruktioner og policies.
+  const promptBase = buildMailPrompt({
       emailBody: plain,
       orderSummary,
       personaInstructions: persona.instructions,
@@ -382,8 +401,9 @@ Deno.serve(async (req) => {
       ? `${promptBase}\n\nPRODUKTKONTEKST:\n${productContext}`
       : promptBase;
 
-    let aiText: string | null = null;
-    let automationActions: AutomationAction[] = [];
+  // Kald OpenAI (eller fallback) for at få forslag til svar og eventuelle automation actions
+  let aiText: string | null = null;
+  let automationActions: AutomationAction[] = [];
     try {
       if (OPENAI_API_KEY) {
         const automationGuidance = buildAutomationGuidance(automation);
@@ -429,8 +449,8 @@ Deno.serve(async (req) => {
     }
     aiText = finalText;
 
-    // Create draft in Gmail
-    const rawLines = [] as string[];
+  // opret et draft i Gmail
+  const rawLines = [] as string[];
     rawLines.push(`To: ${fromEmail || from}`);
     rawLines.push(`Subject: Re: ${subject}`);
     if (threadId) {

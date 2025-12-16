@@ -47,6 +47,7 @@ type GraphListResponse = {
   "@odata.nextLink"?: string;
 };
 
+// Formatterer Graph recipient til "Navn <adresse>"
 function asAddress(recipient?: GraphRecipient): string {
   const name = recipient?.emailAddress?.name?.trim() || "";
   const address = recipient?.emailAddress?.address?.trim() || "";
@@ -54,6 +55,7 @@ function asAddress(recipient?: GraphRecipient): string {
   return name || address || "";
 }
 
+// Samler To/Cc modtagere i en kommasepareret streng
 function findHeaderList(toRecipients?: GraphRecipient[], ccRecipients?: GraphRecipient[]) {
   const recipients = [
     ...(Array.isArray(toRecipients) ? toRecipients : []),
@@ -62,6 +64,7 @@ function findHeaderList(toRecipients?: GraphRecipient[], ccRecipients?: GraphRec
   return recipients.map(asAddress).filter(Boolean).join(", ");
 }
 
+// Læser JSON-body sikkert (bruges til POST varianter)
 async function readBodySafe(req: Request) {
   if (req.method !== "POST") return {};
   try {
@@ -71,6 +74,7 @@ async function readBodySafe(req: Request) {
   }
 }
 
+// Udtrækker Clerk bearer token fra Authorization header
 function getBearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(header);
@@ -93,6 +97,7 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
+// Henter eller fornyer Microsoft Graph access token via Clerk
 async function getMicrosoftAccessToken(userId: string): Promise<string> {
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_microsoft");
   let token = tokens?.data?.[0]?.token ?? null;
@@ -113,6 +118,7 @@ async function getMicrosoftAccessToken(userId: string): Promise<string> {
   return token;
 }
 
+// Udtrækker $skiptoken fra næste-linket i Graph pagination
 function extractSkipToken(nextLink?: string | null): string | null {
   if (!nextLink) return null;
   try {

@@ -23,6 +23,9 @@ import { buildMailPrompt } from "../_shared/prompt.ts";
  * så næste trin kan kalde AI og poste svar retur til Freshdesk.
  */
 
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
+const FRESHDESK_WEBHOOK_SECRET = Deno.env.get("FRESHDESK_WEBHOOK_SECRET");
+
 // Miljøkonstanter - edge function bruger disse til at connecte til Supabase,
 // kalde OpenAI og (valgfrit) slå op i Shopify.
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
@@ -63,6 +66,12 @@ type FreshdeskWebhookPayload = {
   };
 };
 
+const debugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) {
+    console.log(...args);
+  }
+};
+
 function json(body: unknown, init?: ResponseInit): Response {
   return new Response(JSON.stringify(body, null, 2), {
     headers: {
@@ -87,6 +96,46 @@ function decodeCredentials(raw: string | null): string | null {
     bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
   }
   return new TextDecoder().decode(bytes);
+}
+
+// Validerer Freshdesk-webhook via HMAC-SHA256 af rå body med delt secret
+async function verifySignature(rawBody: string, req: Request): Promise<boolean> {
+  if (!FRESHDESK_WEBHOOK_SECRET) {
+    console.warn("FRESHDESK_WEBHOOK_SECRET mangler – webhook kan ikke verificeres.");
+    return false;
+  }
+
+  const headerSig =
+    req.headers.get("x-freshdesk-signature") ??
+    req.headers.get("X-Freshdesk-Signature") ??
+    "";
+  if (!headerSig) return false;
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(FRESHDESK_WEBHOOK_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(rawBody));
+  const computed = Array.from(new Uint8Array(signature))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  return timingSafeEqual(computed, headerSig.trim());
+}
+
+function timingSafeEqual(a: string, b: string) {
+  const bufA = new TextEncoder().encode(a);
+  const bufB = new TextEncoder().encode(b);
+  if (bufA.length !== bufB.length) return false;
+  let result = 0;
+  for (let i = 0; i < bufA.length; i++) {
+    result |= bufA[i] ^ bufB[i];
+  }
+  return result === 0;
 }
 
 // Hent Freshdesk integration fra integrations-tabellen for en given Clerk user id.
@@ -247,7 +296,12 @@ async function generateDraftBody(options: {
     orderSummary,
     personaInstructions: personaNotes,
     matchedSubjectNumber: options.matchedSubjectNumber,
-    extraContext: "Svar skal kunne sendes direkte til kunden via Freshdesk.",
+    extraContext: [
+      "Svar skal kunne sendes direkte til kunden via Freshdesk.",
+      options.contactEmail ? `Kundens e-mail: ${options.contactEmail}` : null,
+    ]
+      .filter(Boolean)
+      .join(" "),
     signature: options.persona.signature,
     policies: options.policies,
   });
@@ -352,6 +406,11 @@ Deno.serve(async (req) => {
       payload = rawBody;
     }
 
+    const signatureOk = await verifySignature(rawBody, req);
+    if (!signatureOk) {
+      return json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     // Hent integration og dekrypter API-nøglen (hex -> tekst)
     const integration = await fetchFreshdeskIntegration(userId);
     const apiKey = decodeCredentials(integration.credentials_enc ?? null);
@@ -371,12 +430,12 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log("------------------------------------------------");
-    console.log(`🚀 Freshdesk webhook fra userId=${userId}`);
-    console.log("📦 Payload:", payload);
-    console.log(`🔐 Integration aktiv. domain=${integration.config?.domain ?? "ukendt"}`);
-    console.log(`🔑 API key tilgængelig: ${apiKey ? "ja" : "nej"}`);
-    console.log("------------------------------------------------");
+    debugLog("Freshdesk webhook", {
+      userId,
+      hasPayload: Boolean(payload),
+      domainPresent: Boolean(integration.config?.domain),
+      hasApiKey: Boolean(apiKey),
+    });
 
     if (!integration.config?.domain || typeof integration.config.domain !== "string") {
       throw Object.assign(

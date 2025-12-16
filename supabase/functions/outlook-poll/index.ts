@@ -85,6 +85,7 @@ Deno.serve(async (req) => {
   }
 });
 
+// Poller enkelt bruger: henter nye mails og trigger draft-funktion
 async function pollSingleUser(user: AutomationUser) {
   if (!supabase) throw new Error("Supabase klient ikke konfigureret");
   try {

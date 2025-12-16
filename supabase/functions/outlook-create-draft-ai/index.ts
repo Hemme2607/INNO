@@ -14,6 +14,16 @@ import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 
+/**
+ * Outlook Create Draft AI
+ * -----------------------
+ * Edge function der:
+ * - Henter en besked fra Microsoft Graph
+ * - Indsamler kontekst (persona, automation, ordrer, produktdata)
+ * - Kører OpenAI for at generere et udkast + eventuelle automation-actions
+ * - Opretter et reply-draft i Outlook (Microsoft Graph) og returnerer metadata
+ */
+
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
 const emitDebugLog = (...args: Array<unknown>) => {
@@ -81,6 +91,7 @@ type GraphMessage = {
   receivedDateTime?: string;
 };
 
+// Læser Clerk bearer token fra Authorization-header
 function getBearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   const match = /^Bearer\s+(.+)$/i.exec(header);
@@ -90,6 +101,7 @@ function getBearerToken(req: Request): string {
   return match[1];
 }
 
+// Tillader interne cron-kald via delt secret uden brugerens JWT
 function isInternalAutomationRequest(req: Request): boolean {
   if (!INTERNAL_AGENT_SECRET) return false;
   const candidate =
@@ -100,6 +112,7 @@ function isInternalAutomationRequest(req: Request): boolean {
   return candidate === INTERNAL_AGENT_SECRET;
 }
 
+// Safe JSON parsing af body
 async function readJsonBody(req: Request) {
   try {
     return await req.json();
@@ -108,6 +121,7 @@ async function readJsonBody(req: Request) {
   }
 }
 
+// Verificerer Clerk JWT og returnerer userId
 async function requireUserIdFromJWT(req: Request): Promise<string> {
   if (!JWKS || !CLERK_JWT_ISSUER) {
     throw Object.assign(new Error("JWT verify ikke konfigureret (CLERK_JWT_ISSUER mangler)"), {
@@ -123,6 +137,7 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
+// Henter/fornyer Microsoft Graph access token via Clerk
 async function getMicrosoftAccessToken(userId: string): Promise<string> {
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_microsoft");
   let token = tokens?.data?.[0]?.token ?? null;
@@ -143,11 +158,13 @@ async function getMicrosoftAccessToken(userId: string): Promise<string> {
   return token;
 }
 
+// Fjerner HTML og komprimerer whitespace
 function stripHtml(input?: string | null): string {
   if (!input) return "";
   return input.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// Genererer embeddings til produktmatch i Supabase
 async function embedText(input: string): Promise<number[]> {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
   const res = await fetch("https://api.openai.com/v1/embeddings", {
@@ -170,6 +187,7 @@ async function embedText(input: string): Promise<number[]> {
   return vector;
 }
 
+// Henter produktkontekst via Supabase vector search til brug i prompten
 async function fetchProductContext(
   supabaseClient: ReturnType<typeof createClient> | null,
   userId: string | null,
@@ -197,6 +215,7 @@ async function fetchProductContext(
   }
 }
 
+// Finder afsenderadresse (From/ReplyTo) fra Graph message
 function resolveFromAddress(message?: GraphMessage): string {
   const addr =
     message?.from?.emailAddress?.address ||
@@ -205,6 +224,7 @@ function resolveFromAddress(message?: GraphMessage): string {
   return addr || "";
 }
 
+// Henter fuld Graph-besked med relevante felter
 async function fetchGraphMessage(messageId: string, accessToken: string): Promise<GraphMessage> {
   const url = new URL(`${GRAPH_BASE}/me/messages/${encodeURIComponent(messageId)}`);
   url.searchParams.set(
@@ -249,6 +269,7 @@ async function fetchGraphMessage(messageId: string, accessToken: string): Promis
   return json as GraphMessage;
 }
 
+// Opretter reply draft i Outlook og patcher HTML-indholdet ind
 async function createOutlookDraftReply({
   accessToken,
   messageId,
@@ -297,6 +318,7 @@ async function createOutlookDraftReply({
   return draftJson;
 }
 
+// Kalder OpenAI med JSON schema og returnerer reply + actions
 async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
   if (!OPENAI_API_KEY) return { reply: null, actions: [] };
   const messages: any[] = [];
@@ -429,7 +451,7 @@ Deno.serve(async (req) => {
         aiText = null;
       }
     } catch (e) {
-      console.warn("OpenAI fejl", e?.message || e);
+      console.warn("OpenAI fejl", String(e));
       aiText = null;
     }
 

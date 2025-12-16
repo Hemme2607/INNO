@@ -31,6 +31,7 @@ type ShopRecord = {
   access_token: string;
 };
 
+// Udtrækker Clerk bearer token fra Authorization-headeren
 function readBearerToken(req: Request): string {
   // Afkoder Authorization-headeren fra Expo-appen
   const header = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "";
@@ -59,6 +60,7 @@ async function requireClerkUserId(req: Request): Promise<string> {
   return sub;
 }
 
+// Map Clerk user id til Supabase user id via profiles-tabellen
 async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient ikke konfigureret."), { status: 500 });
@@ -89,6 +91,7 @@ async function resolveSupabaseUserId(clerkUserId: string): Promise<string> {
   return supabaseUserId;
 }
 
+// Henter og dekrypterer Shopify credentials for brugeren
 async function getShopForUser(clerkUserId: string): Promise<ShopRecord> {
   // Henter og dekrypterer butikken for nuværende bruger
   if (!supabase) {
