@@ -16,14 +16,6 @@ import {
 import { useAuth } from "@clerk/nextjs";
 import { useClerkSupabase } from "@/lib/useClerkSupabase";
 
-// Vi rammer de samme Supabase Edge Functions som mobilappen gør.
-const SUPABASE_URL =
-  (process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.EXPO_PUBLIC_SUPABASE_URL ||
-    ""
-  ).replace(/\/$/, "");
-const FUNCTIONS_BASE = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1` : null;
-
 // Normaliserer brugerinput så vi gemmer et rent domæne.
 const normalizeDomain = (value) =>
   value
@@ -65,11 +57,6 @@ export function ShopifySheet({
   // Forbinder eller opdaterer Shopify integrationen via Supabase functionen.
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!FUNCTIONS_BASE) {
-      setError("Supabase url ikke sat i miljøvariabler.");
-      return;
-    }
-
     const cleanDomain = normalizeDomain(domain);
     const tokenValue = apiKey.trim();
 
@@ -92,7 +79,8 @@ export function ShopifySheet({
         throw new Error("Kunne ikke hente Clerk session token.");
       }
 
-      const response = await fetch(`${FUNCTIONS_BASE}/shopify-connect`, {
+      // Brug server-side proxy for at undgå CORS på functions
+      const response = await fetch("/api/shopify/connect", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${clerkToken}`,
@@ -173,9 +161,7 @@ export function ShopifySheet({
     ? hasExistingConnection
       ? "Opdaterer..."
       : "Forbinder..."
-    : hasExistingConnection
-    ? "Opdater konfiguration"
-    : "Connect Shopify";
+    : "Opdater";
 
   // Separat label til disconnect knappen for tydelig statusfeedback.
   const disconnectLabel = disconnecting
