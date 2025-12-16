@@ -59,6 +59,7 @@ type OpenAIResult = {
   actions: AutomationAction[];
 };
 
+// Laver embeddings så vi kan matche produkter mod mailindholdet
 async function embedText(input: string): Promise<number[]> {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
   const res = await fetch("https://api.openai.com/v1/embeddings", {
@@ -81,6 +82,7 @@ async function embedText(input: string): Promise<number[]> {
   return vector;
 }
 
+// Henter produktbeskrivelser fra Supabase via vector search for mere kontekst
 async function fetchProductContext(
   supabaseClient: ReturnType<typeof createClient> | null,
   userId: string | null,
@@ -108,6 +110,7 @@ async function fetchProductContext(
   }
 }
 
+// Udtrækker Clerk bearer token fra headers
 function getBearerToken(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
   const match = String(header).match(/^Bearer\s+(.+)$/i);
@@ -126,6 +129,7 @@ function isInternalAutomationRequest(req: Request): boolean {
   return candidate === INTERNAL_AGENT_SECRET;
 }
 
+// Parse JSON-body men returner tomt objekt ved fejl
 async function readJsonBody(req: Request) {
   try {
     return await req.json();
@@ -134,6 +138,7 @@ async function readJsonBody(req: Request) {
   }
 }
 
+// Verificerer Clerk JWT og returnerer userId (sub)
 async function requireUserIdFromJWT(req: Request): Promise<string> {
   if (!JWKS || !CLERK_JWT_ISSUER) {
     throw Object.assign(new Error("JWT verify ikke konfigureret (CLERK_JWT_ISSUER mangler)"), { status: 500 });
@@ -147,6 +152,7 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
+// Henter eller fornyer gmail.send token fra Clerk
 async function getGmailAccessToken(userId: string): Promise<string> {
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
   let accessToken = tokens?.data?.[0]?.token ?? null;
@@ -163,6 +169,7 @@ async function getGmailAccessToken(userId: string): Promise<string> {
   return accessToken;
 }
 
+// Dekoder Gmail base64-url encodede dele til tekst
 function decodeBase64Url(data: string): string {
   const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -174,6 +181,7 @@ function decodeBase64Url(data: string): string {
   }
 }
 
+// Finder plaintext fra Gmail MIME payload (fallback til HTML-strip)
 function extractPlainTextFromPayload(payload: any): string {
   if (!payload) return "";
   if (payload.body?.data) {
@@ -192,6 +200,7 @@ function extractPlainTextFromPayload(payload: any): string {
   return "";
 }
 
+// Henter fuld Gmail-besked (payload) med auth token
 async function fetchGmailMessage(messageId: string, token: string) {
   const url = `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}?format=full`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -202,6 +211,7 @@ async function fetchGmailMessage(messageId: string, token: string) {
   return await res.json();
 }
 
+// Opretter Gmail draft ud fra rå MIME tekst
 async function createGmailDraft(rawMessage: string, token: string, threadId?: string) {
   const toBase64Url = (input: string) => {
     const b64 = btoa(unescape(encodeURIComponent(input)));
@@ -221,6 +231,7 @@ async function createGmailDraft(rawMessage: string, token: string, threadId?: st
   return json;
 }
 
+// Kalder OpenAI med JSON schema så vi får reply + handlinger
 async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
   if (!OPENAI_API_KEY) return { reply: null, actions: [] };
   const messages: any[] = [];

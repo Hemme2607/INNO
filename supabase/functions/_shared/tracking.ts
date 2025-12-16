@@ -46,7 +46,7 @@ function pickOrderKey(order: any): string | null {
   );
 }
 
-// Slår status op direkte hos GLS – returværdi er et kort resume der kan sættes i prompten.
+// Formaterer dato/tid til dansk læsbart format
 function formatTimestamp(value?: string | null) {
   if (!value) return null;
   const parsed = new Date(value);
@@ -65,6 +65,7 @@ function formatTimestamp(value?: string | null) {
   }
 }
 
+// Slår status op direkte hos GLS – returværdi er et kort resume der kan sættes i prompten.
 async function fetchGLSStatus(
   trackingNumber: string,
 ): Promise<TrackingSummary | null> {

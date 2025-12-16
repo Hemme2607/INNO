@@ -2,7 +2,9 @@
 import { View, Text, Switch, StyleSheet, Alert, ActivityIndicator } from "react-native";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
+import AgentSharedStyles from "../../styles/AgentSharedStyles";
 
+// Definitioner for hver toggle-kontrol i sektionen
 const CONTROL_DEFINITIONS = [
   {
     id: "orderUpdates",
@@ -32,6 +34,7 @@ const CONTROL_DEFINITIONS = [
   },
 ];
 
+// Hovedkomponent for Agent Automation Section
 export default function AgentAutomationSection({
   settings,
   onToggle = () => {},
@@ -70,6 +73,7 @@ export default function AgentAutomationSection({
     ]);
   };
 
+  // Render sektionen med toggles og statusmeddelelser
   return (
     <AgentSection
       title="Automatisering & kvalitetssikring"
@@ -79,7 +83,7 @@ export default function AgentAutomationSection({
         {CONTROL_DEFINITIONS.map((control) => {
           const value = Boolean(resolvedSettings[control.id]);
           return (
-            <View key={control.id} style={styles.toggleCard}>
+            <View key={control.id} style={[AgentSharedStyles.surfaceCard, styles.toggleCard]}>
               <View style={styles.toggleCopy}>
                 <Text style={styles.toggleTitle}>{control.title}</Text>
                 <Text style={styles.toggleDescription}>{control.description}</Text>
@@ -120,15 +124,12 @@ export default function AgentAutomationSection({
   );
 }
 
+// styles for komponenten
 const styles = StyleSheet.create({
   toggleList: {
     gap: 12,
   },
   toggleCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.12)",
-    backgroundColor: "rgba(10, 16, 28, 0.92)",
     padding: 18,
     flexDirection: "row",
     justifyContent: "space-between",

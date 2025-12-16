@@ -10,14 +10,17 @@ export default function HomeScreen({ navigation }) {
   const displayName = useDisplayName();
 
   // Navigationsgenveje til bundfanerne
+  // Åbner indbakke-fanen så brugeren kan se mails
   const handleGoToInbox = () => {
     navigation.navigate("Inbox");
   };
 
+  // Sender brugeren til integrationsskærmen
   const handleConnectIntegration = () => {
     navigation.navigate("Integrations");
   };
 
+  // Viser profil- og indstillingssiden
   const handleOpenProfile = () => {
     navigation.navigate("Profile");
   };

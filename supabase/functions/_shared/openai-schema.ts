@@ -1,6 +1,7 @@
 export const PERSONA_REPLY_JSON_SCHEMA = {
   name: "persona_reply",
   strict: true,
+  // Definerer hvilke felter modellen må returnere når den skriver et svar inkl. actions
   schema: {
     type: "object",
     additionalProperties: false,

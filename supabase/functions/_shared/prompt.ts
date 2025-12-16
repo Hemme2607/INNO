@@ -23,7 +23,7 @@ export function buildMailPrompt({
   signature,
   policies,
 }: MailPromptOptions): string {
-
+  // Samler kundens mail, ordredata, persona og politikker til et enkelt prompt
   const refundPolicy = policies?.policy_refund?.trim();
   const shippingPolicy = policies?.policy_shipping?.trim();
   const termsPolicy = policies?.policy_terms?.trim();
@@ -52,7 +52,7 @@ ${internalTone ? `INTERNE REGLER (DEL IKKE ORDRET): ${internalTone}` : ""}
 ${personaInstructions ? `Specifik instruks: ${personaInstructions}` : "Vær venlig, professionel, men 'nede på jorden'. Undgå kancellisprog."}
 `;
 
-  // 2. Guardrails – kort og tydeligt så ensartede svar kan produceres på tværs af kanaler.
+  // 2. Sikkerhed – kort og tydeligt så ensartede svar kan produceres på tværs af kanaler.
   prompt += `
 INSTRUKTIONER TIL SVARET:
 1. **Hilsen:** Start med "Hej [Navn]" (hvis navnet fremgår af data, ellers bare "Hej").

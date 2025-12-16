@@ -73,6 +73,7 @@ export default function IntegrationsScreen() {
     [],
   );
 
+  // Åbner modal med eksisterende butik udfyldt så brugeren kan opdatere
   const openShopifyModal = () => {
     setShopifyError(null);
     setShopifyDomainInput(shopifyConnectedDomain ?? "");
@@ -80,6 +81,7 @@ export default function IntegrationsScreen() {
     setShopifyModalVisible(true);
   };
 
+  // Gemmer Shopify domæne + token via edge function og opdaterer lokal state
   const connectShopify = async () => {
     if (!functionsBase) {
       setShopifyError("Supabase url ikke sat i miljøvariabler.");
@@ -137,6 +139,7 @@ export default function IntegrationsScreen() {
     }
   };
 
+  // Fjerner shopify-rækken i Supabase når brugeren frakobler
   const disconnectShopify = async () => {
     if (!shopifyConnectedDomain || !supabase) {
       return;
@@ -165,6 +168,7 @@ export default function IntegrationsScreen() {
     }
   };
 
+  // Tester om den gemte Shopify-forbindelse stadig svarer på API-kald
   const testShopifyConnection = useCallback(async () => {
     if (!functionsBase || !supabase) {
       Alert.alert("Shopify test", "Supabase miljøvariabler mangler.");
@@ -209,6 +213,7 @@ export default function IntegrationsScreen() {
     }
   }, [functionsBase, supabase]);
 
+  // Bekræfter med brugeren før integrationen slettes
   const confirmDisconnectShopify = () => {
     if (!shopifyConnectedDomain) return;
     Alert.alert(
@@ -225,6 +230,7 @@ export default function IntegrationsScreen() {
     );
   };
 
+  // Placeholder for andre integrationer indtil de implementeres
   const handleGenericIntegration = (name) => {
     Alert.alert("Kommer snart", `${name} integrationen er på vej. Indtil da kan du forbinde Shopify.`);
   };

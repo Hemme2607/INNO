@@ -8,6 +8,7 @@ const UUID_REGEX =
 
 const isValidUuid = (value) => typeof value === "string" && UUID_REGEX.test(value);
 
+// Hjælpere til at decode JWT-payload (base64url -> base64 -> JSON)
 const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const base64UrlToBase64 = (input) => {
   if (typeof input !== "string" || !input.length) {
@@ -18,6 +19,7 @@ const base64UrlToBase64 = (input) => {
   return normalized.padEnd(normalized.length + padding, "=");
 };
 
+// Simpel base64-dekoder uden afhængighed til browserens atob
 const decodeBase64 = (input) => {
   let result = "";
   let buffer = 0;
@@ -41,6 +43,7 @@ const decodeBase64 = (input) => {
   return result;
 };
 
+// Ekstraherer payload fra et JWT-token og parser JSON'en.
 const decodeJwtPayload = (token) => {
   if (typeof token !== "string" || !token.includes(".")) {
     return null;
@@ -59,6 +62,7 @@ const decodeJwtPayload = (token) => {
 };
 
 function toPersona(row) {
+  // Mapper DB-rækken til et enklere persona-objekt som komponenter bruger
   if (!row) return null;
   return {
     userId: row.user_id,
@@ -110,6 +114,7 @@ export function useAgentPersonaConfig(options = {}) {
       }
     }
 
+    // Hvis vi ikke kan bestemme id lokalt, slå op i profiles-tabellen
     if (!supabase || !user?.id) {
       throw new Error("Supabase bruger-id er ikke klar endnu.");
     }
@@ -133,6 +138,7 @@ export function useAgentPersonaConfig(options = {}) {
   }, [providedUserId, user?.publicMetadata?.supabase_uuid, getToken, supabase, user?.id]);
 
   const loadPersona = useCallback(async () => {
+    // Henter persona fra Supabase og sætter lokal state
     setLoading(true);
     setError(null);
     try {
@@ -162,6 +168,7 @@ export function useAgentPersonaConfig(options = {}) {
 
   const savePersona = useCallback(
     async (updates) => {
+      // Upsert (insert eller update) persona for den aktuelle bruger
       setSaving(true);
       setError(null);
       const promisedId = ensureUserId().catch(() => null);
@@ -206,6 +213,7 @@ export function useAgentPersonaConfig(options = {}) {
     }
   }, [lazy, loadPersona]);
 
+  // Returner hook API: state + actions
   return useMemo(
     () => ({
       persona,

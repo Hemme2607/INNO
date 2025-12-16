@@ -27,7 +27,7 @@ async function fetchShopifyOrdersPage(options: FetchOrdersOptions): Promise<{
     supabase,
     userId,
     email,
-    limit = 5,
+    limit = 50,
     tokenSecret,
     apiVersion,
     pageInfo = null,
@@ -84,6 +84,7 @@ async function fetchShopifyOrdersPage(options: FetchOrdersOptions): Promise<{
   }
 }
 
+// Henter en side af ordrer (anvendes til både enkel fetch og pagination)
 export async function fetchShopifyOrders(
   options: FetchOrdersOptions,
 ): Promise<ShopifyOrder[]> {
@@ -91,6 +92,7 @@ export async function fetchShopifyOrders(
   return orders;
 }
 
+// Udtrækker et muligt ordrenummer fra emnefeltet (fx "Ordre 1234")
 export function extractSubjectNumber(subject?: string | null): string | null {
   if (!subject) return null;
   const match =
@@ -98,6 +100,7 @@ export function extractSubjectNumber(subject?: string | null): string | null {
   return match ? match[1] : null;
 }
 
+// Tjekker om en ordre indeholder kandidatnummeret i kendte id-felter
 export function matchesOrderNumber(order: any, candidate: string): boolean {
   const values = [
     order?.name,
@@ -141,6 +144,7 @@ function extractNextPageInfo(linkHeader: string): string | null {
   return null;
 }
 
+// Samler et kort resume af op til 5 ordrer til prompts
 export function buildOrderSummary(orders: ShopifyOrder[]): string {
   if (!orders?.length) {
     return "Ingen relaterede ordrer fundet.\n";
@@ -226,6 +230,7 @@ function formatShopifyTimestamp(value?: string | null) {
   }
 }
 
+// Finder relaterede ordrer ud fra email/subject og bygger kort over id'er
 export async function resolveOrderContext(options: {
   supabase: SupabaseClient | null;
   userId?: string | null;
@@ -248,8 +253,10 @@ export async function resolveOrderContext(options: {
     tokenSecret,
     apiVersion,
     fetcher,
-    limit = 5,
+    limit = 50,
   } = options;
+
+  const subjectNumber = extractSubjectNumber(subject);
 
   const fetchOrders = async (candidateEmail?: string | null) => {
     if (typeof fetcher === "function") {
@@ -275,7 +282,9 @@ export async function resolveOrderContext(options: {
   let orders = await fetchOrders(email);
   let matchedSubjectNumber: string | null = null;
 
-  if ((!orders || orders.length === 0) && email) {
+  const hasEmail = !!email;
+  const emailMatchFound = hasEmail ? orders.some((order) => matchesOrderEmail(order, email)) : false;
+  if (hasEmail && !emailMatchFound) {
     orders = await fetchAcrossPages({
       supabase,
       userId,
@@ -286,22 +295,26 @@ export async function resolveOrderContext(options: {
     });
   }
 
-  if ((!orders || orders.length === 0) && subject) {
-    const subjectNumber = extractSubjectNumber(subject);
-    if (subjectNumber) {
-      const matched = await fetchAcrossPages({
-        supabase,
-        userId,
-        tokenSecret,
-        apiVersion,
-        predicate: (order) => matchesOrderNumber(order, subjectNumber),
-        limit,
-      });
-      if (matched.length) {
-        orders = matched;
-        matchedSubjectNumber = subjectNumber;
-      }
+  const hasSubjectNumber = !!subjectNumber;
+  const subjectMatchFound =
+    hasSubjectNumber && orders.some((order) => matchesOrderNumber(order, subjectNumber!));
+
+  if (hasSubjectNumber && !subjectMatchFound) {
+    const matched = await fetchAcrossPages({
+      supabase,
+      userId,
+      tokenSecret,
+      apiVersion,
+      predicate: (order) => matchesOrderNumber(order, subjectNumber!),
+      limit,
+    });
+    if (matched.length) {
+      orders = matched;
     }
+  }
+
+  if (hasSubjectNumber && orders.some((order) => matchesOrderNumber(order, subjectNumber!))) {
+    matchedSubjectNumber = subjectNumber!;
   }
 
   const orderIdMap: Record<string, number> = {};
@@ -351,6 +364,7 @@ type FetchAcrossPagesOptions = {
   maxPages?: number;
 };
 
+// Itererer over flere Shopify-sider indtil predicate matcher eller siderne slipper op
 async function fetchAcrossPages(options: FetchAcrossPagesOptions): Promise<ShopifyOrder[]> {
   const {
     supabase,

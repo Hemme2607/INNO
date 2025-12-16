@@ -196,6 +196,7 @@ export default function AgentScreen() {
     setIsPersonaModified(false);
   }, [supabaseUserId]);
 
+  // Sorterer mailudbydere så allerede forbundne vises først
   const prioritizedProviders = useMemo(() => {
     const connected = new Set(
       (user?.externalAccounts ?? [])
@@ -238,6 +239,7 @@ export default function AgentScreen() {
     []
   );
 
+  // Sender persona-data til backend og nulstiller modified-flag på succes
   const handlePersonaSave = useCallback(() => {
     savePersona(personaConfig)
       .then(() => {
@@ -299,6 +301,7 @@ export default function AgentScreen() {
     }
   }, [personaConfig, defaultSignature, getToken]);
 
+  // Søg efter mails i forbundne mailudbydere og map resultatet til templates
   const handleTemplateSearch = useCallback(
     async (query) => {
       const trimmedQuery = query.trim();
@@ -410,6 +413,7 @@ export default function AgentScreen() {
     [getToken, prioritizedProviders, sessionId]
   );
 
+  // Henter mailindhold for et specifikt provider-id
   const fetchMailBody = useCallback(
     async (providerId, mailId) => {
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -449,6 +453,7 @@ export default function AgentScreen() {
     [getToken]
   );
 
+  // Markerer valgt mail i state og forsøger at hente dens tekst
   const handleSelectTemplateMail = useCallback(
     async (mailId) => {
       setTemplateSourceError(null);
@@ -495,16 +500,19 @@ export default function AgentScreen() {
     [fetchMailBody, prioritizedProviders, selectedTemplateMailId, templateSearchResults]
   );
 
+  // Opdaterer svar-tekstfeltet mens brugeren skriver
   const handleChangeTemplateBody = useCallback((value) => {
     setTemplateBody(value);
   }, []);
 
+  // Overskriver kilde-tekst og rydder evt. valgt mail, hvis brugeren skriver selv
   const handleChangeTemplateSourceBody = useCallback((value) => {
     setTemplateSourceBody(value);
     setSelectedTemplateMailId(null);
     setTemplateSourceError(null);
   }, []);
 
+  // Gemmer et nyt standardsvar i Supabase og rydder formularen
   const handleSaveTemplate = useCallback(
     async ({ templateBody: body, selectedMailId: mailId, sourceBody }) => {
       if (!body.trim()) {
@@ -538,10 +546,12 @@ export default function AgentScreen() {
     [createTemplate, templateSearchResults]
   );
 
+  // Placeholder til kladde-funktionalitet der gemmes senere
   const handleSaveTemplateDraft = useCallback(() => {
     // Placeholder til senere implementering
   }, []);
 
+  // Viser venligt alert fordi dokumentupload ikke er klar endnu
   const handleUploadDocument = useCallback(() => {
     Alert.alert(
       "Kommer snart",
@@ -549,6 +559,7 @@ export default function AgentScreen() {
     );
   }, []);
 
+  // Gemmer automation-flags enkeltvis når brugeren toggler et felt
   const handleAutomationToggle = useCallback(
     (key, value) => {
       saveAutomation({ [key]: value }).catch(() => null);

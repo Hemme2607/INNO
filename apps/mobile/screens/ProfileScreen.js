@@ -11,11 +11,12 @@ export default function ProfileScreen() {
   const { signOut } = useAuth();
   const displayName = useDisplayName();
 
+  // Logger brugeren ud via Clerk og ignorerer stille fejl
   const handleLogout = async () => {
     try {
       await signOut();
     } catch (error) {
-      // Logout fejlede - stille fejl
+
     }
   };
 

@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
+import AgentSharedStyles from "../../styles/AgentSharedStyles";
 
 export default function AgentPersonaSummary({
   onConfigurePress,
@@ -34,32 +35,32 @@ export default function AgentPersonaSummary({
       }
     >
       <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Agentnavn</Text>
+        <View style={[AgentSharedStyles.surfaceCard, styles.summaryCard]}>
+          <Text style={[AgentSharedStyles.mutedLabel, styles.summaryLabel]}>Agentnavn</Text>
           <Text style={styles.summaryValue}>{agentName}</Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Instruktion</Text>
+        <View style={[AgentSharedStyles.surfaceCard, styles.summaryCard]}>
+          <Text style={[AgentSharedStyles.mutedLabel, styles.summaryLabel]}>Instruktion</Text>
           <Text style={styles.summaryValue} numberOfLines={2}>
             {instructionPreview}
           </Text>
         </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Shop</Text>
+        <View style={[AgentSharedStyles.surfaceCard, styles.summaryCard]}>
+          <Text style={[AgentSharedStyles.mutedLabel, styles.summaryLabel]}>Shop</Text>
           <Text style={styles.summaryValue}>{shopDomain ?? "Ikke sat"}</Text>
         </View>
       </View>
 
-      <View style={styles.scenarioCard}>
-        <Text style={styles.scenarioHeading}>Seneste kundesituation</Text>
+      <View style={[AgentSharedStyles.surfaceCard, styles.scenarioCard]}>
+        <Text style={[AgentSharedStyles.mutedLabel, styles.scenarioHeading]}>Seneste kundesituation</Text>
         <Text style={styles.scenarioText}>{scenarioPreview}</Text>
         {scenario?.trim()?.length ? null : (
           <Text style={styles.scenarioHint}>Tilføj en kort beskrivelse for at teste eksempelsvaret.</Text>
         )}
       </View>
 
-      <View style={styles.signatureCard}>
-        <Text style={styles.signatureHeading}>Aktuel signatur</Text>
+      <View style={[AgentSharedStyles.surfaceCardAlt, styles.signatureCard]}>
+        <Text style={[AgentSharedStyles.mutedLabel, styles.signatureHeading]}>Aktuel signatur</Text>
         {signatureLines.length ? (
           signatureLines.map((line, index) => (
             <Text key={`${line}-${index}`} style={styles.signatureLine}>
@@ -98,19 +99,11 @@ const styles = StyleSheet.create({
   summaryCard: {
     flexGrow: 1,
     minWidth: "30%",
-    backgroundColor: "rgba(12, 18, 33, 0.92)",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.12)",
     padding: 16,
     gap: 6,
   },
   summaryLabel: {
     fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "rgba(148, 163, 196, 0.9)",
-    fontWeight: "600",
   },
   summaryValue: {
     fontSize: 15,
@@ -118,19 +111,11 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   signatureCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.12)",
-    backgroundColor: "rgba(9, 14, 24, 0.92)",
     padding: 16,
     gap: 8,
   },
   signatureHeading: {
     fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "rgba(148, 163, 196, 0.95)",
-    fontWeight: "600",
   },
   signatureLine: {
     fontSize: 14,
@@ -147,19 +132,11 @@ const styles = StyleSheet.create({
     color: COLORS.muted,
   },
   scenarioCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.12)",
-    backgroundColor: "rgba(12, 18, 33, 0.9)",
     padding: 16,
     gap: 6,
   },
   scenarioHeading: {
     fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    color: "rgba(148, 163, 196, 0.95)",
-    fontWeight: "600",
   },
   scenarioText: {
     fontSize: 13,

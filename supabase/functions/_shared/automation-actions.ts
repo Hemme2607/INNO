@@ -34,6 +34,7 @@ type ExecuteOptions = {
   orderIdMap?: Record<string | number, number>;
 };
 
+// Henter Shopify domæne og token via krypteret Supabase RPC
 async function getShopCredentials(
   supabase: SupabaseClient,
   userId: string,
@@ -52,6 +53,7 @@ async function getShopCredentials(
   return data;
 }
 
+// Sikrer at handlingen er tilladt ud fra automation-settings
 function ensureActionAllowed(action: string, automation: AutomationSettings) {
   const deny = (reason: string) =>
     Object.assign(new Error(`Automatiseringen tillader ikke denne handling: ${reason}`), {
@@ -74,11 +76,13 @@ function ensureActionAllowed(action: string, automation: AutomationSettings) {
   }
 }
 
+// Normaliserer Shopify URL med korrekt versionering
 function shopifyUrl(shop: ShopCredentials, path: string, apiVersion: string) {
   const domain = shop.shop_domain.replace(/^https?:\/\//, "");
   return `https://${domain}/admin/api/${apiVersion}/${path.replace(/^\/+/, "")}`;
 }
 
+// Wrapper fetch mod Shopify API med JSON parsing og fejlhåndtering
 async function shopifyRequest<T>(
   shop: ShopCredentials,
   apiVersion: string,
@@ -117,6 +121,7 @@ async function shopifyRequest<T>(
   return json as T;
 }
 
+// Opdaterer shipping-adressen på en ordre i Shopify
 async function updateShippingAddress(
   shop: ShopCredentials,
   apiVersion: string,
@@ -144,6 +149,7 @@ async function updateShippingAddress(
   );
 }
 
+// Annullerer en ordre og accepterer valgfrie refund/restock felter
 async function cancelOrder(
   shop: ShopCredentials,
   apiVersion: string,
@@ -167,6 +173,7 @@ async function cancelOrder(
   );
 }
 
+// Tilføjer en note til en ordre (ikke aktiveret i execute flowet)
 async function addNote(
   shop: ShopCredentials,
   apiVersion: string,
@@ -190,6 +197,7 @@ async function addNote(
   );
 }
 
+// Tilføjer et tag til ordre (henter eksisterende tags først)
 async function addTag(
   shop: ShopCredentials,
   apiVersion: string,
@@ -231,6 +239,7 @@ async function addTag(
   );
 }
 
+// Dispatcher der mapper action.type til korrekt Shopify-kald
 async function handleAction(
   shop: ShopCredentials,
   apiVersion: string,
@@ -257,6 +266,7 @@ async function handleAction(
   }
 }
 
+// Kører automation-handlinger sekventielt og returnerer resultat pr. handling
 export async function executeAutomationActions({
   supabase,
   supabaseUserId,

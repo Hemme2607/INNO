@@ -40,6 +40,7 @@ export const DEFAULT_POLICIES: Policies = {
   internal_tone: "",
 };
 
+// Finder Supabase user_id ud fra Clerk userId via profiles-tabellen
 export async function resolveSupabaseUserId(
   supabase: SupabaseClient | null,
   clerkUserId: string,
@@ -73,6 +74,7 @@ export async function resolveSupabaseUserId(
   return data.user_id;
 }
 
+// Henter gemt persona eller falder tilbage til default
 export async function fetchPersona(
   supabase: SupabaseClient | null,
   userId: string | null,
@@ -94,6 +96,7 @@ export async function fetchPersona(
   };
 }
 
+// Henter automation-flag for brugeren og fallbacker hvis mangler
 export async function fetchAutomation(
   supabase: SupabaseClient | null,
   userId: string | null,
@@ -127,6 +130,7 @@ export async function fetchAutomation(
   };
 }
 
+// Bygger menneskelæsbar tekst af automation-reglerne til prompts
 export function buildAutomationGuidance(automation: Automation) {
   const lines = [];
   lines.push(
@@ -152,6 +156,7 @@ export function buildAutomationGuidance(automation: Automation) {
   return lines.join("\n");
 }
 
+// Henter nyeste politikker for brugeren eller returnerer tomme defaults
 export async function fetchPolicies(
   supabase: SupabaseClient | null,
   userId: string | null,

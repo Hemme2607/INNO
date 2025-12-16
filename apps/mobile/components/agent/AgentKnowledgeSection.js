@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AgentSection from "./AgentSection";
 import { COLORS } from "../../styles/GlobalStyles";
+import AgentSharedStyles from "../../styles/AgentSharedStyles";
 
 export default function AgentKnowledgeSection({
   onOpenTemplates = () => {},
@@ -38,7 +39,7 @@ export default function AgentKnowledgeSection({
         </TouchableOpacity>
       </View>
 
-      <View style={styles.infoCard}>
+      <View style={[AgentSharedStyles.surfaceCard, styles.infoCard]}>
         <Ionicons name="sparkles-outline" size={18} color={COLORS.primary} />
         <Text style={styles.infoText}>
           Integrationer (fx Shopify) administreres under fanen &quot;Integrationer&quot; og er tilgængelige i
@@ -80,10 +81,6 @@ const styles = StyleSheet.create({
   },
   infoCard: {
     marginTop: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(77, 124, 255, 0.12)",
-    backgroundColor: "rgba(12, 18, 33, 0.9)",
     padding: 16,
     flexDirection: "row",
     gap: 12,

@@ -18,6 +18,7 @@ import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
  * Viser en gradientbaggrund med app-navn og skifter mellem Login- og Signup-formularer baseret på intern `isLogin`-state.
  */
 export default function AuthScreen() {
+  // Holder styr på om login- eller signup-formularen skal vises
   const [isLogin, setIsLogin] = useState(true);
 
   return (

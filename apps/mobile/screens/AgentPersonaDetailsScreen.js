@@ -15,6 +15,7 @@ export default function AgentPersonaDetailsScreen({
   testError,
   isTestingPersona = false,
 }) {
+  // Opdaterer persona-config i parent-state felt for felt
   const handleSignatureChange = (value) => {
     onUpdatePersonaConfig({ signature: value });
   };

@@ -23,6 +23,8 @@ import { buildMailPrompt } from "../_shared/prompt.ts";
  * så næste trin kan kalde AI og poste svar retur til Freshdesk.
  */
 
+// Miljøkonstanter - edge function bruger disse til at connecte til Supabase,
+// kalde OpenAI og (valgfrit) slå op i Shopify.
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -31,6 +33,7 @@ const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
 const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
 
+// Supabase klient initialiseres kun hvis både url og service key findes.
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
@@ -70,6 +73,8 @@ function json(body: unknown, init?: ResponseInit): Response {
   });
 }
 
+// Dekrypterer credentials_enc (hex lagret i DB) til almindelig tekst.
+// Returnerer null hvis formatet er forkert.
 function decodeCredentials(raw: string | null): string | null {
   if (!raw) return null;
   const hex = raw.startsWith("\\x") ? raw.slice(2) : raw;
@@ -84,6 +89,8 @@ function decodeCredentials(raw: string | null): string | null {
   return new TextDecoder().decode(bytes);
 }
 
+// Hent Freshdesk integration fra integrations-tabellen for en given Clerk user id.
+// Funktion kaster et Error-objekt med .status ved problemer (404, 409, 500).
 async function fetchFreshdeskIntegration(clerkUserId: string): Promise<IntegrationRecord> {
   if (!supabase) {
     throw Object.assign(new Error("Supabase klient er ikke konfigureret på edge function."), {
@@ -122,11 +129,13 @@ async function fetchFreshdeskIntegration(clerkUserId: string): Promise<Integrati
   return data as IntegrationRecord;
 }
 
+// Bygger Basic Authorization header som Freshdesk forventer (apiKey:X)
 function buildBasicAuthHeader(apiKey: string): string {
   const token = btoa(`${apiKey}:X`);
   return `Basic ${token}`;
 }
 
+// Simpel HTML-escaping for at undgå injektion i den HTML-note vi poster.
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -136,6 +145,8 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Bygger en pæn HTML-note der inkluderes som bodyHtml i Freshdesk API-opkaldet.
+// Vi bruger escapeHtml og konverterer linjeskift til <br>.
 function buildNoteHtml(body: string): string {
   const escapedBody = escapeHtml(body).replace(/\n/g, "<br>");
   return `
@@ -158,6 +169,8 @@ type OpenAIResult = {
   actions: AutomationAction[];
 };
 
+// Wrapper til at kalde OpenAI chat/completions med json_schema response_format.
+// Returnerer parsed reply og eventuelle automation actions hvis succes.
 async function callOpenAI(prompt: string, system: string): Promise<OpenAIResult> {
   if (!OPENAI_API_KEY) return { reply: null, actions: [] };
 
@@ -208,6 +221,8 @@ async function callOpenAI(prompt: string, system: string): Promise<OpenAIResult>
   }
 }
 
+// Genererer kladde-tekst til Freshdesk baseret på persona, automation og ordrer.
+// Returnerer både body-tekst og eventuelle automation actions som OpenAI foreslår.
 async function generateDraftBody(options: {
   subject?: string | null;
   description?: string | null;
@@ -268,6 +283,8 @@ async function generateDraftBody(options: {
   return { body, actions };
 }
 
+// Opretter en privat draft-note på en Freshdesk ticket via Freshdesk API.
+// Kaster fejl hvis API'et ikke svarer med OK.
 async function createFreshdeskDraftNote(options: {
   domain: string;
   apiKey: string;
@@ -302,6 +319,16 @@ async function createFreshdeskDraftNote(options: {
   }
 }
 
+// Hovedhandler for incoming webhook POST-requests fra Freshdesk.
+// Forventet URL-format: /?userId=<clerkUserId>
+// Flow:
+// 1) Valider request og userId query param
+// 2) Parse payload (JSON hvis muligt)
+// 3) Hent integration, dekrypter API key
+// 4) Indhent persona/automation/policies + ordre-kontekst
+// 5) Generer kladde via OpenAI og opret en privat note i Freshdesk
+// 6) Udfør eventuelle automation-actions (labels, ordre-opdateringer osv.)
+// 7) Returner et JSON-svar med status og metadata
 Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return json({ error: "Method Not Allowed" }, { status: 405 });
@@ -316,6 +343,7 @@ Deno.serve(async (req) => {
       return json({ error: "Missing userId in webhook URL" }, { status: 400 });
     }
 
+    // Læs body som tekst og prøv at parse JSON — fallback til rå tekst
     const rawBody = await req.text();
     let payload: FreshdeskWebhookPayload | string = rawBody;
     try {
@@ -324,6 +352,7 @@ Deno.serve(async (req) => {
       payload = rawBody;
     }
 
+    // Hent integration og dekrypter API-nøglen (hex -> tekst)
     const integration = await fetchFreshdeskIntegration(userId);
     const apiKey = decodeCredentials(integration.credentials_enc ?? null);
     if (!apiKey) {
@@ -362,6 +391,7 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Hent persona, automation rules og policy-tekster fra DB
     const persona = await fetchPersona(supabase, integration.user_id);
     const automation = await fetchAutomation(supabase, integration.user_id);
     const policies = await fetchPolicies(supabase, integration.user_id);
@@ -374,6 +404,7 @@ Deno.serve(async (req) => {
       apiVersion: SHOPIFY_API_VERSION,
     });
 
+    // Generer kladde (tekst) og modtag eventuelle automation actions
     const { body: draftBody, actions } = await generateDraftBody({
       subject: webhook?.ticket_subject,
       description: webhook?.ticket_description,
@@ -387,6 +418,7 @@ Deno.serve(async (req) => {
 
     const formattedHtml = buildNoteHtml(draftBody);
 
+    // Opret en privat note (draft) i Freshdesk
     await createFreshdeskDraftNote({
       domain: integration.config.domain,
       apiKey,
@@ -395,6 +427,7 @@ Deno.serve(async (req) => {
       bodyHtml: formattedHtml,
     });
 
+    // Udfør automation actions (labels, ordre-opdateringer osv.)
     const automationResults = await executeAutomationActions({
       supabase,
       supabaseUserId: integration.user_id,

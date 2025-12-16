@@ -1,4 +1,5 @@
 // Hook der afklarer shop-domæne og ejer ved at læse Clerk-token og Supabase-data.
+// Kort: prøv cache/metadata -> Clerk token -> profiler tabel -> edge fallback
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { useClerkSupabase } from "../supabaseClient";
@@ -14,6 +15,7 @@ const SUPABASE_TEMPLATE =
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "") ?? null;
 const SHOPIFY_STATUS_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/shopify-status` : null;
 
+// Hjælpere til at afkode JWT-payload (base64url -> base64 -> JSON)
 const base64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const base64UrlToBase64 = (input) => {
   if (typeof input !== "string" || !input.length) {
@@ -24,6 +26,7 @@ const base64UrlToBase64 = (input) => {
   return normalized.padEnd(normalized.length + padding, "=");
 };
 
+// Simpel base64-dekoder - bruges til at læse Clerk-token payload uden atob
 const decodeBase64 = (input) => {
   let result = "";
   let buffer = 0;
@@ -47,6 +50,7 @@ const decodeBase64 = (input) => {
   return result;
 };
 
+// Ekstraher og parse JWT payload. Returner objekt eller null.
 const decodeJwtPayload = (token) => {
   if (typeof token !== "string" || !token.includes(".")) {
     return null;
@@ -64,7 +68,8 @@ const decodeJwtPayload = (token) => {
   }
 };
 
-// Forsøger at finde shopdomæne og ejer ved at læse Clerk-token og Supabase
+// Forsøger at finde shopdomæne og ejer ved at læse Clerk-token, profiler eller
+// en edge-funktion som fallback. Returnerer { shopDomain, ownerUserId, isLoaded, error, refresh }
 export function useShopDomain() {
   const supabase = useClerkSupabase();
   const { user } = useUser();
@@ -74,6 +79,7 @@ export function useShopDomain() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState(null);
   const missingSupabaseUserWarnedRef = useRef(false);
+  // Gem en hint til Supabase user_id, kan komme fra metadata eller token
   const [supabaseUserIdHint, setSupabaseUserIdHint] = useState(() => {
     const metadataUuid = user?.publicMetadata?.supabase_uuid;
     return isValidUuid(metadataUuid) ? metadataUuid : null;
@@ -86,7 +92,7 @@ export function useShopDomain() {
     }
   }, [user?.publicMetadata?.supabase_uuid]);
 
-  // Henter status fra edge-funktionen som fallback til profilopslag
+  // Henter status fra edge-funktionen som fallback, bruger Clerk token for auth
   const fetchStatusFromEdge = useCallback(async () => {
     if (!SHOPIFY_STATUS_ENDPOINT || typeof getToken !== "function") {
       return null;
@@ -148,7 +154,7 @@ export function useShopDomain() {
     }
   }, [getToken, user?.id, setSupabaseUserIdHint]);
 
-  // Finder Supabase user_id via profiler-tabellen hvis Clerk ikke har det
+  // Finder Supabase user_id via profiles-tabellen hvis metadata/token ikke gav resultat
   const fetchProfileUserId = useCallback(async () => {
     if (!supabase || !user?.id) {
       return null;
@@ -186,7 +192,7 @@ export function useShopDomain() {
     return null;
   }, [supabase, user?.id]);
 
-  // Prioriterer cached metadata eller Clerk-token til at afgøre brugerens Supabase-id
+  // Prioriterer cached hint, Clerk-token, metadata, og som sidste mulighed DB-opslag
   const resolveSupabaseUserId = useCallback(async () => {
     if (isValidUuid(supabaseUserIdHint)) {
       return supabaseUserIdHint;
@@ -227,6 +233,8 @@ export function useShopDomain() {
     return null;
   }, [supabaseUserIdHint, getToken, user?.id, user?.publicMetadata?.supabase_uuid, fetchProfileUserId, setSupabaseUserIdHint]);
 
+  // Hovedflow: forsøg at resolve shop via owner_user_id i shops-tabellen,
+  // ellers brug edge-funktion som fallback.
   const fetchDomain = useCallback(async () => {
     setIsLoaded(false);
     setError(null);
@@ -264,7 +272,8 @@ export function useShopDomain() {
         }
       }
 
-      if (!shopRow?.shop_domain) {
+  // Hvis direkte opslag ikke gav et resultat, prøv edge fallback
+  if (!shopRow?.shop_domain) {
         const fallback = await fetchStatusFromEdge();
         if (fallback?.supabaseUserId && isValidUuid(fallback.supabaseUserId)) {
           missingSupabaseUserWarnedRef.current = false;
@@ -284,7 +293,8 @@ export function useShopDomain() {
           return fallback.shopDomain;
         }
 
-        if (!supabaseUserId && !fallback?.supabaseUserId && !missingSupabaseUserWarnedRef.current) {
+  // Warn kun én gang hvis vi ikke kan bestemme supabaseUserId
+  if (!supabaseUserId && !fallback?.supabaseUserId && !missingSupabaseUserWarnedRef.current) {
           console.warn("useShopDomain: supabaseUserId mangler – kan ikke hente shop", {
             clerkId: user?.id,
           });
@@ -300,6 +310,7 @@ export function useShopDomain() {
         return null;
       }
 
+      // Hvis vi fandt en shopRow, sæt resultater og ejerskab
       const resolved =
         typeof shopRow?.shop_domain === "string" && shopRow.shop_domain.length
           ? shopRow.shop_domain
@@ -321,6 +332,7 @@ export function useShopDomain() {
     }
   }, [supabase, user, resolveSupabaseUserId, fetchStatusFromEdge, setSupabaseUserIdHint]);
 
+  // Kør ved mount / når fetchDomain ændrer sig
   useEffect(() => {
     fetchDomain().catch(() => null);
   }, [fetchDomain]);

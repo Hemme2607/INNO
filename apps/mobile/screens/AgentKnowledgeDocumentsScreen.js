@@ -7,6 +7,7 @@ export default function AgentKnowledgeDocumentsScreen({
   onUploadDocument = () => {},
   warningMessage = null,
 }) {
+  // Viser placeholder for dokumentbiblioteket og lader brugeren trigge upload-flowet
   return (
     <ScrollView
       style={GlobalStyles.screen}

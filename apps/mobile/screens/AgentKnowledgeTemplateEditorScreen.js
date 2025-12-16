@@ -34,16 +34,19 @@ export default function AgentKnowledgeTemplateEditorScreen({
   const [query, setQuery] = useState("");
   const [hasSubmittedSearch, setHasSubmittedSearch] = useState(false);
 
+  // Udløser søgning i mailindbakken baseret på lokal query-state
   const handleSearch = () => {
     const trimmed = query.trim();
     setHasSubmittedSearch(true);
     onSearch(trimmed);
   };
 
+  // Gemmer hvilket mail-id der er valgt som kilde
   const handleSelectMail = (mailId) => {
     onSelectMail(mailId);
   };
 
+  // Kalder udkast-handler med nuværende inputs
   const handleSaveDraft = () => {
     onSaveDraft({
       templateBody,
@@ -52,6 +55,7 @@ export default function AgentKnowledgeTemplateEditorScreen({
     });
   };
 
+  // Gemmer standardsvaret og lukker siden hvis succesfuldt
   const handleSaveTemplate = async () => {
     const saved = await onSaveTemplate({
       templateBody,

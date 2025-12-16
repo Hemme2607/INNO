@@ -57,6 +57,7 @@ export default function InboxScreen() {
     return provider?.label ?? null;
   }, [activeMailProvider]);
 
+  // Henter indbakke fra prioriterede mailudbydere med simpel rate limiting
   const fetchInbox = useCallback(
     async ({ showLoader = true, force = false } = {}) => {
       if (!sessionId) {
@@ -239,6 +240,7 @@ export default function InboxScreen() {
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
 
+  // Trækker e-mailadresse ud fra mail-headeren
   const extractEmail = (raw) => {
     if (!raw || typeof raw !== "string") return null;
     // If raw contains angle-bracket address use that
@@ -249,6 +251,7 @@ export default function InboxScreen() {
     return simple ? simple[1] : null;
   };
 
+  // Kalder Supabase edge function for at oprette et AI-udkast for en given mail
   const createDraft = async (item) => {
     if (!functionsBase) {
       Alert.alert("Funktionen ikke konfigureret", "Supabase functions base URL mangler.");
@@ -260,7 +263,7 @@ export default function InboxScreen() {
       const token = await getToken();
       if (!token) throw new Error("Kunne ikke hente session token.");
 
-  const to = extractEmail(item.rawFrom ?? item.sender);
+      const to = extractEmail(item.rawFrom ?? item.sender);
       if (!to) throw new Error("Kunne ikke udtrække e-mailadresse fra afsender.");
 
       const body = `Hej ${item.sender.split(" <")[0]},\n\nTak for din besked — her er et udkast til svar.\n\nMvh`;
@@ -281,7 +284,10 @@ export default function InboxScreen() {
         throw new Error(message);
       }
 
-  Alert.alert("AI-udkast oprettet", "Et AI-genereret udkast er blevet oprettet i din Gmail-indbakke.");
+      Alert.alert(
+        "AI-udkast oprettet",
+        "Et AI-genereret udkast er blevet oprettet i din Gmail-indbakke."
+      );
     } catch (err) {
       Alert.alert("Kunne ikke oprette udkast", err?.message ?? String(err));
     } finally {

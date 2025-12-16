@@ -4,11 +4,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS } from "../../styles/GlobalStyles";
 
+// Placeholder-statistikker for agent-heroen
 const DEFAULT_STATS = [
   { label: "løst ved første svar", value: "98%" },
   { label: "opsætningstid", value: "<5m" },
 ];
 
+// Hovedkomponent for Agent Hero
 export default function AgentHero({
   title = "Agent Sona",
   subtitle = "Din AI-operator, der kombinerer kundedata, kontekst og tone of voice i ét svar.",
@@ -24,6 +26,7 @@ export default function AgentHero({
   const actionColors = primaryActionColors;
   const actionTextColor = primaryActionDisabled ? "#E2E8F0" : "#F5F8FF";
 
+  // Render hero-kortet med statistik og primær handling
   return (
     <LinearGradient
       colors={["#1F2B45", "#141B2D"]}

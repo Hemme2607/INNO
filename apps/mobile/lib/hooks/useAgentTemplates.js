@@ -1,7 +1,9 @@
 // Hook der styrer hentning og CRUD for agentens standardsvar-templates i Supabase.
+// Kortfattet: load, create, update og delete for `agent_templates` med lokal state.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useClerkSupabase } from "../supabaseClient";
 
+// Mapper en DB-række til et simpelt template-objekt brugt i React-komponenter.
 function mapTemplate(row) {
   return {
     id: row.id,
@@ -25,6 +27,8 @@ export function useAgentTemplates(options = {}) {
   const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
 
+  // Enkel ensureUserId: i mobile-variant forventes userId ofte at blive
+  // leveret af kaldende kode. Ellers kastes fejl (caller bør håndtere dette).
   const ensureUserId = useCallback(async () => {
     if (providedUserId) {
       return providedUserId;
@@ -32,6 +36,7 @@ export function useAgentTemplates(options = {}) {
     throw new Error("Supabase bruger-id er ikke klar endnu.");
   }, [providedUserId]);
 
+  // Indlæser alle templates (nyeste først) og sætter lokal state.
   const loadTemplates = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -52,6 +57,7 @@ export function useAgentTemplates(options = {}) {
     }
   }, [supabase, providedUserId]);
 
+  // Opretter et nyt template og push'er det øverst i lokal liste.
   const createTemplate = useCallback(
     async ({ title, body, sourceBody, linkedMailId, linkedMailProvider }) => {
       setProcessing(true);
@@ -85,6 +91,7 @@ export function useAgentTemplates(options = {}) {
     [ensureUserId, supabase]
   );
 
+  // Opdaterer et eksisterende template og synkroniserer lokal state.
   const updateTemplate = useCallback(
     async (id, updates) => {
       setProcessing(true);
@@ -118,6 +125,7 @@ export function useAgentTemplates(options = {}) {
     [supabase]
   );
 
+  // Sletter et template og fjerner det fra lokal liste.
   const deleteTemplate = useCallback(
     async (id) => {
       setProcessing(true);
@@ -139,12 +147,14 @@ export function useAgentTemplates(options = {}) {
     [supabase]
   );
 
+  // Auto-load templates medmindre `lazy` er sand.
   useEffect(() => {
     if (!lazy) {
       loadTemplates().catch(() => null);
     }
   }, [lazy, loadTemplates]);
 
+  // Hook API: templates + status + CRUD-actions
   return useMemo(
     () => ({
       templates,

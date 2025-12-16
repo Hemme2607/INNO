@@ -37,11 +37,13 @@ type GmailListResponse = {
 };
 
 // --- Helpers ---
+// Finder header-værdi (case-insensitive) på en Gmail-besked
 function findHeader(msg: GmailMessage, name: string) {
   const h = msg?.payload?.headers ?? [];
   return h.find((x) => x.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
 }
 
+// Læser debug-flag fra querystring uden at forbruge body
 function readDebugFlag(req: Request) {
   const url = new URL(req.url);
   let debug = url.searchParams.get("debug") === "1";
@@ -51,6 +53,7 @@ function readDebugFlag(req: Request) {
   return debug;
 }
 
+// Forsøger at parse JSON-body men fejler stille så vi kan håndtere GET
 async function readBodySafe(req: Request) {
   if (req.method !== "POST") return {};
   try {
@@ -60,6 +63,7 @@ async function readBodySafe(req: Request) {
   }
 }
 
+// Udtrækker bearer token fra Authorization header
 function getBearerToken(req: Request): string {
   const h1 = req.headers.get("authorization");
   const h2 = req.headers.get("Authorization");
@@ -70,6 +74,7 @@ function getBearerToken(req: Request): string {
   return match[1];
 }
 
+// Verificerer Clerk session JWT og returnerer userId (sub)
 async function requireUserIdFromJWT(req: Request): Promise<string> {
   if (!JWKS || !CLERK_JWT_ISSUER) {
     throw Object.assign(new Error("JWT verify ikke konfigureret (CLERK_JWT_ISSUER mangler)"), { status: 500 });
@@ -83,6 +88,7 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
+// Henter/fornyer Gmail access token via Clerk OAuth tokens
 async function getGmailAccessToken(userId: string): Promise<string> {
   // 1) prøv den token Clerk allerede har liggende
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
@@ -104,6 +110,7 @@ async function getGmailAccessToken(userId: string): Promise<string> {
   return accessToken;
 }
 
+// Fetch wrapper der kaster med status hvis Gmail fejler
 async function fetchJson<T>(url: string, token: string): Promise<T> {
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   const text = await res.text();
@@ -236,6 +243,7 @@ Deno.serve(async (req) => {
   }
 });
 
+// Udtrækker første plaintext fra Gmail MIME payload
 function extractPlainTextFromPayload(payload: GmailMessage["payload"]): string {
   if (!payload) return "";
 
@@ -264,6 +272,7 @@ function extractPlainTextFromPayload(payload: GmailMessage["payload"]): string {
   return "";
 }
 
+// Gmail returnerer URL-safe base64 – denne helper normaliserer og dekoder
 function decodeBase64Url(data: string): string {
   const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
@@ -272,6 +281,7 @@ function decodeBase64Url(data: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+// Fjerner HTML tags og komprimerer whitespace
 function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim();
 }

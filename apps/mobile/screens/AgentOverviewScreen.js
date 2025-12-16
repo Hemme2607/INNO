@@ -25,6 +25,7 @@ export default function AgentOverviewScreen({
   const isAgentActive = Boolean(automationSettings?.autoDraftEnabled);
   // Holder knaptekst i sync med autoDraft-flaget og viser spinner-tekst ved gem
   const heroLoading = automationSaving || automationLoading;
+  // Toggler auto-draft status via handler fra props
   const handleHeroPress = () => {
     if (heroLoading || typeof onToggleAutoDraft !== "function") return;
     onToggleAutoDraft(!isAgentActive);
@@ -48,7 +49,7 @@ export default function AgentOverviewScreen({
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
     >
-        <AgentHero
+      <AgentHero
         onPrimaryActionPress={handleHeroPress}
         primaryActionLabel={heroButtonLabel}
         badgeLabel={heroBadge}

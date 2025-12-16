@@ -110,8 +110,6 @@ function MainTabs() {
   );
 }
 
-
-
 // Wrapper der viser auth-flow eller hovedapp afhængig af Clerk-session
 function AppContent() {
   const { isLoaded, isSignedIn } = useAuth();

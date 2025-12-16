@@ -13,6 +13,7 @@ const JWKS = CLERK_JWT_ISSUER
     )
   : null;
 
+// Udtrækker bearer token fra Authorization header
 const readBearerToken = (req: Request): string => {
   const header = req.headers.get("Authorization") ?? req.headers.get("authorization") ?? "";
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -22,6 +23,7 @@ const readBearerToken = (req: Request): string => {
   return match[1];
 };
 
+// Verificerer Clerk JWT og returnerer subject (user id)
 const requireClerkUserId = async (req: Request): Promise<string> => {
   if (!JWKS || !CLERK_JWT_ISSUER) {
     throw Object.assign(
@@ -44,6 +46,7 @@ type TestPersonaPayload = {
   instructions?: string | null;
 };
 
+// Skræddersyr system-promptet til et kort persona-udkast
 const buildSystemPrompt = (userId: string) =>
   [
     "Du er Sona – en hjælpsom kundeservice-agent.",
@@ -58,6 +61,7 @@ const callOpenAI = async (options: {
   instructions: string;
   userId: string;
 }): Promise<string> => {
+  // Kalder OpenAI for at generere et kort testsvar baseret på persona-data
   if (!OPENAI_API_KEY) {
     throw new Error("OpenAI API-nøgle mangler.");
   }

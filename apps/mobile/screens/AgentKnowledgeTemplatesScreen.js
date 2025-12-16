@@ -9,10 +9,12 @@ export default function AgentKnowledgeTemplatesScreen({
   loading = false,
   processing = false,
 }) {
+  // Navigerer til editor for at oprette et nyt standardsvar
   const handleCreateTemplate = () => {
     navigation.navigate("AgentKnowledgeTemplateEditor");
   };
 
+  // Åbner editoren med valgt template-id for redigering
   const handleEditTemplate = (templateId) => {
     navigation.navigate("AgentKnowledgeTemplateEditor", { templateId });
   };
