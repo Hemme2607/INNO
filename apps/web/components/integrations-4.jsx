@@ -36,6 +36,7 @@ const rightSatellites = [
   },
 ];
 
+// Viser et “orbit” af integrationer omkring Sona-kerne-logoet
 export default function IntegrationsSection() {
   return (
     <section className="relative overflow-hidden bg-slate-950 py-24 lg:py-32">
@@ -94,6 +95,7 @@ export default function IntegrationsSection() {
   );
 }
 
+// Lille kortkomponent for hver integration
 const IntegrationCard = ({ icon, name, sub, cardClass }) => {
   return (
     <div

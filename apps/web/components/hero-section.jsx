@@ -15,6 +15,7 @@ const fadeIn = {
   },
 };
 
+// Hero med leadform og demo-preview, animeret via AnimatedGroup
 export default function HeroSection() {
   return (
     <section className="relative overflow-hidden bg-slate-950">
@@ -64,6 +65,7 @@ export default function HeroSection() {
             <div className="absolute -left-4 -top-4 h-24 w-24 rounded-full bg-sky-500/15 blur-3xl" />
             <div className="absolute right-4 top-1/3 h-28 w-28 rounded-full bg-indigo-500/15 blur-3xl" />
             <div className="relative rounded-2xl border border-white/10 bg-slate-900/70 p-4 shadow-2xl shadow-sky-950/40 backdrop-blur">
+              {/* Forhåndsvisning af AI-processing komponenten */}
               <ProcessingDemo />
             </div>
           </div>

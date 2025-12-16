@@ -12,6 +12,7 @@ function mapClerkUser(user) {
   };
 }
 
+// Dashboard-layout henter Clerk-bruger til sidebar/header og wrapper børnene i sidebar/provider
 export default async function DashboardLayout({ children }) {
   const { userId } = await auth();
   let sidebarUser = null;

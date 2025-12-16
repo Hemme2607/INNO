@@ -18,6 +18,7 @@ export const HeroHeader = () => {
     const [menuState, setMenuState] = React.useState(false)
     const [isScrolled, setIsScrolled] = React.useState(false)
 
+    // Skifter nav-baggrund og padding når brugeren scroller ned
     React.useEffect(() => {
         const handleScroll = () => {
             setIsScrolled(window.scrollY > 50)
@@ -40,6 +41,7 @@ export const HeroHeader = () => {
                                 <span className="text-lg font-semibold text-foreground">Sona</span>
                             </Link>
 
+                            {/* Mobil-menu toggle */}
                             <button
                                 onClick={() => setMenuState(!menuState)}
                                 aria-label={menuState == true ? 'Close Menu' : 'Open Menu'}

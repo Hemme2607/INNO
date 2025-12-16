@@ -7,6 +7,7 @@ export const metadata = {
     "Webudgave af INNO – få overblik over kundeservice og integrationer direkte i browseren.",
 };
 
+// Wrapper layout der sætter globale providers og <html lang="da">
 export default function RootLayout({ children }) {
   return (
     <html lang="da">
