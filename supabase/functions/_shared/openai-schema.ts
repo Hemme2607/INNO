@@ -5,21 +5,21 @@ export const PERSONA_REPLY_JSON_SCHEMA = {
   schema: {
     type: "object",
     additionalProperties: false,
+    properties: {
+      reply: { type: "string" },
+      actions: {
+        type: "array",
+        items: {
+          type: "object",
+          additionalProperties: false,
           properties: {
-            reply: { type: "string" },
-            actions: {
-              type: "array",
-              items: {
-                type: "object",
-                additionalProperties: false,
-                properties: {
             type: {
               type: "string",
               enum: ["update_shipping_address", "cancel_order", "add_tag"],
             },
-                  orderId: { type: "number" },
-                  payload: {
-                    type: "object",
+            orderId: { type: "number" },
+            payload: {
+              type: "object",
               additionalProperties: false,
               properties: {
                 shipping_address: {
@@ -34,16 +34,26 @@ export const PERSONA_REPLY_JSON_SCHEMA = {
                     country: { type: "string" },
                     phone: { type: "string" },
                   },
+                  required: [
+                    "name",
+                    "address1",
+                    "address2",
+                    "zip",
+                    "city",
+                    "country",
+                    "phone",
+                  ],
                 },
                 note: { type: "string" },
                 tag: { type: "string" },
               },
-            },
-                },
-                required: ["type", "orderId"],
-              },
+              required: ["shipping_address", "note", "tag"],
             },
           },
+          required: ["type", "orderId", "payload"],
+        },
+      },
+    },
     required: ["reply", "actions"],
   },
 };
