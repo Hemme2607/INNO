@@ -13,6 +13,7 @@ import { AutomationAction, executeAutomationActions } from "../_shared/automatio
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
+import { classifyEmail } from "../_shared/classify-email.ts";
 
 /**
  * Outlook Create Draft AI
@@ -391,6 +392,28 @@ Deno.serve(async (req) => {
       message?.body?.contentType === "text"
         ? message?.body?.content ?? ""
         : stripHtml(message?.body?.content ?? "") || message?.bodyPreview || "";
+
+    const classification = await classifyEmail({
+      from: fromAddress,
+      subject,
+      body: textContent,
+    });
+    if (!classification.process) {
+      emitDebugLog("outlook-create-draft-ai: gatekeeper skip", {
+        reason: classification.reason,
+        category: classification.category,
+      });
+      return Response.json(
+        {
+          success: true,
+          skipped: true,
+          reason: classification.reason,
+          category: classification.category ?? null,
+          explanation: classification.explanation ?? null,
+        },
+        { status: 200 },
+      );
+    }
 
     const supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
     const persona = await fetchPersona(supabase, supabaseUserId);

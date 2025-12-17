@@ -12,6 +12,7 @@ import { AutomationAction, executeAutomationActions } from "../_shared/automatio
 import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
+import { classifyEmail } from "../_shared/classify-email.ts";
 
 /**
  * Gmail Create Draft AI
@@ -341,6 +342,29 @@ Deno.serve(async (req) => {
 
     const emailMatch = from.match(/<([^>]+)>/);
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
+
+    const classification = await classifyEmail({
+      from,
+      subject,
+      body: plain,
+      headers,
+    });
+    if (!classification.process) {
+      emitDebugLog("gmail-create-draft-ai: gatekeeper skip", {
+        reason: classification.reason,
+        category: classification.category,
+      });
+      return Response.json(
+        {
+          success: true,
+          skipped: true,
+          reason: classification.reason,
+          category: classification.category ?? null,
+          explanation: classification.explanation ?? null,
+        },
+        { status: 200 },
+      );
+    }
 
     // Hvis vi har et Clerk-token tilgængeligt kan vi bruge en intern frontend
     // proxy til at hente ordrer (bruges som fallback når direkte shopify access mangler).

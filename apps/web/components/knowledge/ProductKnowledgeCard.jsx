@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Database } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { useClerkSupabase } from "@/lib/useClerkSupabase";
 
 export function ProductKnowledgeCard() {
@@ -58,25 +58,28 @@ export function ProductKnowledgeCard() {
     }
   };
 
+  const statusText = loading
+    ? "Checking products..."
+    : `${count} product${count === 1 ? "" : "s"} synced`;
+
   return (
-    <Card className="border border-gray-200 shadow-sm">
-      <CardHeader className="flex items-start justify-between gap-3">
-        <div className="space-y-1">
-          <CardTitle className="flex items-center gap-2 text-lg">
+    <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4 lg:p-5">
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div className="flex items-center gap-2 font-medium text-foreground">
             <Database className="h-4 w-4 text-slate-500" />
-            Product Catalog
-          </CardTitle>
-          <CardDescription>Product knowledge for the agent.</CardDescription>
+            <span>Product Catalog</span>
+          </div>
+          <span className="text-sm text-muted-foreground">{statusText}</span>
         </div>
-        <Button size="sm" onClick={handleSync} disabled={syncing} className="gap-2">
+        <Button
+          size="sm"
+          onClick={handleSync}
+          disabled={syncing}
+          className="gap-2 self-start sm:self-auto"
+        >
           {syncing ? "Syncing..." : "Sync Products"}
         </Button>
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Sona has indexed <span className="font-semibold text-foreground">{loading ? "…" : count}</span>{" "}
-          products from your store.
-        </p>
       </CardContent>
     </Card>
   );

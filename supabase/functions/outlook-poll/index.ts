@@ -93,18 +93,25 @@ async function pollSingleUser(user: AutomationUser) {
     const state = await loadPollState(user.clerk_user_id);
     const candidates = await fetchCandidateMessages(token, state);
 
-    let processed = 0;
+    let handled = 0;
+    let draftsCreated = 0;
+    let skipped = 0;
     let maxTs = state?.last_received_ts ?? 0;
     for (const msg of candidates) {
-      if (processed >= MAX_MESSAGES_PER_USER) break;
+      if (handled >= MAX_MESSAGES_PER_USER) break;
       if (!msg?.id) continue;
-      await triggerDraft(user.clerk_user_id, msg.id);
-      processed += 1;
+      const outcome = await triggerDraft(user.clerk_user_id, msg.id);
+      handled += 1;
       const ts = Date.parse(msg.receivedDateTime ?? "") || 0;
       if (ts > maxTs) maxTs = ts;
+      if (outcome?.skipped) {
+        skipped += 1;
+      } else {
+        draftsCreated += 1;
+      }
     }
 
-    if (processed && maxTs) {
+    if (handled && maxTs) {
       await savePollState(
         user.clerk_user_id,
         candidates[candidates.length - 1]?.id ?? null,
@@ -114,7 +121,9 @@ async function pollSingleUser(user: AutomationUser) {
 
     emitDebugLog("outlook-poll", user.clerk_user_id, {
       candidates: candidates.length,
-      drafts: processed,
+      drafts: draftsCreated,
+      skipped,
+      handled,
       maxReceivedTs: maxTs,
     });
 
@@ -122,7 +131,9 @@ async function pollSingleUser(user: AutomationUser) {
       clerkUserId: user.clerk_user_id,
       supabaseUserId: user.user_id,
       candidates: candidates.length,
-      draftsCreated: processed,
+      draftsCreated,
+      skipped,
+      processed: handled,
     };
   } catch (err: any) {
     console.warn("outlook-poll user failed", user.clerk_user_id, err?.message || err);

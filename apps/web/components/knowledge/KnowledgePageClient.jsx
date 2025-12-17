@@ -6,44 +6,48 @@ import {
   Bold,
   DownloadCloud,
   FileText,
+  Heading1,
+  Heading2,
   Italic,
   List,
+  ListOrdered,
+  Lock,
   RefreshCcw,
   Save,
   ShieldCheck,
-  Sparkles,
   Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProductKnowledgeCard } from "@/components/knowledge/ProductKnowledgeCard";
 import { useClerkSupabase } from "@/lib/useClerkSupabase";
 
 const fieldConfig = [
   {
     key: "policy_refund",
-    label: "Returret",
-    description: "Hvordan kunder returnerer/ombytter – frister, betingelser, gebyrer.",
+    label: "Returns",
+    description: "How customers return or exchange items—deadlines, conditions, fees.",
     icon: ShieldCheck,
   },
   {
     key: "policy_shipping",
-    label: "Fragt & Levering",
-    description: "Leveringstider, fragtpriser, ekspres, sporingslinks, undtagelser.",
+    label: "Shipping",
+    description: "Delivery times, shipping rates, express options, tracking links, exceptions.",
     icon: Truck,
   },
   {
     key: "policy_terms",
-    label: "Handelsbetingelser",
-    description: "Betaling, fortrydelse, reklamation, garantier.",
+    label: "Terms",
+    description: "Payment, cancellations, claims, warranties.",
     icon: FileText,
   },
   {
     key: "internal_tone",
-    label: "Interne regler",
-    description: "Tone-of-voice, rabatter, eskalationsregler – kun internt for agenten.",
-    icon: Sparkles,
+    label: "Internal Rules",
+    description: "Tone of voice, discounts, escalation rules—internal for the agent only.",
+    icon: Lock,
   },
 ];
 
@@ -57,6 +61,7 @@ export function KnowledgePageClient() {
   });
   const [shopId, setShopId] = useState(null);
   const [shopDomain, setShopDomain] = useState("");
+  const [platform, setPlatform] = useState("");
   const [manualDomain, setManualDomain] = useState("");
   const [manualToken, setManualToken] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,7 +82,7 @@ export function KnowledgePageClient() {
     try {
       const { data, error } = await supabase
         .from("shops")
-        .select("id, shop_domain, policy_refund, policy_shipping, policy_terms, internal_tone")
+        .select("id, shop_domain, platform, policy_refund, policy_shipping, policy_terms, internal_tone")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -89,6 +94,7 @@ export function KnowledgePageClient() {
       if (data) {
         setShopId(data.id);
         setShopDomain(data.shop_domain || "");
+        setPlatform(data.platform || "");
         setValues({
           policy_refund: data.policy_refund || "",
           policy_shipping: data.policy_shipping || "",
@@ -100,17 +106,18 @@ export function KnowledgePageClient() {
       } else {
         setShopId(null);
         setShopDomain("");
+        setPlatform("");
         setValues({
           policy_refund: "",
           policy_shipping: "",
           policy_terms: "",
           internal_tone: "",
         });
-        // behold eventuelle manuelt indtastede felter
+        // keep any manually entered values
       }
     } catch (error) {
       console.warn("Load policies failed:", error);
-      toast.error("Kunne ikke hente politikker.");
+      toast.error("Could not load policies.");
     } finally {
       setLoading(false);
     }
@@ -135,7 +142,7 @@ export function KnowledgePageClient() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const message = typeof payload?.error === "string" ? payload.error : "Kunne ikke hente fra Shopify.";
+        const message = typeof payload?.error === "string" ? payload.error : "Could not import from the store.";
         throw new Error(message);
       }
 
@@ -149,14 +156,14 @@ export function KnowledgePageClient() {
         policy_terms: payload?.terms ?? prev.policy_terms,
       }));
       if (policyCount === 0) {
-        toast.info("Ingen politikker fundet i Shopify. Tjek at de er udfyldt og at token har read_legal_policies.");
+        toast.info("No policies found. Check that they are filled out and the token has permissions.");
       } else {
         toast.success(
-          `Politikker hentet fra Shopify (${policyCount} fundet${policyTypes.length ? `: ${policyTypes.join(", ")}` : ""}).`
+          `Policies imported (${policyCount} found${policyTypes.length ? `: ${policyTypes.join(", ")}` : ""}).`
         );
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Importen fejlede.";
+      const message = error instanceof Error ? error.message : "Import failed.";
       toast.error(message);
     } finally {
       setImporting(false);
@@ -165,11 +172,11 @@ export function KnowledgePageClient() {
 
   const handleSave = async () => {
     if (!supabase) {
-      toast.error("Supabase klient er ikke klar endnu.");
+      toast.error("Supabase client is not ready yet.");
       return;
     }
     if (!shopId) {
-      toast.error("Ingen Shopify butik fundet. Forbind din butik først.");
+      toast.error("No store connection found. Connect your store first.");
       return;
     }
 
@@ -183,17 +190,14 @@ export function KnowledgePageClient() {
       };
       const { error } = await supabase.from("shops").update(payload).eq("id", shopId);
       if (error) throw error;
-      toast.success("Politikker gemt.");
+      toast.success("Policies saved.");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Kunne ikke gemme.";
+      const message = error instanceof Error ? error.message : "Could not save.";
       toast.error(message);
     } finally {
       setSaving(false);
     }
   };
-
-  const internalToneClasses =
-    "min-h-[220px] w-full resize-y rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2";
 
   const tabByKey = useMemo(
     () => fieldConfig.reduce((acc, item) => ({ ...acc, [item.key]: item }), {}),
@@ -201,27 +205,59 @@ export function KnowledgePageClient() {
   );
 
   const active = tabByKey[activeTab] || fieldConfig[0];
+  const platformLabel = useMemo(() => {
+    if (!platform) return "Store";
+    return platform.charAt(0).toUpperCase() + platform.slice(1);
+  }, [platform]);
 
   return (
-    <div className="space-y-5">
-      <Card className="border border-gray-200 shadow-sm">
-        <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
-            <CardTitle className="text-xl">Policies & rules</CardTitle>
-            <CardDescription>
-              Refunds, shipping, terms and internal notes are sent to the AI agent.
-            </CardDescription>
-            {shopDomain ? (
-              <p className="text-xs text-muted-foreground">
-                Connected to: <span className="font-mono">{shopDomain}</span>
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                No Shopify store found. Enter domain and access token to fetch directly, or connect via Integrations.
-              </p>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-2">
+          <p className="text-sm uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
+          <h1 className="text-3xl font-semibold text-foreground">Knowledge Base</h1>
+          <p className="text-sm text-muted-foreground">
+            Sync your store policies, edit them, and add internal rules. The agent uses them directly in replies.
+          </p>
+        </div>
+        <Button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="gap-2 self-start bg-black text-white shadow-sm hover:bg-black/90 lg:self-auto"
+        >
+          {saving ? (
+            <>
+              <RefreshCcw className="h-4 w-4 animate-spin" />
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="h-4 w-4" />
+              Save Changes
+            </>
+          )}
+        </Button>
+      </div>
+
+      <div className="space-y-5">
+        <ProductKnowledgeCard />
+
+        <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+          <CardHeader className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+            <div className="space-y-1.5">
+              <CardTitle className="text-xl">Store Policies</CardTitle>
+              <CardDescription>Manage return rules, shipping info, and internal notes.</CardDescription>
+              {shopDomain ? (
+                <p className="text-xs text-muted-foreground">
+                  Connected to: <span className="font-mono text-foreground">{shopDomain}</span>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No store connection found. Enter a domain and access token to fetch once, or connect via Integrations.
+                </p>
+              )}
+            </div>
             <Button
               type="button"
               variant="outline"
@@ -232,116 +268,94 @@ export function KnowledgePageClient() {
               {importing ? (
                 <>
                   <RefreshCcw className="h-4 w-4 animate-spin" />
-                  Opdaterer...
+                  Importing...
                 </>
               ) : (
                 <>
                   <DownloadCloud className="h-4 w-4" />
-                  Update
+                  {`Import from ${platformLabel}`}
                 </>
               )}
             </Button>
-            <Button type="button" onClick={handleSave} disabled={saving || loading} className="gap-2">
-              {saving ? (
-                <>
-                  <RefreshCcw className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  Save changes
-        </>
-              )}
-            </Button>
-          </div>
-        </CardHeader>
-      </Card>
-
-      {!shopDomain ? (
-        <Card className="border border-gray-200 bg-gray-50 shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base">Fetch without saved connection</CardTitle>
-            <CardDescription className="text-sm">
-              Use your Shopify domain and Admin API access token to fetch policies once. (Does not save the credentials.)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid gap-3 lg:grid-cols-2">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shopify domain</p>
-                <input
-                  type="text"
-                  value={manualDomain}
-                  onChange={(e) => setManualDomain(e.target.value)}
-                  placeholder="myshop.myshopify.com"
-                  className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-500/30"
-                  disabled={loading || importing}
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Admin API Access Token</p>
-                <input
-                  type="password"
-                  value={manualToken}
-                  onChange={(e) => setManualToken(e.target.value)}
-                  placeholder="shpat_xxx"
-                  className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-500/30"
-                  disabled={loading || importing}
-                />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Tip: Find the token under Shopify Admin → Apps → Develop apps → Admin API access token.
+            <p className="text-xs text-muted-foreground lg:text-right">
+              Use this if you updated policies in your store platform.
             </p>
-          </CardContent>
-        </Card>
-      ) : null}
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <Card className="border border-gray-200 shadow-sm">
-          <CardHeader className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-foreground">Sektioner</p>
-                <p className="text-xs text-muted-foreground">Vælg en sektion for at redigere indhold.</p>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {!shopDomain ? (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-semibold text-foreground">Fetch without saved connection</p>
+                <p className="text-xs text-muted-foreground">
+                  Use your store domain and API access token to fetch policies once. (Does not save the credentials.)
+                </p>
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Store domain</p>
+                    <input
+                      type="text"
+                      value={manualDomain}
+                      onChange={(e) => setManualDomain(e.target.value)}
+                      placeholder="mystore.example.com"
+                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      disabled={loading || importing}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">API Access Token</p>
+                    <input
+                      type="password"
+                      value={manualToken}
+                      onChange={(e) => setManualToken(e.target.value)}
+                      placeholder="access_token"
+                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      disabled={loading || importing}
+                    />
+                  </div>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Tip: Generate an Admin API token from your platform.
+                </p>
               </div>
+            ) : null}
+
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
               <TabsList className="bg-muted/60">
                 {fieldConfig.map((field) => (
-                  <TabsTrigger key={field.key} value={field.key}>
-                    <field.icon className="mr-2 h-4 w-4" />
+                  <TabsTrigger key={field.key} value={field.key} className="gap-2">
+                    <field.icon className="h-4 w-4" />
                     {field.label}
                   </TabsTrigger>
                 ))}
               </TabsList>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                {active?.icon ? <active.icon className="h-4 w-4 text-muted-foreground" /> : null}
-                <span>{active?.label}</span>
+
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+                  {active?.icon ? <active.icon className="h-4 w-4 text-muted-foreground" /> : null}
+                  <span>{active?.label}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">{active?.description}</p>
               </div>
-              <p className="text-xs text-muted-foreground">{active?.description}</p>
-            </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            {fieldConfig.map((field) => (
-              <TabsContent key={field.key} value={field.key} className="mt-0">
-                <RichTextarea
-                  value={values[field.key]}
-                  onValueChange={(next) => updateField(field.key, next)}
-                  placeholder={
-                    field.key === "internal_tone"
-                      ? "Skriv din interne tone, ekstra regler eller midlertidige kampagner."
-                      : "Indsæt politiktekst..."
-                  }
-                  disabled={loading}
-                  variant={field.key === "internal_tone" ? "internal" : "default"}
-                />
-              </TabsContent>
-            ))}
+
+              {fieldConfig.map((field) => (
+                <TabsContent key={field.key} value={field.key} className="mt-0">
+                  <RichTextarea
+                    value={values[field.key]}
+                    onValueChange={(next) => updateField(field.key, next)}
+                    placeholder={
+                      field.key === "internal_tone"
+                        ? "Document tone, extra rules, or temporary campaigns for the agent."
+                        : "Write or paste your policy content..."
+                    }
+                    disabled={loading}
+                    variant={field.key === "internal_tone" ? "internal" : "default"}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
           </CardContent>
         </Card>
-      </Tabs>
+      </div>
     </div>
   );
 }
@@ -355,7 +369,7 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
     const start = el.selectionStart ?? 0;
     const end = el.selectionEnd ?? start;
     const current = el.value ?? "";
-    const selected = start !== end ? current.slice(start, end) : "tekst";
+    const selected = start !== end ? current.slice(start, end) : "text";
     const nextValue = current.slice(0, start) + prefix + selected + suffix + current.slice(end);
     onValueChange(nextValue);
     const cursorPos = start + prefix.length + selected.length;
@@ -365,7 +379,28 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
     });
   };
 
-  const applyBullet = () => {
+  const applyHeading = (level) => {
+    const el = ref.current;
+    if (!el) return;
+    const start = el.selectionStart ?? 0;
+    const current = el.value ?? "";
+    const lineStart = current.lastIndexOf("\n", start - 1) + 1;
+    const lineEnd = current.indexOf("\n", start);
+    const segmentEnd = lineEnd === -1 ? current.length : lineEnd;
+    const line = current.slice(lineStart, segmentEnd);
+    const clean = line.replace(/^#{1,6}\s*/, "").trimStart();
+    const prefix = `${"#".repeat(level)} `;
+    const nextLine = `${prefix}${clean}`;
+    const nextValue = current.slice(0, lineStart) + nextLine + current.slice(segmentEnd);
+    onValueChange(nextValue);
+    const cursorPos = lineStart + nextLine.length;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursorPos, cursorPos);
+    });
+  };
+
+  const applyList = (mode = "bullet") => {
     const el = ref.current;
     if (!el) return;
     const start = el.selectionStart ?? 0;
@@ -375,7 +410,11 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
     const lineEnd = current.indexOf("\n", end);
     const segmentEnd = lineEnd === -1 ? current.length : lineEnd;
     const segment = current.slice(lineStart, segmentEnd);
-    const lines = segment.split("\n").map((line) => (line.trim().length ? `- ${line.replace(/^-\\s*/, "")}` : "- "));
+    const lines = segment.split("\n").map((line, idx) => {
+      if (!line.trim().length) return mode === "ordered" ? `${idx + 1}. ` : "- ";
+      const cleaned = line.replace(/^(-|\d+\.)\s*/, "");
+      return mode === "ordered" ? `${idx + 1}. ${cleaned}` : `- ${cleaned}`;
+    });
     const nextSegment = lines.join("\n");
     const nextValue = current.slice(0, lineStart) + nextSegment + current.slice(segmentEnd);
     onValueChange(nextValue);
@@ -387,7 +426,7 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
   };
 
   const baseClass =
-    "min-h-[220px] w-full resize-y rounded-xl px-4 py-3 text-sm shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2";
+    "min-h-[600px] w-full resize-y rounded-xl border border-gray-200 px-6 py-6 text-base leading-relaxed text-gray-800 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0";
   const variantClass =
     variant === "internal"
       ? "border border-blue-200 bg-blue-50"
@@ -395,10 +434,15 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1.5">
-        <ToolbarButton onClick={() => applyWrap("**", "**")} icon={Bold} label="Fed" />
-        <ToolbarButton onClick={() => applyWrap("*", "*")} icon={Italic} label="Kursiv" />
-        <ToolbarButton onClick={applyBullet} icon={List} label="Punktliste" />
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-2">
+        <ToolbarButton onClick={() => applyWrap("**", "**")} icon={Bold} label="Bold" />
+        <ToolbarButton onClick={() => applyWrap("*", "*")} icon={Italic} label="Italic" />
+        <ToolbarSeparator />
+        <ToolbarButton onClick={() => applyHeading(1)} icon={Heading1} label="Heading 1" />
+        <ToolbarButton onClick={() => applyHeading(2)} icon={Heading2} label="Heading 2" />
+        <ToolbarSeparator />
+        <ToolbarButton onClick={() => applyList("bullet")} icon={List} label="Bullet list" />
+        <ToolbarButton onClick={() => applyList("ordered")} icon={ListOrdered} label="Numbered list" />
       </div>
       <Textarea
         ref={ref}
@@ -419,11 +463,16 @@ function ToolbarButton({ onClick, icon: Icon, label }) {
       type="button"
       size="sm"
       variant="ghost"
-      className="h-8 gap-1 rounded-md border border-transparent px-2 text-xs font-medium text-foreground hover:border-gray-200"
+      aria-label={label}
+      className="h-9 w-9 rounded-md border border-transparent p-2 text-foreground hover:border-gray-200 hover:bg-gray-100"
       onClick={onClick}
     >
       <Icon className="h-4 w-4" />
-      {label}
+      <span className="sr-only">{label}</span>
     </Button>
   );
+}
+
+function ToolbarSeparator() {
+  return <span className="h-6 w-px bg-gray-200" aria-hidden="true" />;
 }

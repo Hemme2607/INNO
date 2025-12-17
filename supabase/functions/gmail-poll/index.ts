@@ -106,23 +106,32 @@ async function pollSingleUser(user: AutomationUser) {
     const state = await loadPollState(user.clerk_user_id);
     const candidates = await fetchCandidateMessages(gmailToken, state);
 
-    let processed = 0;
+    let handled = 0;
+    let draftsCreated = 0;
+    let skipped = 0;
     let maxInternalDate = state?.last_internal_date ?? 0;
     for (const item of candidates) {
-      if (processed >= MAX_MESSAGES_PER_USER) break;
-      await triggerDraft(user.clerk_user_id, item.id);
-      processed += 1;
+      if (handled >= MAX_MESSAGES_PER_USER) break;
+      const outcome = await triggerDraft(user.clerk_user_id, item.id);
+      handled += 1;
       const ts = Number(item.internalDate ?? "0");
       if (ts > maxInternalDate) maxInternalDate = ts;
+      if (outcome?.skipped) {
+        skipped += 1;
+      } else {
+        draftsCreated += 1;
+      }
     }
 
-    if (processed && maxInternalDate) {
+    if (handled && maxInternalDate) {
       await savePollState(user.clerk_user_id, candidates[candidates.length - 1]?.id ?? null, maxInternalDate);
     }
 
     emitDebugLog("gmail-poll", user.clerk_user_id, {
       candidates: candidates.length,
-      drafts: processed,
+      drafts: draftsCreated,
+      skipped,
+      handled,
       maxInternalDate,
     });
 
@@ -130,7 +139,9 @@ async function pollSingleUser(user: AutomationUser) {
       clerkUserId: user.clerk_user_id,
       supabaseUserId: user.user_id,
       candidates: candidates.length,
-      draftsCreated: processed,
+      draftsCreated,
+      skipped,
+      processed: handled,
     };
   } catch (err: any) {
     console.warn("gmail-poll user failed", user.clerk_user_id, err?.message || err);
