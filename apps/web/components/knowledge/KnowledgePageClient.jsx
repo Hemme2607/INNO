@@ -142,7 +142,7 @@ export function KnowledgePageClient() {
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const message = typeof payload?.error === "string" ? payload.error : "Could not import from the store.";
+        const message = typeof payload?.error === "string" ? payload.error : "Could not import from Shopify.";
         throw new Error(message);
       }
 
@@ -156,10 +156,12 @@ export function KnowledgePageClient() {
         policy_terms: payload?.terms ?? prev.policy_terms,
       }));
       if (policyCount === 0) {
-        toast.info("No policies found. Check that they are filled out and the token has permissions.");
+        toast.info("No policies found in Shopify. Check that they are filled out and the token has read_legal_policies.");
       } else {
         toast.success(
-          `Policies imported (${policyCount} found${policyTypes.length ? `: ${policyTypes.join(", ")}` : ""}).`
+          `Policies imported from Shopify (${policyCount} found${
+            policyTypes.length ? `: ${policyTypes.join(", ")}` : ""
+          }).`
         );
       }
     } catch (error) {
@@ -176,7 +178,7 @@ export function KnowledgePageClient() {
       return;
     }
     if (!shopId) {
-      toast.error("No store connection found. Connect your store first.");
+      toast.error("No Shopify store found. Connect your store first.");
       return;
     }
 
@@ -217,7 +219,7 @@ export function KnowledgePageClient() {
           <p className="text-sm uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
           <h1 className="text-3xl font-semibold text-foreground">Knowledge Base</h1>
           <p className="text-sm text-muted-foreground">
-            Sync your store policies, edit them, and add internal rules. The agent uses them directly in replies.
+            Sync your policies, edit them, and add internal rules. The agent uses them directly in replies.
           </p>
         </div>
         <Button
@@ -254,7 +256,7 @@ export function KnowledgePageClient() {
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  No store connection found. Enter a domain and access token to fetch once, or connect via Integrations.
+                  No Shopify store found. Enter a domain and access token to fetch once, or connect via Integrations.
                 </p>
               )}
             </div>
@@ -273,13 +275,10 @@ export function KnowledgePageClient() {
               ) : (
                 <>
                   <DownloadCloud className="h-4 w-4" />
-                  {`Import from ${platformLabel}`}
+                  Update from Store
                 </>
               )}
             </Button>
-            <p className="text-xs text-muted-foreground lg:text-right">
-              Use this if you updated policies in your store platform.
-            </p>
 
           </CardHeader>
           <CardContent className="space-y-5">
@@ -287,34 +286,37 @@ export function KnowledgePageClient() {
               <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm font-semibold text-foreground">Fetch without saved connection</p>
                 <p className="text-xs text-muted-foreground">
-                  Use your store domain and API access token to fetch policies once. (Does not save the credentials.)
+                  Use your Shopify domain and Admin API access token to fetch policies once. (Does not save the
+                  credentials.)
                 </p>
                 <div className="mt-3 grid gap-3 lg:grid-cols-2">
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Store domain</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shopify domain</p>
                     <input
                       type="text"
                       value={manualDomain}
                       onChange={(e) => setManualDomain(e.target.value)}
-                      placeholder="mystore.example.com"
-                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      placeholder="myshop.myshopify.com"
+                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-500/30"
                       disabled={loading || importing}
                     />
                   </div>
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">API Access Token</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Admin API Access Token
+                    </p>
                     <input
                       type="password"
                       value={manualToken}
                       onChange={(e) => setManualToken(e.target.value)}
-                      placeholder="access_token"
-                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                      placeholder="shpat_xxx"
+                      className="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-500/30"
                       disabled={loading || importing}
                     />
                   </div>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Tip: Generate an Admin API token from your platform.
+                  Tip: Find the token under Shopify Admin &gt; Apps &gt; Develop apps &gt; Admin API access token.
                 </p>
               </div>
             ) : null}
@@ -426,7 +428,7 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
   };
 
   const baseClass =
-    "min-h-[600px] w-full resize-y rounded-xl border border-gray-200 px-6 py-6 text-base leading-relaxed text-gray-800 shadow-inner focus-visible:ring-0 focus-visible:ring-offset-0";
+    "min-h-[600px] lg:h-[65vh] w-full resize-y rounded-xl px-6 py-6 text-base leading-7 text-gray-800 shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2";
   const variantClass =
     variant === "internal"
       ? "border border-blue-200 bg-blue-50"

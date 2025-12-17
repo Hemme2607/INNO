@@ -39,12 +39,7 @@ export default function AuthScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={GlobalStyles.authWrapper}>
-            <View style={GlobalStyles.cardHeader}>
-              <Text style={GlobalStyles.authBrandTitle}>Sona.ai</Text>
-              <Text style={GlobalStyles.authBrandSubtitle}>
-                Optimer kundeservice med AI-klargjorte svar i din indbakke
-              </Text>
-            </View>
+            
 
             <View style={GlobalStyles.card}>
               {isLogin ? <Login /> : <Signup />}
