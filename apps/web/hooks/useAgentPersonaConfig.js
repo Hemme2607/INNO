@@ -104,12 +104,12 @@ export function useAgentPersonaConfig(options = {}) {
           return candidate;
         }
       } catch (tokenError) {
-        console.warn("useAgentPersonaConfig(web): clerk token mangler supabase uuid", tokenError);
+        console.warn("useAgentPersonaConfig(web): clerk token missing supabase uuid", tokenError);
       }
     }
 
     if (!supabase || !user?.id) {
-      throw new Error("Supabase bruger-id er ikke klar endnu.");
+      throw new Error("Supabase user ID is not ready yet.");
     }
 
     const { data, error: profileError } = await supabase
@@ -126,7 +126,7 @@ export function useAgentPersonaConfig(options = {}) {
     if (isValidUuid(candidate)) {
       return candidate;
     }
-    throw new Error("Supabase bruger-id er ikke klar endnu.");
+    throw new Error("Supabase user ID is not ready yet.");
   }, [providedUserId, user?.publicMetadata?.supabase_uuid, getToken, supabase, user?.id]);
 
   const loadPersona = useCallback(async () => {
@@ -149,7 +149,7 @@ export function useAgentPersonaConfig(options = {}) {
       setPersona(toPersona(data));
       return data;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error("Kunne ikke hente persona."));
+      setError(err instanceof Error ? err : new Error("Could not load persona."));
       throw err;
     } finally {
       setLoading(false);
@@ -163,7 +163,7 @@ export function useAgentPersonaConfig(options = {}) {
       try {
         const userId = await ensureUserId().catch(() => null);
         if (!userId) {
-          throw new Error("Supabase bruger-id er ikke klar endnu.");
+          throw new Error("Supabase user ID is not ready yet.");
         }
         const payload = {
           user_id: userId,
@@ -182,7 +182,7 @@ export function useAgentPersonaConfig(options = {}) {
         setPersona(toPersona(data));
         return data;
       } catch (err) {
-        setError(err instanceof Error ? err : new Error("Kunne ikke gemme persona."));
+        setError(err instanceof Error ? err : new Error("Could not save persona."));
         throw err;
       } finally {
         setSaving(false);
@@ -211,7 +211,7 @@ export function useAgentPersonaConfig(options = {}) {
         const payload = {
           signature: signatureInput.trim().length
             ? signatureInput.trim()
-            : "Venlig hilsen\nDin agent",
+            : "Best regards\nYour agent",
           scenario: scenarioInput,
           instructions: instructionsInput,
         };
@@ -226,23 +226,23 @@ export function useAgentPersonaConfig(options = {}) {
           const errMessage =
             typeof body?.error === "string"
               ? body.error
-              : `Persona test fejlede (${response.status}).`;
+              : `Persona test failed (${response.status}).`;
           throw new Error(errMessage);
         }
 
         const reply =
           typeof body?.reply === "string" && body.reply.trim().length
             ? body.reply.trim()
-            : "Testen returnerede intet svar.";
+            : "The test returned no response.";
         setTestState({ loading: false, error: null, result: reply });
         return reply;
       } catch (err) {
         const normalized =
           err instanceof Error
             ? err.message === "Failed to fetch"
-              ? new Error("Kunne ikke kontakte persona testen. Prøv igen om lidt.")
+              ? new Error("Could not reach the persona test. Try again in a moment.")
               : err
-            : new Error("Ukendt fejl under testen.");
+            : new Error("Unknown error during the test.");
         setTestState({ loading: false, error: normalized, result: "" });
         throw normalized;
       }

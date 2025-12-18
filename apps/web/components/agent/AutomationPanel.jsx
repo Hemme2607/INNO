@@ -12,26 +12,26 @@ const toggles = [
   {
     key: "orderUpdates",
     icon: Package,
-    label: "Ordreopdateringer",
-    description: "Agenten må slå tracking op og give statusopdateringer til kunder.",
+    label: "Order updates",
+    description: "Allow the agent to look up tracking and share status updates with customers.",
   },
   {
     key: "cancelOrders",
     icon: XCircle,
-    label: "Tillad annullering",
-    description: "Agenten må annullere ordrer hvis de ikke er afsendt endnu.",
+    label: "Allow cancellations",
+    description: "Allow the agent to cancel orders if they have not shipped yet.",
   },
   {
     key: "automaticRefunds",
     icon: DollarSign,
-    label: "Automatisk Refusion",
-    description: "Tillad agenten at gennemføre mindre refunderinger automatisk.",
+    label: "Automatic refunds",
+    description: "Allow the agent to process small refunds automatically.",
   },
   {
     key: "historicInboxAccess",
     icon: Archive,
-    label: "Historisk Indbakke",
-    description: "Giv adgang til gamle mails så agenten kan referere til tidligere samtaler.",
+    label: "Historical inbox",
+    description: "Allow access to old emails so the agent can reference past conversations.",
   },
 ];
 
@@ -117,7 +117,7 @@ export function AutomationPanel({ children = null }) {
           <div>
             <p className="text-sm font-semibold text-foreground">Auto-draft agent</p>
             <p className="text-sm text-muted-foreground">
-              Slå AI-kladder til/fra. Når den er aktiv, danner agenten automatisk kladder i din indbakke.
+              Toggle AI drafts on/off. When enabled, the agent automatically creates drafts in your inbox.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -128,7 +128,7 @@ export function AutomationPanel({ children = null }) {
                   : "bg-slate-100 text-slate-600"
               }`}
             >
-              {local?.autoDraftEnabled ? "Aktiv" : "Deaktiveret"}
+              {local?.autoDraftEnabled ? "Active" : "Inactive"}
             </span>
             <Button
               type="button"
@@ -137,7 +137,7 @@ export function AutomationPanel({ children = null }) {
               disabled={loading || saving}
               variant={local?.autoDraftEnabled ? "outline" : "default"}
             >
-              {local?.autoDraftEnabled ? "Deaktiver" : "Aktivér"}
+              {local?.autoDraftEnabled ? "Disable" : "Enable"}
             </Button>
           </div>
         </CardContent>
@@ -185,7 +185,7 @@ export function AutomationPanel({ children = null }) {
                             htmlFor="automation-refund-max"
                             className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
                           >
-                            Maks. beløb (DKK)
+                            Maximum amount (DKK)
                           </label>
                           <input
                             id="automation-refund-max"
@@ -207,7 +207,7 @@ export function AutomationPanel({ children = null }) {
           {error && (
             <div className="px-5 py-4">
               <p className="text-sm text-destructive">
-                {error.message ?? "Kunne ikke gemme automatisering."}
+                {error.message ?? "Could not save automation settings."}
               </p>
             </div>
           )}

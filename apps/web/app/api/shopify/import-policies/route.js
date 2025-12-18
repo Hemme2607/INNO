@@ -52,7 +52,7 @@ async function resolveSupabaseUserId(serviceClient, clerkUserId) {
     .select("user_id")
     .eq("clerk_user_id", clerkUserId)
     .maybeSingle();
-  if (error) throw new Error(`Kunne ikke slå Supabase bruger op: ${error.message}`);
+  if (error) throw new Error(`Could not look up Supabase user: ${error.message}`);
   return data?.user_id ?? null;
 }
 
@@ -64,7 +64,7 @@ async function fetchShopCredentials(serviceClient, supabaseUserId) {
       p_secret: SHOPIFY_TOKEN_KEY,
     })
     .maybeSingle();
-  if (error) throw new Error(`Kunne ikke hente Shopify credentials: ${error.message}`);
+  if (error) throw new Error(`Could not fetch Shopify credentials: ${error.message}`);
   return data;
 }
 
@@ -130,14 +130,14 @@ async function getShopRecord({ token }) {
       payload?.message ||
       payload?.error ||
       payload?.hint ||
-      `Kunne ikke hente butik (status ${response.status}).`;
+      `Could not fetch store (status ${response.status}).`;
     return { data: null, error: `${message}` };
   }
 
   const list = await response.json().catch(() => []);
   const record = Array.isArray(list) && list.length > 0 ? list[0] : null;
   if (!record) {
-    return { data: null, error: "Ingen Shopify butik fundet. Forbind i Integrations først." };
+    return { data: null, error: "No Shopify store found. Connect in Integrations first." };
   }
   return { data: record, error: null };
 }
@@ -179,7 +179,7 @@ export async function POST(request) {
   const { userId, getToken } = auth();
   if (!userId) {
     return NextResponse.json(
-      { error: "Du skal være logget ind for at hente politikker." },
+      { error: "You must be signed in to fetch policies." },
       { status: 401 }
     );
   }
@@ -245,9 +245,9 @@ export async function POST(request) {
   if (shopError && !bodyDomain && !bodyToken) {
     const message =
       shopError === "auth_missing"
-        ? "Ingen adgang til Supabase token. Prøv at logge ind igen."
+        ? "No access to Supabase token. Please sign in again."
         : shopError === "supabase_config_missing"
-        ? "Supabase konfiguration mangler på serveren."
+        ? "Supabase configuration is missing on the server."
         : shopError;
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -279,7 +279,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         error:
-          "Manglende Shopify domæne eller adgangsnøgle. Forbind Shopify først, eller send shop_domain og access_token i body.",
+          "Missing Shopify domain or access token. Connect Shopify first, or send shop_domain and access_token in the body.",
         debug: {
           domainSource,
           tokenSource,
@@ -307,7 +307,7 @@ export async function POST(request) {
     console.error("Shopify fetch failed:", error);
     return NextResponse.json(
       {
-        error: `Kunne ikke kontakte Shopify for ${domain}. Tjek domæne/adgangsnøgle.`,
+        error: `Could not contact Shopify for ${domain}. Check domain/access token.`,
       },
       { status: 502 }
     );
@@ -323,10 +323,10 @@ export async function POST(request) {
       payload?.error ||
       payload?.error_description ||
       response.statusText ||
-      `Shopify returnerede status ${response.status}.`;
+      `Shopify returned status ${response.status}.`;
     const scopeHint =
       response.status === 401 || response.status === 403
-        ? " Tjek at Admin API access token er korrekt og har scope `read_legal_policies`."
+        ? " Check that the Admin API access token is correct and has scope `read_legal_policies`."
         : "";
     const message = `${baseMessage}${scopeHint}`;
     return NextResponse.json({ error: message }, { status: response.status });

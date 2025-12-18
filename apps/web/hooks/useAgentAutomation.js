@@ -99,7 +99,7 @@ export function useAgentAutomation(options = {}) {
     if (tokenId) return tokenId;
 
     if (!supabase || !user?.id) {
-      throw new Error("Supabase bruger-id er ikke klar endnu.");
+      throw new Error("Supabase user ID is not ready yet.");
     }
 
     const { data, error: profileError } = await supabase
@@ -113,7 +113,7 @@ export function useAgentAutomation(options = {}) {
       return data.user_id;
     }
 
-    throw new Error("Supabase bruger-id er ikke klar endnu.");
+    throw new Error("Supabase user ID is not ready yet.");
   }, [providedUserId, user?.publicMetadata?.supabase_uuid, resolveUserIdFromToken, supabase, user?.id]);
 
   const mapAutomation = useCallback((row) => {
@@ -147,7 +147,7 @@ export function useAgentAutomation(options = {}) {
       setSettings(mapped);
       return mapped;
     } catch (err) {
-      setError(err instanceof Error ? err : new Error("Kunne ikke hente automatisering."));
+      setError(err instanceof Error ? err : new Error("Could not load automation settings."));
       throw err;
     } finally {
       setLoading(false);
@@ -161,7 +161,7 @@ export function useAgentAutomation(options = {}) {
       try {
         const userId = await ensureUserId().catch(() => null);
         if (!isValidUuid(userId)) {
-          throw new Error("Supabase bruger-id er ikke klar endnu.");
+          throw new Error("Supabase user ID is not ready yet.");
         }
         const payload = {
           user_id: userId,
@@ -183,7 +183,7 @@ export function useAgentAutomation(options = {}) {
         return data;
       } catch (err) {
         setError(
-          err instanceof Error ? err : new Error("Kunne ikke gemme automatisering.")
+          err instanceof Error ? err : new Error("Could not save automation settings.")
         );
         throw err;
       } finally {

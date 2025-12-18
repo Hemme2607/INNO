@@ -53,8 +53,9 @@ export function FreshdeskConnectCard() {
         </div>
         <div className="space-y-1">
           <CardTitle>Freshdesk</CardTitle>
-          <CardDescription>  Lad agenten læse sager og oprette svarkladder direkte i freshdesk
-            system.</CardDescription>
+          <CardDescription>
+            Let the agent read tickets and create reply drafts directly in Freshdesk.
+          </CardDescription>
         </div>
       </CardHeader>
 
@@ -73,11 +74,11 @@ export function FreshdeskConnectCard() {
         {isConnected ? (
           <div className="flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-1 text-xs font-medium text-green-700">
             <CheckCircle2 className="h-3.5 w-3.5" />
-            Aktiv
+            Active
           </div>
         ) : (
           <span className="text-xs font-medium text-muted-foreground">
-            Ikke forbundet
+            Not connected
           </span>
         )}
 

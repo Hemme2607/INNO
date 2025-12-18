@@ -24,7 +24,7 @@ export function AutomationPageHeader() {
         className="bg-black text-white hover:bg-black/90"
       >
         <Save className="mr-2 h-4 w-4" />
-        {saving ? "Gemmer..." : "Gem ændringer"}
+        {saving ? "Saving..." : "Save Changes"}
       </Button>
     </header>
   );

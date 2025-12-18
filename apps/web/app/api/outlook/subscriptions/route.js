@@ -69,7 +69,7 @@ export async function POST(request) {
   const { userId, getToken } = auth();
   if (!userId) {
     return NextResponse.json(
-      { error: "Du skal være logget ind for at oprette overvågning." },
+      { error: "You must be signed in to create monitoring." },
       { status: 401 }
     );
   }
@@ -78,7 +78,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         error:
-          "OUTLOOK_WEBHOOK_HOST mangler. Sæt den til din offentlige base-URL (fx https://api.sona.ai).",
+          "OUTLOOK_WEBHOOK_HOST is missing. Set it to your public base URL (e.g. https://api.sona.ai).",
       },
       { status: 500 }
     );
@@ -90,7 +90,7 @@ export async function POST(request) {
     return NextResponse.json(
       {
         error:
-          "Kunne ikke hente Microsoft adgangstoken fra Clerk. Tjek at Microsoft login er aktiveret og scopes er godkendt.",
+          "Could not fetch Microsoft access token from Clerk. Check that Microsoft login is enabled and scopes are approved.",
       },
       { status: 401 }
     );
@@ -107,7 +107,7 @@ export async function POST(request) {
   } catch (error) {
     console.error("Create subscription failed:", error);
     return NextResponse.json(
-      { error: error?.message || "Kunne ikke oprette subscription." },
+      { error: error?.message || "Could not create subscription." },
       { status: 500 }
     );
   }
@@ -146,7 +146,7 @@ export async function POST(request) {
     }
   } catch (error) {
     supabaseError = error?.message;
-    console.warn("Gem Outlook subscription i Supabase fejlede:", error);
+    console.warn("Saving Outlook subscription in Supabase failed:", error);
   }
 
   return NextResponse.json(
@@ -163,7 +163,7 @@ export async function PATCH(request) {
   const { userId } = auth();
   if (!userId) {
     return NextResponse.json(
-      { error: "Du skal være logget ind for at forny overvågning." },
+      { error: "You must be signed in to renew monitoring." },
       { status: 401 }
     );
   }
@@ -172,7 +172,7 @@ export async function PATCH(request) {
   const subscriptionId = body?.subscriptionId || body?.id;
   if (!subscriptionId) {
     return NextResponse.json(
-      { error: "subscriptionId mangler i body." },
+      { error: "subscriptionId is missing in the body." },
       { status: 400 }
     );
   }
@@ -180,7 +180,7 @@ export async function PATCH(request) {
   const accessToken = await getMicrosoftAccessToken(userId);
   if (!accessToken) {
     return NextResponse.json(
-      { error: "Kunne ikke hente Microsoft token." },
+      { error: "Could not fetch Microsoft token." },
       { status: 401 }
     );
   }
@@ -191,7 +191,7 @@ export async function PATCH(request) {
   } catch (error) {
     console.error("Renew subscription failed:", error);
     return NextResponse.json(
-      { error: error?.message || "Kunne ikke forny subscription." },
+      { error: error?.message || "Could not renew subscription." },
       { status: 500 }
     );
   }

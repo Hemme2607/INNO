@@ -81,7 +81,7 @@ export async function getMicrosoftAccessToken(userId) {
       typeof token?.token === "string" ? token.token : token?.access_token;
     return accessToken || null;
   } catch (error) {
-    console.warn("Kunne ikke hente Microsoft token fra Clerk:", error);
+    console.warn("Could not fetch Microsoft token from Clerk:", error);
     return null;
   }
 }
@@ -134,7 +134,7 @@ export async function draftReplyToMessage({ accessToken, messageId, bodyHtml }) 
     }
   );
   if (!draft?.id) {
-    throw new Error("Reply draft mangler id");
+    throw new Error("Reply draft missing id");
   }
   await graphRequest(`/me/messages/${draft.id}`, {
     method: "PATCH",
@@ -154,18 +154,18 @@ export function buildDraftFromMessage(message) {
   const fromName =
     message?.from?.emailAddress?.name ||
     message?.from?.emailAddress?.address ||
-    "deres mail";
-  const subject = message?.subject ? `Re: ${message.subject}` : "Svar";
+    "your email";
+  const subject = message?.subject ? `Re: ${message.subject}` : "Reply";
   const preview = message?.bodyPreview?.slice(0, 280) || "";
 
   return {
     subject,
     html: `
-      <p>Hej ${fromName},</p>
-      <p>Tak for din mail.</p>
-      <p>Opsummering: ${preview || "Ingen kort opsummering tilgængelig."}</p>
+      <p>Hi ${fromName},</p>
+      <p>Thanks for your email.</p>
+      <p>Summary: ${preview || "No short summary available."}</p>
       <p>---</p>
-      <p>Venlig hilsen<br/>Sona</p>
+      <p>Best regards<br/>Sona</p>
     `.trim(),
   };
 }

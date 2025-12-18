@@ -21,14 +21,14 @@ export async function DELETE() {
   const { userId, getToken } = auth();
   if (!userId) {
     return NextResponse.json(
-      { error: "Du skal være logget ind for at afbryde Freshdesk." },
+      { error: "You must be signed in to disconnect Freshdesk." },
       { status: 401 }
     );
   }
 
   if (!SUPABASE_BASE_URL || !SUPABASE_ANON_KEY) {
     return NextResponse.json(
-      { error: "Supabase konfiguration mangler." },
+      { error: "Supabase configuration is missing." },
       { status: 500 }
     );
   }
@@ -36,7 +36,7 @@ export async function DELETE() {
   const token = await getToken({ template: SUPABASE_TEMPLATE });
   if (!token) {
     return NextResponse.json(
-      { error: "Kunne ikke hente Clerk token til Supabase." },
+      { error: "Could not fetch Clerk token for Supabase." },
       { status: 401 }
     );
   }
@@ -62,7 +62,7 @@ export async function DELETE() {
         ? data.message
         : typeof data?.error === "string"
         ? data.error
-        : "Kunne ikke afbryde Freshdesk.";
+        : "Could not disconnect Freshdesk.";
     return NextResponse.json({ error: message }, { status: response.status });
   }
 

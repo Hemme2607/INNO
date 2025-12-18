@@ -36,7 +36,7 @@ const rightSatellites = [
   },
 ];
 
-// Viser et “orbit” af integrationer omkring Sona-kerne-logoet
+// Viser et "orbit" af integrationer omkring Sona-kerne-logoet
 export default function IntegrationsSection() {
   return (
     <section className="relative overflow-hidden bg-slate-950 py-24 lg:py-32">
@@ -47,13 +47,13 @@ export default function IntegrationsSection() {
 
       <div className="mx-auto flex max-w-5xl flex-col items-center gap-12 px-6">
         <header className="text-center space-y-3">
-          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Integrationer</p>
+          <p className="text-xs uppercase tracking-[0.18em] text-slate-400">Integrations</p>
           <h2 className="text-3xl font-semibold text-white sm:text-4xl">
-            Dine apps samlet i Sona
+            Your apps, unified in Sona
           </h2>
           <p className="max-w-2xl text-sm text-slate-300 sm:text-base">
-            Connect Shopify, mails og supportværktøjer til én AI-kerne. Alt synker automatisk og
-            kører i baggrunden.
+            Connect Shopify, email, and support tools to one AI core. Everything syncs automatically
+            in the background.
           </p>
         </header>
 
@@ -73,7 +73,7 @@ export default function IntegrationsSection() {
             <div className="absolute left-0 top-1/2 flex -translate-y-1/2 flex-col gap-12">
               {leftSatellites.map((sat) => (
                 <div key={sat.name} className="relative flex items-center gap-4">
-                  <span className="pointer-events-none h-[2px] w-24 bg-gradient-to-r from-white/5 via-white/20 to-white/5 blur-[1px]" />
+                  <span className="pointer-events-none h-px w-24 animate-pulse bg-gradient-to-r from-slate-700/20 via-slate-500/80 to-slate-700/20" />
                   <IntegrationCard {...sat} />
                 </div>
               ))}
@@ -84,7 +84,7 @@ export default function IntegrationsSection() {
               {rightSatellites.map((sat) => (
                 <div key={sat.name} className="relative flex items-center gap-4">
                   <IntegrationCard {...sat} />
-                  <span className="pointer-events-none h-[2px] w-24 bg-gradient-to-l from-white/5 via-white/20 to-white/5 blur-[1px]" />
+                  <span className="pointer-events-none h-px w-24 animate-pulse bg-gradient-to-l from-slate-700/20 via-slate-500/80 to-slate-700/20" />
                 </div>
               ))}
             </div>
@@ -99,7 +99,7 @@ export default function IntegrationsSection() {
 const IntegrationCard = ({ icon, name, sub, cardClass }) => {
   return (
     <div
-      className={`flex w-40 items-center gap-3 rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-3 shadow-md shadow-black/30 backdrop-blur ${cardClass}`}
+      className={`flex w-40 items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/80 px-4 py-3 shadow-md shadow-black/40 backdrop-blur ${cardClass}`}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5">
         {icon}

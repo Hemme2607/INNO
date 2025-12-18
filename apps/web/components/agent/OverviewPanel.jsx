@@ -27,38 +27,38 @@ export function AgentOverviewPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Agentstatus</CardTitle>
+        <CardTitle>Agent status</CardTitle>
         <CardDescription>
-          Hold øje med om agenten er aktiv, og hop hurtigt til konfigurationer.
+          Track whether the agent is active and jump quickly to configurations.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-sm text-muted-foreground">Aktuel status</p>
+          <p className="text-sm text-muted-foreground">Current status</p>
           <div className="mt-2 flex items-center gap-3">
             <Badge variant={enabled ? "default" : "secondary"}>
-              {enabled ? "Aktiveret" : "Deaktiveret"}
+              {enabled ? "Active" : "Inactive"}
             </Badge>
             <span className="text-sm text-muted-foreground">
               {enabled
-                ? "Agenten genererer AI-svar automatisk."
-                : "Slå agenten til for at køre automationer."}
+                ? "The agent automatically generates AI replies."
+                : "Enable the agent to run automations."}
             </span>
           </div>
         </div>
         <div className="flex gap-2">
           {/* Hurtige genvejsknapper til Agent undersider */}
           <Button variant="outline" onClick={() => router.push("/agent/persona")}>
-            Redigér persona
+            Edit persona
           </Button>
           <Button variant="outline" onClick={() => router.push("/agent/automation")}>
-            Justér automation
+            Adjust automation
           </Button>
         </div>
       </CardContent>
       <CardFooter className="justify-end">
         <Button onClick={toggleAgent} disabled={saving}>
-          {enabled ? "Deaktiver agent" : "Aktiver agent"}
+          {enabled ? "Disable agent" : "Enable agent"}
         </Button>
       </CardFooter>
     </Card>

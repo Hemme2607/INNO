@@ -34,15 +34,14 @@ export default function HeroSection() {
           <div className="space-y-7">
 
             <div className="space-y-4">
-              <h1 className="text-4xl font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
-                Gør din kundeservice{" "}
+              <h1 className="text-4xl font-semibold leading-tight tracking-tight text-white sm:text-5xl lg:text-6xl">
+                Make your customer support{" "}
                 <span className="bg-gradient-to-r from-sky-400 via-cyan-300 to-indigo-300 bg-clip-text text-transparent">
-                  selvkørende
-                </span>{" "}
-                med Sona
+                  self-running with Sona
+                </span>
               </h1>
               <p className="max-w-2xl text-lg text-slate-300">
-                Vi kobler AI med dine webshop-data, så du automatisk finder ordren, tjekker status og sender det rigtige svar – uden manuel håndtering.
+                We connect AI with your store data so you can automatically find orders, check status, and send the right response without manual work.
               </p>
             </div>
 
@@ -50,11 +49,11 @@ export default function HeroSection() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Input
                   type="email"
-                  placeholder="Din e-mail"
-                  className="h-11 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 sm:h-12"
+                  placeholder="Your email"
+                  className="h-11 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] focus-visible:border-cyan-400/50 focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:shadow-[0_0_0_1px_rgba(56,189,248,0.5),0_0_24px_rgba(56,189,248,0.25)] sm:h-12"
                 />
                 <Button className="h-11 gap-2 bg-sky-500 px-5 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400 sm:h-12">
-                  Få tidlig adgang
+                  Get early access
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>

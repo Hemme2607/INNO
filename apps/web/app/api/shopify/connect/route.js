@@ -104,17 +104,17 @@ async function fetchShopifyPolicies({ domain, accessToken }) {
 export async function POST(request) {
   const { userId } = auth();
   if (!userId) {
-    return NextResponse.json({ error: "Du skal være logget ind for at forbinde Shopify." }, { status: 401 });
+    return NextResponse.json({ error: "You must be signed in to connect Shopify." }, { status: 401 });
   }
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json(
-      { error: "SUPABASE_SERVICE_ROLE_KEY eller SUPABASE_URL mangler på serveren." },
+      { error: "SUPABASE_SERVICE_ROLE_KEY or SUPABASE_URL is missing on the server." },
       { status: 500 }
     );
   }
   if (!SHOPIFY_TOKEN_KEY) {
-    return NextResponse.json({ error: "SHOPIFY_TOKEN_KEY mangler på serveren." }, { status: 500 });
+    return NextResponse.json({ error: "SHOPIFY_TOKEN_KEY is missing on the server." }, { status: 500 });
   }
 
   const body = await request.json().catch(() => ({}));
@@ -123,10 +123,10 @@ export async function POST(request) {
 
   const domain = normalizeDomain(domainInput);
   if (!domain) {
-    return NextResponse.json({ error: "Angiv dit Shopify domæne." }, { status: 400 });
+    return NextResponse.json({ error: "Enter your Shopify domain." }, { status: 400 });
   }
   if (!accessToken) {
-    return NextResponse.json({ error: "Angiv dit Shopify Admin API access token." }, { status: 400 });
+    return NextResponse.json({ error: "Enter your Shopify Admin API access token." }, { status: 400 });
   }
 
   const supabase = createServiceClient();
@@ -135,7 +135,7 @@ export async function POST(request) {
     const supabaseUserId = await getSupabaseUserId(supabase, userId);
     if (!supabaseUserId) {
       return NextResponse.json(
-        { error: "Kunne ikke finde Supabase-profil for brugeren. Log ud/ind og prøv igen." },
+        { error: "Could not find a Supabase profile for the user. Log out/in and try again." },
         { status: 404 }
       );
     }
@@ -159,7 +159,7 @@ export async function POST(request) {
         shopPayload?.error ||
         shopPayload?.error_description ||
         shopResponse.statusText ||
-        `Shopify returnerede status ${shopResponse.status}.`;
+        `Shopify returned status ${shopResponse.status}.`;
       return NextResponse.json({ error: msg }, { status: 401 });
     }
 
@@ -170,7 +170,10 @@ export async function POST(request) {
       p_secret: SHOPIFY_TOKEN_KEY,
     });
     if (upsertError) {
-      return NextResponse.json({ error: upsertError.message || "Kunne ikke gemme Shopify forbindelse." }, { status: 500 });
+      return NextResponse.json(
+        { error: upsertError.message || "Could not save Shopify connection." },
+        { status: 500 }
+      );
     }
 
     // Hent politikker med det samme og gem dem i shops.
@@ -188,7 +191,7 @@ export async function POST(request) {
         .eq("owner_user_id", supabaseUserId)
         .eq("shop_domain", domain);
     } catch (policyError) {
-      console.warn("Kunne ikke hente/gemme Shopify policies ved connect:", policyError);
+      console.warn("Could not fetch/save Shopify policies on connect:", policyError);
     }
 
     return NextResponse.json(
@@ -196,7 +199,7 @@ export async function POST(request) {
       { status: 200 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Ukendt fejl ved forbindelse til Shopify.";
+    const message = error instanceof Error ? error.message : "Unknown error while connecting to Shopify.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

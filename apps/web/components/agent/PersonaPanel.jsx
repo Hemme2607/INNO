@@ -18,11 +18,11 @@ import {
 
 // Dummy toolbar data – ren kosmetik men hjælper med at beskrive editoren.
 const TOOLBAR_BUTTONS = [
-  { icon: Bold, label: "Fed" },
-  { icon: Italic, label: "Kursiv" },
-  { icon: Underline, label: "Understreg" },
-  { icon: List, label: "Liste" },
-  { icon: Quote, label: "Citat" },
+  { icon: Bold, label: "Bold" },
+  { icon: Italic, label: "Italic" },
+  { icon: Underline, label: "Underline" },
+  { icon: List, label: "List" },
+  { icon: Quote, label: "Quote" },
 ];
 
 const PersonaPanelContext = createContext(null);
@@ -103,24 +103,24 @@ export function PersonaPanel({ children }) {
         <div className="grid gap-8 lg:grid-cols-[minmax(0,2fr)_minmax(360px,1fr)]">
           <div className="space-y-5">
             <EditorField
-              label="Signatur"
-              description="Vises nederst i alle svar – understøtter linjeskift."
+              label="Signature"
+              description="Shown at the bottom of every reply - supports line breaks."
               value={form.signature}
               onChange={handleChange("signature")}
-              placeholder={"Venlig hilsen\nINNO Support"}
+              placeholder={"Best regards\nINNO Support"}
               rows={4}
             />
             <EditorField
-              label="Instruktioner"
-              description="Tone-of-voice, hvad må agenten love og hvordan skal der svares."
+              label="Instructions"
+              description="Tone of voice, what the agent can promise, and how to reply."
               value={form.instructions}
               onChange={handleChange("instructions")}
-              placeholder="Hold tonen varm og løsningsorienteret..."
+              placeholder="Keep the tone warm and solution-oriented..."
               rows={8}
             />
             {error && (
               <p className="text-sm text-destructive">
-                {error.message ?? "Kunne ikke hente/gemme persona."}
+                {error.message ?? "Could not load/save persona."}
               </p>
             )}
           </div>
@@ -129,7 +129,7 @@ export function PersonaPanel({ children }) {
               <div>
                 <p className="text-sm font-semibold text-foreground">Playground</p>
                 <p className="text-xs text-muted-foreground">
-                  Test scenarier uden at gemme indstillingerne.
+                  Test scenarios without saving settings.
                 </p>
               </div>
               <Badge variant="secondary" className="gap-1">
@@ -140,7 +140,7 @@ export function PersonaPanel({ children }) {
             <div className="flex flex-1 flex-col gap-5 px-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium text-foreground" htmlFor="scenario-test-input">
-                  Test et scenarie
+                  Test a scenario
                 </label>
                 <div className="relative">
                   <Textarea
@@ -149,14 +149,14 @@ export function PersonaPanel({ children }) {
                     onChange={(event) => setScenarioInput(event.target.value)}
                     rows={4}
                     className="min-h-[110px] resize-y border border-input bg-background px-3 py-3 text-sm shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2"
-                    placeholder="Hej! Jeg kan ikke finde ordre #1001 – kan du hjælpe?"
+                    placeholder="Hi! I can't find order #1001 - can you help?"
                   />
                   <button
                     type="button"
                     onClick={handleTest}
                     disabled={test?.loading || loading || !scenarioInput.trim()}
                     className="absolute bottom-3 right-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition hover:bg-blue-500 disabled:opacity-50"
-                    aria-label="Kør test"
+                    aria-label="Run test"
                   >
                     {test?.loading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -175,10 +175,10 @@ export function PersonaPanel({ children }) {
                   <div className="rounded-xl bg-white p-4 shadow-sm">
                     <div className="mb-4 rounded-lg border bg-slate-50 px-4 py-3 text-xs text-muted-foreground">
                       <p>
-                        <span className="font-semibold text-slate-800">Fra:</span> Kunde
+                        <span className="font-semibold text-slate-800">From:</span> Customer
                       </p>
                       <p>
-                        <span className="font-semibold text-slate-800">Emne:</span> Re: Ordre #1001
+                        <span className="font-semibold text-slate-800">Subject:</span> Re: Order #1001
                       </p>
                     </div>
                     <div className="min-h-[140px] text-sm leading-relaxed text-foreground">
@@ -193,8 +193,8 @@ export function PersonaPanel({ children }) {
                         <p className="whitespace-pre-wrap">{test.result}</p>
                       ) : (
                         <p className="text-muted-foreground">
-                          Skriv et scenarie for at se hvordan agenten reagerer med din nuværende
-                          konfiguration.
+                          Write a scenario to see how the agent responds with your current
+                          configuration.
                         </p>
                       )}
                     </div>

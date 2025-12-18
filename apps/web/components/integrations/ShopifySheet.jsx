@@ -61,12 +61,12 @@ export function ShopifySheet({
     const tokenValue = apiKey.trim();
 
     if (!cleanDomain) {
-      setError("Indtast dit Shopify domæne.");
+      setError("Enter your Shopify domain.");
       return;
     }
 
     if (!tokenValue) {
-      setError("Indtast din Admin API adgangsnøgle.");
+      setError("Enter your Admin API access token.");
       return;
     }
 
@@ -76,7 +76,7 @@ export function ShopifySheet({
     try {
       const clerkToken = await getToken();
       if (!clerkToken) {
-        throw new Error("Kunne ikke hente Clerk session token.");
+        throw new Error("Could not fetch Clerk session token.");
       }
 
       // Brug server-side proxy for at undgå CORS på functions
@@ -97,7 +97,7 @@ export function ShopifySheet({
         const message =
           typeof payload?.error === "string"
             ? payload.error
-            : "Kunne ikke forbinde Shopify.";
+            : "Could not connect Shopify.";
         throw new Error(message);
       }
 
@@ -109,7 +109,7 @@ export function ShopifySheet({
       const message =
         submitError instanceof Error
           ? submitError.message
-          : "Ukendt fejl ved forbindelse til Shopify.";
+          : "Unknown error while connecting to Shopify.";
       setError(message);
     } finally {
       setSubmitting(false);
@@ -119,12 +119,12 @@ export function ShopifySheet({
   // Frakobler Shopify ved at slette butikken fra shops tabellen.
   const handleDisconnect = async () => {
     if (!supabase) {
-      setError("Supabase klient er ikke klar endnu.");
+      setError("Supabase client is not ready yet.");
       return;
     }
 
     if (!existingDomain) {
-      setError("Der er ingen aktiv Shopify forbindelse at fjerne.");
+      setError("There is no active Shopify connection to remove.");
       return;
     }
 
@@ -149,7 +149,7 @@ export function ShopifySheet({
       const message =
         disconnectError instanceof Error
           ? disconnectError.message
-          : "Kunne ikke fjerne Shopify integrationen.";
+          : "Could not remove the Shopify integration.";
       setError(message);
     } finally {
       setDisconnecting(false);
@@ -159,13 +159,13 @@ export function ShopifySheet({
   // Primær CTA skifter text afhængigt af state og om der findes data i forvejen.
   const primaryLabel = submitting
     ? hasExistingConnection
-      ? "Opdaterer..."
-      : "Forbinder..."
-    : "Opdater";
+      ? "Updating..."
+      : "Connecting..."
+    : "Update";
 
   // Separat label til disconnect knappen for tydelig statusfeedback.
   const disconnectLabel = disconnecting
-    ? "Afbryder..."
+    ? "Disconnecting..."
     : "Disconnect integration";
 
   return (
@@ -174,26 +174,26 @@ export function ShopifySheet({
       <SheetContent side="right" className="sm:max-w-md overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>
-            {hasExistingConnection ? "Opdater Shopify" : "Connect Shopify"}
+            {hasExistingConnection ? "Update Shopify" : "Connect Shopify"}
           </SheetTitle>
           <SheetDescription>
-            Indsæt dit shop-domæne og Admin API nøgle for at forbinde Shopify.
+            Enter your store domain and Admin API access token to connect Shopify.
           </SheetDescription>
         </SheetHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="shopify-domain">Shopify domæne</Label>
+            <Label htmlFor="shopify-domain">Shopify domain</Label>
             <Input
               id="shopify-domain"
-              placeholder="din-butik.myshopify.com"
+              placeholder="your-store.myshopify.com"
               autoComplete="off"
               value={domain}
               onChange={(event) => setDomain(event.target.value)}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="shopify-api">Admin API key</Label>
+            <Label htmlFor="shopify-api">Admin API access token</Label>
             <Input
               id="shopify-api"
               type="password"
@@ -203,7 +203,7 @@ export function ShopifySheet({
               onChange={(event) => setApiKey(event.target.value)}
             />
             <p className="text-[10px] text-muted-foreground">
-              Find den under Apps &gt; Develop apps &gt; API credentials.
+              Find it under Apps &gt; Develop apps &gt; API credentials.
             </p>
           </div>
 

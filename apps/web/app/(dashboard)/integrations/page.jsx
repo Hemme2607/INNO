@@ -17,17 +17,17 @@ export default async function IntegrationsPage() {
           <p className="text-sm uppercase tracking-widest text-muted-foreground">
             Integrations
           </p>
-          <h1 className="text-3xl font-semibold">Forbind dine systemer</h1>
+          <h1 className="text-3xl font-semibold">Connect your systems</h1>
         </div>
       </header>
       <section className="space-y-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Webshop
+            Store
           </p>
-          <h2 className="text-2xl font-semibold">Hold styr på din butik</h2>
+          <h2 className="text-2xl font-semibold">Stay on top of your store</h2>
           <p className="text-sm text-muted-foreground">
-            Synkronisér ordrer, kunder og lager på tværs af dine kanaler.
+            Sync orders, customers, and inventory across your channels.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -40,9 +40,9 @@ export default async function IntegrationsPage() {
           <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Helpdesk
           </p>
-          <h2 className="text-2xl font-semibold">Saml kundedialogen</h2>
+          <h2 className="text-2xl font-semibold">Unify customer conversations</h2>
           <p className="text-sm text-muted-foreground">
-            Kobl dine helpdesk-systemer til Sona og få fuldt overblik over sager.
+            Connect your helpdesk tools to Sona and get a complete overview of cases.
           </p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

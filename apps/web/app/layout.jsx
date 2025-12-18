@@ -4,13 +4,13 @@ import Providers from "./providers";
 export const metadata = {
   title: "INNO Desk",
   description:
-    "Webudgave af INNO – få overblik over kundeservice og integrationer direkte i browseren.",
+    "INNO web app - get a clear view of customer service and integrations in your browser.",
 };
 
 // Wrapper layout der sætter globale providers og <html lang="da">
 export default function RootLayout({ children }) {
   return (
-    <html lang="da">
+    <html lang="en">
       <body>
         <Providers>{children}</Providers>
       </body>

@@ -14,9 +14,9 @@ export function PersonaPageHeader() {
         <p className="text-sm uppercase tracking-widest text-muted-foreground">
           Agent • Persona
         </p>
-        <h1 className="text-3xl font-semibold text-foreground">Redigér signatur og instruktioner</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Edit signature and instructions</h1>
         <p className="text-sm text-muted-foreground">
-          Justér AI&apos;ens identitet, og test svar uden at gemme først.
+          Refine the AI&apos;s identity and test responses before saving.
         </p>
       </div>
       <div className="flex items-center gap-2">
@@ -29,7 +29,7 @@ export function PersonaPageHeader() {
           className="text-muted-foreground hover:text-foreground"
         >
           <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-          Genindlæs
+          Refresh
         </Button>
         <Button
           type="button"
@@ -39,7 +39,7 @@ export function PersonaPageHeader() {
           className="bg-black text-white hover:bg-black/90"
         >
           <Save className="mr-1.5 h-3.5 w-3.5" />
-          {saving ? "Gemmer..." : "Gem"}
+          {saving ? "Saving..." : "Save"}
         </Button>
       </div>
     </header>

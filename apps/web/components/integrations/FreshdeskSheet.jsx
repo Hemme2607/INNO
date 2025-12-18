@@ -105,7 +105,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
   // Webhook URL er per Clerk bruger – bruges senere i Supabase config.
   const uniqueWebhookUrl = user
     ? `${BASE_WEBHOOK_URL}?userId=${user.id}`
-    : "Henter URL...";
+    : "Loading URL...";
 
   // Kopierer webhook URL til brugerens clipboard og viser en kort indikator.
   const handleCopy = async () => {
@@ -161,7 +161,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
       }
     } catch (tokenError) {
       console.warn(
-        "FreshdeskSheet: clerk token havde ikke supabase uuid",
+        "FreshdeskSheet: clerk token did not include supabase uuid",
         tokenError
       );
     }
@@ -177,7 +177,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
       .eq("clerk_user_id", user.id)
       .maybeSingle();
     if (profileError) {
-      console.warn("FreshdeskSheet: kunne ikke hente profile user id", profileError);
+      console.warn("FreshdeskSheet: could not fetch profile user id", profileError);
       return null;
     }
     return isValidUuid(data?.user_id) ? data.user_id : null;
@@ -207,7 +207,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
     if (!supabase || !user) return;
 
     if (!domain.trim() || !apiKey.trim()) {
-      setError("Udfyld både domæne og API-nøgle.");
+      setError("Enter both domain and API key.");
       return;
     }
 
@@ -232,12 +232,12 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
       try {
         supabaseUserId = await ensureUserId();
       } catch (uuidError) {
-        console.error("Kunne ikke hente Supabase user id:", uuidError);
+        console.error("Could not fetch Supabase user ID:", uuidError);
       }
     }
 
     if (!isValidUuid(supabaseUserId)) {
-      setError("Supabase bruger-id er ikke klar endnu.");
+      setError("Supabase user ID is not ready yet.");
       setSubmitting(false);
       return;
     }
@@ -260,7 +260,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
 
     if (upsertError) {
       console.error("Error saving integration:", upsertError);
-      setError("Kunne ikke gemme. Tjek console for detaljer.");
+      setError("Could not save. Check the console for details.");
     } else {
       onConnected?.();
       setOpen(false);
@@ -284,7 +284,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
         const message =
           typeof data?.error === "string"
             ? data.error
-            : "Kunne ikke afbryde integrationen.";
+            : "Could not disconnect the integration.";
         throw new Error(message);
       }
       setDomain("");
@@ -295,7 +295,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
       console.error("Error disconnecting Freshdesk:", disconnectError);
       setError(
         disconnectError?.message ||
-          "Kunne ikke afbryde integrationen. Prøv igen."
+          "Could not disconnect the integration. Try again."
       );
     } finally {
       setDisconnecting(false);
@@ -320,10 +320,10 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
       <SheetContent side="right" className="sm:max-w-md overflow-y-auto">
         <SheetHeader className="mb-6">
           <SheetTitle>
-            {hasExistingConfig ? "Opdater Freshdesk" : "Connect Freshdesk"}
+            {hasExistingConfig ? "Update Freshdesk" : "Connect Freshdesk"}
           </SheetTitle>
           <SheetDescription>
-            Indtast API-nøgle og opsæt webhooken for at aktivere agenten.
+            Enter an API key and set up the webhook to activate the agent.
           </SheetDescription>
         </SheetHeader>
         
@@ -331,12 +331,12 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
           
           {/* TRIN 1 */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">1. Adgang</h3>
+            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">1. Access</h3>
             <div className="space-y-2">
-              <Label htmlFor="fd-domain">Freshdesk domæne</Label>
+              <Label htmlFor="fd-domain">Freshdesk domain</Label>
               <Input
                 id="fd-domain"
-                placeholder="din-butik.freshdesk.com"
+                placeholder="your-store.freshdesk.com"
                 value={domain}
                 onChange={(e) => setDomain(e.target.value)}
               />
@@ -351,7 +351,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
                 onChange={(e) => setApiKey(e.target.value)}
               />
               <p className="text-[10px] text-muted-foreground">
-                Find den under Profile Settings i Freshdesk.
+                Find it under Profile Settings in Freshdesk.
               </p>
             </div>
           </div>
@@ -361,14 +361,14 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
           {/* TRIN 2 - Webhook */}
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">2. Opsætning</h3>
-               <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Vigtigt</span>
+               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">2. Setup</h3>
+               <span className="bg-blue-100 text-blue-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Important</span>
             </div>
             
             <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
                <div className="flex items-center gap-2 text-xs text-slate-700">
                   <AlertCircle className="w-3 h-3" />
-                  <span>Kopier denne URL til Freshdesk Automation:</span>
+                  <span>Copy this URL into Freshdesk Automation:</span>
                </div>
                <div className="flex gap-2">
                 <Input 
@@ -388,7 +388,7 @@ export function FreshdeskSheet({ children, onConnected, initialData = null }) {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Opret en ny automation i Freshdesk, der udløses ved oprettelse eller opdatering af sager, og brug denne URL som webhook destination.
+              Create a new automation in Freshdesk that triggers on ticket creation or updates, and use this URL as the webhook destination.
             </p>
           </div>
 

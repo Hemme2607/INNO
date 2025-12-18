@@ -64,9 +64,9 @@ export default function ProcessingDemo() {
         />
       ),
       title: "get_order",
-      subtext: "Shopify API · #3259",
+      subtext: "Shopify API - #3259",
       status: "Found",
-      statusIcon: "✅",
+      statusIcon: null,
       tone: "emerald",
     },
     {
@@ -75,7 +75,7 @@ export default function ProcessingDemo() {
       title: "check_tracking",
       subtext: "GLS",
       status: "In Transit",
-      statusIcon: "🚚",
+      statusIcon: null,
       tone: "sky",
     },
     {
@@ -116,7 +116,7 @@ export default function ProcessingDemo() {
           <div className="mb-2 flex items-center">
             <span className="font-semibold text-card-foreground">Lars</span>
           </div>
-          <p className="text-card-foreground">Hvor er min ordre #3259?</p>
+          <p className="text-card-foreground">Where is my order #3259?</p>
         </motion.div>
 
         <div className="flex-grow space-y-4">
@@ -142,7 +142,7 @@ export default function ProcessingDemo() {
             <div className="w-full rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200/80 backdrop-blur">
               <div className="flex items-center gap-2">
                 <div className="flex h-2 w-2 animate-ping rounded-full bg-sky-400" />
-                <span>Arbejder på næste trin...</span>
+                <span>Working on the next step...</span>
               </div>
             </div>
           )}
@@ -160,23 +160,23 @@ export default function ProcessingDemo() {
             >
               <div className="mb-3 flex items-center">
                 <Mail className="mr-3 h-5 w-5 text-muted-foreground" />
-                <span className="font-semibold text-card-foreground">Svar til Lars (Udkast)</span>
+                <span className="font-semibold text-card-foreground">Reply to Lars (Draft)</span>
               </div>
               <div className="space-y-2 text-sm text-card-foreground">
-                <p>Hej Lars,</p>
-                <p>Tak for din henvendelse!</p>
+                <p>Hi Lars,</p>
+                <p>Thanks for reaching out!</p>
                 <p>
-                  Jeg kan se, at din ordre #3259 er afsendt og er på vej med GLS. Du kan følge den
-                  via dette trackingnummer:{" "}
+                  I can see that your order #3259 has shipped and is on its way with GLS. You can
+                  track it with this tracking number:{" "}
                   <span className="font-mono text-blue-600">373461234567</span>.
                 </p>
-                <p>Den forventes leveret inden for 2-3 hverdage.</p>
+                <p>Expected delivery within 2-3 business days.</p>
                 <p>
-                  Mvh,
+                  Best regards,
                   <br />
                   Jonas
                   <br />
-                  Kundeservice
+                  Customer Support
                 </p>
               </div>
             </motion.div>

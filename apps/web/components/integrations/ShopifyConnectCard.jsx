@@ -38,7 +38,7 @@ export function ShopifyConnectCard() {
       .maybeSingle();
 
     if (error) {
-      console.warn("Kunne ikke hente Shopify connection:", error);
+      console.warn("Could not load Shopify connection:", error);
       setConnection(null);
     } else {
       setConnection(data);
@@ -55,10 +55,10 @@ export function ShopifyConnectCard() {
   const connectedDomain = connection?.shop_domain || connection?.store_domain;
   // Status badges skal vise loading/aktiv/inaktiv baseret på Supabase record.
   const statusLabel = loading
-    ? "Henter..."
+    ? "Loading..."
     : isConnected
-    ? "Aktiv"
-    : "Ikke tilsluttet";
+    ? "Active"
+    : "Not connected";
 
   const buttonLabel = isConnected ? "Manage" : "Connect Shopify Store";
 
@@ -77,7 +77,7 @@ export function ShopifyConnectCard() {
         <div className="space-y-1">
           <CardTitle>Shopify</CardTitle>
           <CardDescription>
-            Forbind din Shopify store og synkroniser ordrer og kunder med Sona.
+            Connect your Shopify store and sync orders and customers with Sona.
           </CardDescription>
         </div>
       </CardHeader>
@@ -93,7 +93,7 @@ export function ShopifyConnectCard() {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Forbind din Shopify store og synkroniser ordrer og kunder med Sona.
+            Connect your Shopify store and sync orders and customers with Sona.
           </p>
         )}
       </CardContent>

@@ -12,12 +12,12 @@ const SUPABASE_EDGE_BASE =
 export async function POST(request) {
   const { getToken, userId } = auth();
   if (!userId) {
-    return NextResponse.json({ error: "Du skal være logget ind." }, { status: 401 });
+    return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
   }
 
   if (!SUPABASE_EDGE_BASE) {
     return NextResponse.json(
-      { error: "Supabase URL mangler i miljøvariablerne." },
+      { error: "Supabase URL is missing from environment variables." },
       { status: 500 }
     );
   }
@@ -25,7 +25,7 @@ export async function POST(request) {
   const token = await getToken();
   if (!token) {
     return NextResponse.json(
-      { error: "Kunne ikke hente Clerk session token." },
+      { error: "Could not fetch Clerk session token." },
       { status: 401 }
     );
   }
@@ -51,7 +51,7 @@ export async function POST(request) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     const errorMessage =
-      typeof data?.error === "string" ? data.error : "Persona testen fejlede.";
+      typeof data?.error === "string" ? data.error : "Persona test failed.";
     return NextResponse.json({ error: errorMessage }, { status: response.status });
   }
 
