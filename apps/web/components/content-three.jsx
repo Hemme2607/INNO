@@ -1,7 +1,7 @@
-import Image from "next/image";
-import { Play } from "lucide-react";
-
 export default function ContentSection() {
+  // Use Loom embed URL (not share URL) to render the player.
+  const loomUrl = "https://www.loom.com/embed/1bb945c5a0544c839e1cf2af71845e76";
+
   return (
     <section className="relative py-24">
       <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
@@ -34,19 +34,14 @@ export default function ContentSection() {
                 </span>
               </div>
 
-              <div className="relative">
-                <Image
-                  src="/mist/tailark-3.png"
-                  alt="Sona product preview"
-                  width="2880"
-                  height="1842"
-                  className="size-full object-cover"
+              <div className="relative aspect-video">
+                <iframe
+                  src={loomUrl}
+                  title="Sona demo"
+                  allow="autoplay; fullscreen; encrypted-media"
+                  allowFullScreen
+                  className="absolute inset-0 h-full w-full border-0"
                 />
-                <div className="absolute inset-0 flex items-center justify-center bg-slate-950/40">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white shadow-lg shadow-cyan-500/20">
-                    <Play className="h-6 w-6" />
-                  </div>
-                </div>
               </div>
             </div>
           </div>

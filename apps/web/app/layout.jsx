@@ -2,7 +2,7 @@ import "./globals.css";
 import Providers from "./providers";
 
 export const metadata = {
-  title: "INNO Desk",
+  title: "Sona AI",
   description:
     "INNO web app - get a clear view of customer service and integrations in your browser.",
 };

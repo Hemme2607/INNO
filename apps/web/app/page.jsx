@@ -2,6 +2,7 @@ import HeroSection from "@/components/hero-section";
 import IntegrationsSection from "@/components/integrations-4";
 import FAQsTwo from "@/components/faqs-2";
 import ContentSection from "@/components/content-three";
+import TrustLogos from "@/components/trust-logos";
 import FeaturesGrid from "@/components/features-grid";
 import FinalCta from "@/components/final-cta";
 import FooterSection from "@/components/footer-four";
@@ -14,6 +15,7 @@ export default function HomePage() {
       <div className="relative z-10">
         {/* Hero + integrations section provides a fast intro to Sona */}
         <HeroSection />
+        <TrustLogos />
         <ContentSection />
         <FeaturesGrid />
         <IntegrationsSection />
