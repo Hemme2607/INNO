@@ -7,28 +7,28 @@ export default function FAQsTwo() {
     const faqItems = [
         {
             id: 'item-1',
-            question: 'How long does shipping take?',
-            answer: 'Standard shipping takes 3-5 business days, depending on your location. Express shipping options are available at checkout for 1-2 business day delivery.',
+            question: 'Does Sona send emails automatically?',
+            answer: 'No. Sona follows a "Human-in-the-loop" approach. It creates drafts in your inbox. You always review and hit send, ensuring customers never get a bad AI reply.',
         },
         {
             id: 'item-2',
-            question: 'What payment methods do you accept?',
-            answer: 'We accept all major credit cards (Visa, Mastercard, American Express), PayPal, Apple Pay, and Google Pay. For enterprise customers, we also offer invoicing options.',
+            question: 'How does the AI know about my products and policies?',
+            answer: 'Sona syncs securely with your webshop. It reads your product catalog and policy pages to understand your specific shipping times, return rules, and inventory.',
         },
         {
             id: 'item-3',
-            question: 'Can I change or cancel my order?',
-            answer: 'You can modify or cancel your order within 1 hour of placing it. After this window, please contact our customer support team who will assist you with any changes.',
+            question: 'Do I need technical skills to set it up?',
+            answer: 'Not at all. Setup takes less than 2 minutes. Just sign in, connect your webshop, and link your support email (Gmail or Outlook).',
         },
         {
             id: 'item-4',
-            question: 'Do you ship internationally?',
-            answer: "Yes, we ship to over 50 countries worldwide. International shipping typically takes 7-14 business days. Additional customs fees may apply depending on your country's import regulations.",
+            question: 'What languages does Sona support?',
+            answer: 'Sona is multilingual. It automatically detects the language of the customer\'s email (e.g., Danish, German, French) and drafts the reply in the matching language.',
         },
         {
             id: 'item-5',
-            question: 'What is your return policy?',
-            answer: 'We offer a 30-day return policy for most items. Products must be in original condition with tags attached. Some specialty items may have different return terms, which will be noted on the product page.',
+            question: 'Is my data safe?',
+            answer: 'Yes. We use enterprise-grade encryption. We do not use your customer data to train public AI models. Your data stays yours.',
         },
     ]
 

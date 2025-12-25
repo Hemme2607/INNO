@@ -9,12 +9,12 @@ const features = [
   {
     icon: Zap,
     title: "Instant Context",
-    description: "Order details and tracking info are fetched automatically. Stop searching in Shopify.",
+    description: "Order details and tracking info are fetched automatically.",
   },
   {
     icon: Plug,
     title: "2-Minute Setup",
-    description: "Connects with your existing Gmail or Outlook. No new helpdesk software to learn.",
+    description: "Connects with your existing mail. No new helpdesk software to learn.",
   },
 ];
 

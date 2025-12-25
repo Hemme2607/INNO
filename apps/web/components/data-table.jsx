@@ -35,12 +35,12 @@ import {
   ChevronRightIcon,
   ChevronsLeftIcon,
   ChevronsRightIcon,
+  Clock3Icon,
   ColumnsIcon,
   GripVerticalIcon,
-  LoaderIcon,
   MoreVerticalIcon,
   PlusIcon,
-  TrendingUpIcon,
+  SendIcon,
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { toast } from "sonner"
@@ -157,7 +157,7 @@ const columns = [
   },
   {
     accessorKey: "header",
-    header: "Header",
+    header: "Subject",
     cell: ({ row }) => {
       return <TableCellViewer item={row.original} />;
     },
@@ -165,7 +165,7 @@ const columns = [
   },
   {
     accessorKey: "type",
-    header: "Section Type",
+    header: "Channel",
     cell: ({ row }) => (
       <div className="w-32">
         <Badge variant="outline" className="px-1.5 text-muted-foreground">
@@ -177,22 +177,28 @@ const columns = [
   {
     accessorKey: "status",
     header: "Status",
-    cell: ({ row }) => (
-      <Badge
-        variant="outline"
-        className="flex gap-1 px-1.5 text-muted-foreground [&_svg]:size-3">
-        {row.original.status === "Done" ? (
-          <CheckCircle2Icon className="text-green-500 dark:text-green-400" />
-        ) : (
-          <LoaderIcon />
-        )}
-        {row.original.status}
-      </Badge>
-    ),
+    cell: ({ row }) => {
+      const status = row.original.status
+
+      return (
+        <Badge
+          variant="outline"
+          className="flex gap-1 px-1.5 text-muted-foreground [&_svg]:size-3">
+          {status === "Draft Ready" ? (
+            <CheckCircle2Icon className="text-emerald-500 dark:text-emerald-400" />
+          ) : status === "Sent" ? (
+            <SendIcon className="text-blue-500 dark:text-blue-400" />
+          ) : (
+            <Clock3Icon className="text-amber-500 dark:text-amber-400" />
+          )}
+          {status}
+        </Badge>
+      );
+    },
   },
   {
     accessorKey: "target",
-    header: () => <div className="w-full text-right">Target</div>,
+    header: () => <div className="w-full text-right">First Reply</div>,
     cell: ({ row }) => (
       <form
         onSubmit={(e) => {
@@ -204,7 +210,7 @@ const columns = [
           })
         }}>
         <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
+          First reply
         </Label>
         <Input
           className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background"
@@ -215,7 +221,7 @@ const columns = [
   },
   {
     accessorKey: "limit",
-    header: () => <div className="w-full text-right">Limit</div>,
+    header: () => <div className="w-full text-right">SLA Limit</div>,
     cell: ({ row }) => (
       <form
         onSubmit={(e) => {
@@ -227,7 +233,7 @@ const columns = [
           })
         }}>
         <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
+          SLA limit
         </Label>
         <Input
           className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background"
@@ -377,42 +383,40 @@ export function DataTable({
 
   return (
     <Tabs
-      defaultValue="outline"
+      defaultValue="all-activity"
       className="flex w-full flex-col justify-start gap-6">
       <div className="flex items-center justify-between px-4 lg:px-6">
         <Label htmlFor="view-selector" className="sr-only">
-          View
+          Activity view
         </Label>
-        <Select defaultValue="outline">
+        <Select defaultValue="all-activity">
           <SelectTrigger className="@4xl/main:hidden flex w-fit" id="view-selector">
             <SelectValue placeholder="Select a view" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="outline">Outline</SelectItem>
-            <SelectItem value="past-performance">Past Performance</SelectItem>
-            <SelectItem value="key-personnel">Key Personnel</SelectItem>
-            <SelectItem value="focus-documents">Focus Documents</SelectItem>
+            <SelectItem value="all-activity">All Activity</SelectItem>
+            <SelectItem value="drafts-ready">Drafts Ready</SelectItem>
+            <SelectItem value="sent">Sent</SelectItem>
           </SelectContent>
         </Select>
         <TabsList className="@4xl/main:flex hidden">
-          <TabsTrigger value="outline">Outline</TabsTrigger>
-          <TabsTrigger value="past-performance" className="gap-1">
-            Past Performance{" "}
+          <TabsTrigger value="all-activity">All Activity</TabsTrigger>
+          <TabsTrigger value="drafts-ready" className="gap-1">
+            Drafts Ready{" "}
             <Badge
               variant="secondary"
               className="flex h-5 w-5 items-center justify-center rounded-full bg-muted-foreground/30">
-              3
+              12
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="key-personnel" className="gap-1">
-            Key Personnel{" "}
+          <TabsTrigger value="sent" className="gap-1">
+            Sent{" "}
             <Badge
               variant="secondary"
               className="flex h-5 w-5 items-center justify-center rounded-full bg-muted-foreground/30">
-              2
+              21
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-2">
           <DropdownMenu>
@@ -452,7 +456,7 @@ export function DataTable({
         </div>
       </div>
       <TabsContent
-        value="outline"
+        value="all-activity"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
         <div className="overflow-hidden rounded-lg border">
           <DndContext
@@ -566,13 +570,10 @@ export function DataTable({
           </div>
         </div>
       </TabsContent>
-      <TabsContent value="past-performance" className="flex flex-col px-4 lg:px-6">
+      <TabsContent value="drafts-ready" className="flex flex-col px-4 lg:px-6">
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
       </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent value="focus-documents" className="flex flex-col px-4 lg:px-6">
+      <TabsContent value="sent" className="flex flex-col px-4 lg:px-6">
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
       </TabsContent>
     </Tabs>
@@ -580,22 +581,22 @@ export function DataTable({
 }
 
 const chartData = [
-  { month: "January", desktop: 186, mobile: 80 },
-  { month: "February", desktop: 305, mobile: 200 },
-  { month: "March", desktop: 237, mobile: 120 },
-  { month: "April", desktop: 73, mobile: 190 },
-  { month: "May", desktop: 209, mobile: 130 },
-  { month: "June", desktop: 214, mobile: 140 },
+  { month: "January", tickets: 186, drafts: 80 },
+  { month: "February", tickets: 305, drafts: 200 },
+  { month: "March", tickets: 237, drafts: 120 },
+  { month: "April", tickets: 73, drafts: 190 },
+  { month: "May", tickets: 209, drafts: 130 },
+  { month: "June", tickets: 214, drafts: 140 },
 ]
 
 const chartConfig = {
-  desktop: {
-    label: "Desktop",
+  tickets: {
+    label: "Tickets",
     color: "var(--primary)",
   },
 
-  mobile: {
-    label: "Mobile",
+  drafts: {
+    label: "Drafts",
     color: "var(--primary)",
   }
 }
@@ -616,7 +617,7 @@ function TableCellViewer({
         <SheetHeader className="gap-1">
           <SheetTitle>{item.header}</SheetTitle>
           <SheetDescription>
-            Showing total visitors for the last 6 months
+            Ticket activity for the last 6 months
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-4 text-sm">
@@ -640,31 +641,29 @@ function TableCellViewer({
                     hide />
                   <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
                   <Area
-                    dataKey="mobile"
+                    dataKey="drafts"
                     type="natural"
-                    fill="var(--color-mobile)"
+                    fill="var(--color-drafts)"
                     fillOpacity={0.6}
-                    stroke="var(--color-mobile)"
+                    stroke="var(--color-drafts)"
                     stackId="a" />
                   <Area
-                    dataKey="desktop"
+                    dataKey="tickets"
                     type="natural"
-                    fill="var(--color-desktop)"
+                    fill="var(--color-tickets)"
                     fillOpacity={0.4}
-                    stroke="var(--color-desktop)"
+                    stroke="var(--color-tickets)"
                     stackId="a" />
                 </AreaChart>
               </ChartContainer>
               <Separator />
               <div className="grid gap-2">
                 <div className="flex gap-2 font-medium leading-none">
-                  Trending up by 5.2% this month{" "}
-                  <TrendingUpIcon className="size-4" />
+                  Draft throughput up by 5.2% this month{" "}
+                  <SendIcon className="size-4" />
                 </div>
                 <div className="text-muted-foreground">
-                  Showing total visitors for the last 6 months. This is just
-                  some random text to test the layout. It spans multiple lines
-                  and should wrap around.
+                  Drafted replies and sent emails tracked side by side to keep SLAs on target.
                 </div>
               </div>
               <Separator />
@@ -672,33 +671,22 @@ function TableCellViewer({
           )}
           <form className="flex flex-col gap-4">
             <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
+              <Label htmlFor="header">Subject</Label>
               <Input id="header" defaultValue={item.header} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
+                <Label htmlFor="type">Channel</Label>
                 <Select defaultValue={item.type}>
                   <SelectTrigger id="type" className="w-full">
                     <SelectValue placeholder="Select a type" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Table of Contents">
-                      Table of Contents
-                    </SelectItem>
-                    <SelectItem value="Executive Summary">
-                      Executive Summary
-                    </SelectItem>
-                    <SelectItem value="Technical Approach">
-                      Technical Approach
-                    </SelectItem>
-                    <SelectItem value="Design">Design</SelectItem>
-                    <SelectItem value="Capabilities">Capabilities</SelectItem>
-                    <SelectItem value="Focus Documents">
-                      Focus Documents
-                    </SelectItem>
-                    <SelectItem value="Narrative">Narrative</SelectItem>
-                    <SelectItem value="Cover Page">Cover Page</SelectItem>
+                    <SelectItem value="Email">Email</SelectItem>
+                    <SelectItem value="Chat">Chat</SelectItem>
+                    <SelectItem value="Phone">Phone</SelectItem>
+                    <SelectItem value="Escalation">Escalation</SelectItem>
+                    <SelectItem value="Social">Social</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -709,20 +697,20 @@ function TableCellViewer({
                     <SelectValue placeholder="Select a status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Done">Done</SelectItem>
-                    <SelectItem value="In Progress">In Progress</SelectItem>
-                    <SelectItem value="Not Started">Not Started</SelectItem>
+                    <SelectItem value="Draft Ready">Draft Ready</SelectItem>
+                    <SelectItem value="Sent">Sent</SelectItem>
+                    <SelectItem value="Pending">Pending</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
+                <Label htmlFor="target">First Reply</Label>
                 <Input id="target" defaultValue={item.target} />
               </div>
               <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
+                <Label htmlFor="limit">SLA Limit</Label>
                 <Input id="limit" defaultValue={item.limit} />
               </div>
             </div>

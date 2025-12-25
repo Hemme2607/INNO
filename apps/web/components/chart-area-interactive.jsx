@@ -24,112 +24,108 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 const chartData = [
-  { date: "2024-04-01", desktop: 222, mobile: 150 },
-  { date: "2024-04-02", desktop: 97, mobile: 180 },
-  { date: "2024-04-03", desktop: 167, mobile: 120 },
-  { date: "2024-04-04", desktop: 242, mobile: 260 },
-  { date: "2024-04-05", desktop: 373, mobile: 290 },
-  { date: "2024-04-06", desktop: 301, mobile: 340 },
-  { date: "2024-04-07", desktop: 245, mobile: 180 },
-  { date: "2024-04-08", desktop: 409, mobile: 320 },
-  { date: "2024-04-09", desktop: 59, mobile: 110 },
-  { date: "2024-04-10", desktop: 261, mobile: 190 },
-  { date: "2024-04-11", desktop: 327, mobile: 350 },
-  { date: "2024-04-12", desktop: 292, mobile: 210 },
-  { date: "2024-04-13", desktop: 342, mobile: 380 },
-  { date: "2024-04-14", desktop: 137, mobile: 220 },
-  { date: "2024-04-15", desktop: 120, mobile: 170 },
-  { date: "2024-04-16", desktop: 138, mobile: 190 },
-  { date: "2024-04-17", desktop: 446, mobile: 360 },
-  { date: "2024-04-18", desktop: 364, mobile: 410 },
-  { date: "2024-04-19", desktop: 243, mobile: 180 },
-  { date: "2024-04-20", desktop: 89, mobile: 150 },
-  { date: "2024-04-21", desktop: 137, mobile: 200 },
-  { date: "2024-04-22", desktop: 224, mobile: 170 },
-  { date: "2024-04-23", desktop: 138, mobile: 230 },
-  { date: "2024-04-24", desktop: 387, mobile: 290 },
-  { date: "2024-04-25", desktop: 215, mobile: 250 },
-  { date: "2024-04-26", desktop: 75, mobile: 130 },
-  { date: "2024-04-27", desktop: 383, mobile: 420 },
-  { date: "2024-04-28", desktop: 122, mobile: 180 },
-  { date: "2024-04-29", desktop: 315, mobile: 240 },
-  { date: "2024-04-30", desktop: 454, mobile: 380 },
-  { date: "2024-05-01", desktop: 165, mobile: 220 },
-  { date: "2024-05-02", desktop: 293, mobile: 310 },
-  { date: "2024-05-03", desktop: 247, mobile: 190 },
-  { date: "2024-05-04", desktop: 385, mobile: 420 },
-  { date: "2024-05-05", desktop: 481, mobile: 390 },
-  { date: "2024-05-06", desktop: 498, mobile: 520 },
-  { date: "2024-05-07", desktop: 388, mobile: 300 },
-  { date: "2024-05-08", desktop: 149, mobile: 210 },
-  { date: "2024-05-09", desktop: 227, mobile: 180 },
-  { date: "2024-05-10", desktop: 293, mobile: 330 },
-  { date: "2024-05-11", desktop: 335, mobile: 270 },
-  { date: "2024-05-12", desktop: 197, mobile: 240 },
-  { date: "2024-05-13", desktop: 197, mobile: 160 },
-  { date: "2024-05-14", desktop: 448, mobile: 490 },
-  { date: "2024-05-15", desktop: 473, mobile: 380 },
-  { date: "2024-05-16", desktop: 338, mobile: 400 },
-  { date: "2024-05-17", desktop: 499, mobile: 420 },
-  { date: "2024-05-18", desktop: 315, mobile: 350 },
-  { date: "2024-05-19", desktop: 235, mobile: 180 },
-  { date: "2024-05-20", desktop: 177, mobile: 230 },
-  { date: "2024-05-21", desktop: 82, mobile: 140 },
-  { date: "2024-05-22", desktop: 81, mobile: 120 },
-  { date: "2024-05-23", desktop: 252, mobile: 290 },
-  { date: "2024-05-24", desktop: 294, mobile: 220 },
-  { date: "2024-05-25", desktop: 201, mobile: 250 },
-  { date: "2024-05-26", desktop: 213, mobile: 170 },
-  { date: "2024-05-27", desktop: 420, mobile: 460 },
-  { date: "2024-05-28", desktop: 233, mobile: 190 },
-  { date: "2024-05-29", desktop: 78, mobile: 130 },
-  { date: "2024-05-30", desktop: 340, mobile: 280 },
-  { date: "2024-05-31", desktop: 178, mobile: 230 },
-  { date: "2024-06-01", desktop: 178, mobile: 200 },
-  { date: "2024-06-02", desktop: 470, mobile: 410 },
-  { date: "2024-06-03", desktop: 103, mobile: 160 },
-  { date: "2024-06-04", desktop: 439, mobile: 380 },
-  { date: "2024-06-05", desktop: 88, mobile: 140 },
-  { date: "2024-06-06", desktop: 294, mobile: 250 },
-  { date: "2024-06-07", desktop: 323, mobile: 370 },
-  { date: "2024-06-08", desktop: 385, mobile: 320 },
-  { date: "2024-06-09", desktop: 438, mobile: 480 },
-  { date: "2024-06-10", desktop: 155, mobile: 200 },
-  { date: "2024-06-11", desktop: 92, mobile: 150 },
-  { date: "2024-06-12", desktop: 492, mobile: 420 },
-  { date: "2024-06-13", desktop: 81, mobile: 130 },
-  { date: "2024-06-14", desktop: 426, mobile: 380 },
-  { date: "2024-06-15", desktop: 307, mobile: 350 },
-  { date: "2024-06-16", desktop: 371, mobile: 310 },
-  { date: "2024-06-17", desktop: 475, mobile: 520 },
-  { date: "2024-06-18", desktop: 107, mobile: 170 },
-  { date: "2024-06-19", desktop: 341, mobile: 290 },
-  { date: "2024-06-20", desktop: 408, mobile: 450 },
-  { date: "2024-06-21", desktop: 169, mobile: 210 },
-  { date: "2024-06-22", desktop: 317, mobile: 270 },
-  { date: "2024-06-23", desktop: 480, mobile: 530 },
-  { date: "2024-06-24", desktop: 132, mobile: 180 },
-  { date: "2024-06-25", desktop: 141, mobile: 190 },
-  { date: "2024-06-26", desktop: 434, mobile: 380 },
-  { date: "2024-06-27", desktop: 448, mobile: 490 },
-  { date: "2024-06-28", desktop: 149, mobile: 200 },
-  { date: "2024-06-29", desktop: 103, mobile: 160 },
-  { date: "2024-06-30", desktop: 446, mobile: 400 },
+  { date: "2024-04-01", tickets: 222, drafts: 150 },
+  { date: "2024-04-02", tickets: 97, drafts: 180 },
+  { date: "2024-04-03", tickets: 167, drafts: 120 },
+  { date: "2024-04-04", tickets: 242, drafts: 260 },
+  { date: "2024-04-05", tickets: 373, drafts: 290 },
+  { date: "2024-04-06", tickets: 301, drafts: 340 },
+  { date: "2024-04-07", tickets: 245, drafts: 180 },
+  { date: "2024-04-08", tickets: 409, drafts: 320 },
+  { date: "2024-04-09", tickets: 59, drafts: 110 },
+  { date: "2024-04-10", tickets: 261, drafts: 190 },
+  { date: "2024-04-11", tickets: 327, drafts: 350 },
+  { date: "2024-04-12", tickets: 292, drafts: 210 },
+  { date: "2024-04-13", tickets: 342, drafts: 380 },
+  { date: "2024-04-14", tickets: 137, drafts: 220 },
+  { date: "2024-04-15", tickets: 120, drafts: 170 },
+  { date: "2024-04-16", tickets: 138, drafts: 190 },
+  { date: "2024-04-17", tickets: 446, drafts: 360 },
+  { date: "2024-04-18", tickets: 364, drafts: 410 },
+  { date: "2024-04-19", tickets: 243, drafts: 180 },
+  { date: "2024-04-20", tickets: 89, drafts: 150 },
+  { date: "2024-04-21", tickets: 137, drafts: 200 },
+  { date: "2024-04-22", tickets: 224, drafts: 170 },
+  { date: "2024-04-23", tickets: 138, drafts: 230 },
+  { date: "2024-04-24", tickets: 387, drafts: 290 },
+  { date: "2024-04-25", tickets: 215, drafts: 250 },
+  { date: "2024-04-26", tickets: 75, drafts: 130 },
+  { date: "2024-04-27", tickets: 383, drafts: 420 },
+  { date: "2024-04-28", tickets: 122, drafts: 180 },
+  { date: "2024-04-29", tickets: 315, drafts: 240 },
+  { date: "2024-04-30", tickets: 454, drafts: 380 },
+  { date: "2024-05-01", tickets: 165, drafts: 220 },
+  { date: "2024-05-02", tickets: 293, drafts: 310 },
+  { date: "2024-05-03", tickets: 247, drafts: 190 },
+  { date: "2024-05-04", tickets: 385, drafts: 420 },
+  { date: "2024-05-05", tickets: 481, drafts: 390 },
+  { date: "2024-05-06", tickets: 498, drafts: 520 },
+  { date: "2024-05-07", tickets: 388, drafts: 300 },
+  { date: "2024-05-08", tickets: 149, drafts: 210 },
+  { date: "2024-05-09", tickets: 227, drafts: 180 },
+  { date: "2024-05-10", tickets: 293, drafts: 330 },
+  { date: "2024-05-11", tickets: 335, drafts: 270 },
+  { date: "2024-05-12", tickets: 197, drafts: 240 },
+  { date: "2024-05-13", tickets: 197, drafts: 160 },
+  { date: "2024-05-14", tickets: 448, drafts: 490 },
+  { date: "2024-05-15", tickets: 473, drafts: 380 },
+  { date: "2024-05-16", tickets: 338, drafts: 400 },
+  { date: "2024-05-17", tickets: 499, drafts: 420 },
+  { date: "2024-05-18", tickets: 315, drafts: 350 },
+  { date: "2024-05-19", tickets: 235, drafts: 180 },
+  { date: "2024-05-20", tickets: 177, drafts: 230 },
+  { date: "2024-05-21", tickets: 82, drafts: 140 },
+  { date: "2024-05-22", tickets: 81, drafts: 120 },
+  { date: "2024-05-23", tickets: 252, drafts: 290 },
+  { date: "2024-05-24", tickets: 294, drafts: 220 },
+  { date: "2024-05-25", tickets: 201, drafts: 250 },
+  { date: "2024-05-26", tickets: 213, drafts: 170 },
+  { date: "2024-05-27", tickets: 420, drafts: 460 },
+  { date: "2024-05-28", tickets: 233, drafts: 190 },
+  { date: "2024-05-29", tickets: 78, drafts: 130 },
+  { date: "2024-05-30", tickets: 340, drafts: 280 },
+  { date: "2024-05-31", tickets: 178, drafts: 230 },
+  { date: "2024-06-01", tickets: 178, drafts: 200 },
+  { date: "2024-06-02", tickets: 470, drafts: 410 },
+  { date: "2024-06-03", tickets: 103, drafts: 160 },
+  { date: "2024-06-04", tickets: 439, drafts: 380 },
+  { date: "2024-06-05", tickets: 88, drafts: 140 },
+  { date: "2024-06-06", tickets: 294, drafts: 250 },
+  { date: "2024-06-07", tickets: 323, drafts: 370 },
+  { date: "2024-06-08", tickets: 385, drafts: 320 },
+  { date: "2024-06-09", tickets: 438, drafts: 480 },
+  { date: "2024-06-10", tickets: 155, drafts: 200 },
+  { date: "2024-06-11", tickets: 92, drafts: 150 },
+  { date: "2024-06-12", tickets: 492, drafts: 420 },
+  { date: "2024-06-13", tickets: 81, drafts: 130 },
+  { date: "2024-06-14", tickets: 426, drafts: 380 },
+  { date: "2024-06-15", tickets: 307, drafts: 350 },
+  { date: "2024-06-16", tickets: 371, drafts: 310 },
+  { date: "2024-06-17", tickets: 475, drafts: 520 },
+  { date: "2024-06-18", tickets: 107, drafts: 170 },
+  { date: "2024-06-19", tickets: 341, drafts: 290 },
+  { date: "2024-06-20", tickets: 408, drafts: 450 },
+  { date: "2024-06-21", tickets: 169, drafts: 210 },
+  { date: "2024-06-22", tickets: 317, drafts: 270 },
+  { date: "2024-06-23", tickets: 480, drafts: 530 },
+  { date: "2024-06-24", tickets: 132, drafts: 180 },
+  { date: "2024-06-25", tickets: 141, drafts: 190 },
+  { date: "2024-06-26", tickets: 434, drafts: 380 },
+  { date: "2024-06-27", tickets: 448, drafts: 490 },
+  { date: "2024-06-28", tickets: 149, drafts: 200 },
+  { date: "2024-06-29", tickets: 103, drafts: 160 },
+  { date: "2024-06-30", tickets: 446, drafts: 400 },
 ]
 
 const chartConfig = {
-  visitors: {
-    label: "Visitors",
+  tickets: {
+    label: "Tickets",
+    color: "#6366f1",
   },
 
-  desktop: {
-    label: "Desktop",
-    color: "hsl(var(--chart-1))",
-  },
-
-  mobile: {
-    label: "Mobile",
-    color: "hsl(var(--chart-2))",
+  drafts: {
+    label: "Drafts",
+    color: "#0ea5e9",
   }
 }
 
@@ -160,12 +156,14 @@ export function ChartAreaInteractive() {
   return (
     <Card className="@container/card">
       <CardHeader className="relative">
-        <CardTitle>Total Visitors</CardTitle>
+        <CardTitle>Ticket Volume</CardTitle>
         <CardDescription>
           <span className="@[540px]/card:block hidden">
-            Total for the last 3 months
+            Incoming emails vs. AI drafts generated
           </span>
-          <span className="@[540px]/card:hidden">Last 3 months</span>
+          <span className="@[540px]/card:hidden">
+            Incoming emails vs. AI drafts generated
+          </span>
         </CardDescription>
         <div className="absolute right-4 top-4">
           <ToggleGroup
@@ -206,13 +204,13 @@ export function ChartAreaInteractive() {
         <ChartContainer config={chartConfig} className="aspect-auto h-[250px] w-full">
           <AreaChart data={filteredData}>
             <defs>
-              <linearGradient id="fillDesktop" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-desktop)" stopOpacity={1.0} />
-                <stop offset="95%" stopColor="var(--color-desktop)" stopOpacity={0.1} />
+              <linearGradient id="fillTickets" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-tickets)" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="var(--color-tickets)" stopOpacity={0} />
               </linearGradient>
-              <linearGradient id="fillMobile" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--color-mobile)" stopOpacity={0.8} />
-                <stop offset="95%" stopColor="var(--color-mobile)" stopOpacity={0.1} />
+              <linearGradient id="fillDrafts" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="var(--color-drafts)" stopOpacity={0.2} />
+                <stop offset="95%" stopColor="var(--color-drafts)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} />
@@ -242,16 +240,16 @@ export function ChartAreaInteractive() {
                   indicator="dot" />
               } />
             <Area
-              dataKey="mobile"
+              dataKey="drafts"
               type="natural"
-              fill="url(#fillMobile)"
-              stroke="var(--color-mobile)"
+              fill="url(#fillDrafts)"
+              stroke="var(--color-drafts)"
               stackId="a" />
             <Area
-              dataKey="desktop"
+              dataKey="tickets"
               type="natural"
-              fill="url(#fillDesktop)"
-              stroke="var(--color-desktop)"
+              fill="url(#fillTickets)"
+              stroke="var(--color-tickets)"
               stackId="a" />
           </AreaChart>
         </ChartContainer>

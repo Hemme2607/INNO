@@ -7,7 +7,7 @@ const logos = [
   {
     name: "Shopify",
     src: shopifyLogo,
-    scale: "scale-125",
+    scale: "scale-150",
   },
   {
     name: "Gmail",
@@ -17,7 +17,7 @@ const logos = [
   {
     name: "Outlook",
     src: microsoftLogo,
-    scale: "scale-115",
+    scale: "scale-100",
   },
 ];
 

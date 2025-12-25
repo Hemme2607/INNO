@@ -6,12 +6,11 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
-// Links kan nemt opdateres her når marketing-sektioner ændrer sig.
 const menuItems = [
-    { name: 'Features', href: '#link' },
-    { name: 'Solution', href: '#link' },
-    { name: 'Pricing', href: '#link' },
-    { name: 'About', href: '#link' },
+    { name: 'Demo', href: '#demo', sectionIndex: 2 },
+    { name: 'Features', href: '#features', sectionIndex: 3 },
+    { name: 'Integrations', href: '#integrations', sectionIndex: 4 },
+    { name: 'FAQ', href: '#faq', sectionIndex: 5 },
 ]
 
 export const HeroHeader = () => {
@@ -26,19 +25,43 @@ export const HeroHeader = () => {
         window.addEventListener('scroll', handleScroll)
         return () => window.removeEventListener('scroll', handleScroll);
     }, [])
+
+    const handleNavClick = (event, href, sectionIndex) => {
+        if (typeof window === 'undefined') return
+
+        const targetById = document.querySelector(href)
+        const fallbackTarget = document.querySelectorAll('section')[sectionIndex]
+        const target = targetById ?? fallbackTarget
+
+        if (!target) return
+
+        event.preventDefault()
+
+        const navOffset = 80
+        const targetPosition = target.getBoundingClientRect().top + window.scrollY - navOffset
+
+        window.scrollTo({
+            top: Math.max(targetPosition, 0),
+            behavior: 'smooth'
+        })
+
+        setMenuState(false)
+    }
+
     return (
         <header>
             <nav data-state={menuState && 'active'} className="fixed z-20 w-full px-2">
                 <div
                     className={cn(
                         'mx-auto mt-2 max-w-6xl px-6 transition-all duration-300 lg:px-12',
-                        isScrolled && 'bg-background/50 max-w-4xl rounded-2xl border backdrop-blur-lg lg:px-5'
+                        'bg-slate-950/80 rounded-2xl border-b border-white/5 backdrop-blur-md',
+                        isScrolled && 'max-w-4xl lg:px-5'
                     )}>
                     <div
                         className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
                         <div className="flex w-full justify-between lg:w-auto">
                             <Link href="/" aria-label="home" className="flex items-center space-x-2">
-                                <span className="text-lg font-semibold text-foreground">Sona</span>
+                                <span className="text-[12px] tracking-[0.28em] text-blue-200/80 drop-shadow-md">SONA AI</span>
                             </Link>
 
                             {/* Mobil-menu toggle */}
@@ -60,7 +83,8 @@ export const HeroHeader = () => {
                                     <li key={index}>
                                         <Link
                                             href={item.href}
-                                            className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                                            onClick={(event) => handleNavClick(event, item.href, item.sectionIndex)}
+                                            className="block text-sm font-medium text-slate-400 transition-colors hover:text-white">
                                             <span>{item.name}</span>
                                         </Link>
                                     </li>
@@ -77,7 +101,8 @@ export const HeroHeader = () => {
                                         <li key={index}>
                                             <Link
                                                 href={item.href}
-                                                className="text-muted-foreground hover:text-accent-foreground block duration-150">
+                                                onClick={(event) => handleNavClick(event, item.href, item.sectionIndex)}
+                                                className="block text-sm font-medium text-slate-400 transition-colors hover:text-white">
                                                 <span>{item.name}</span>
                                             </Link>
                                         </li>

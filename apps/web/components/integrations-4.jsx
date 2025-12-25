@@ -1,20 +1,30 @@
-import { Sparkles, ShoppingBag, Mail, PanelsTopLeft, LifeBuoy } from "lucide-react";
+import {
+  AppWindow,
+  ArrowDown,
+  Layers,
+  LifeBuoy,
+  Mail,
+  ShoppingBag,
+  Store,
+} from "lucide-react";
+import { SonaLogo } from "@/components/ui/SonaLogo";
 
 const leftSatellites = [
   {
     name: "Shopify",
-    icon: <ShoppingBag className="h-5 w-5 text-emerald-200" />,
-    sub: "Orders & customers",
+    icon: <ShoppingBag className="h-5 w-5 text-emerald-300" />,
+    sub: "Orders & data",
   },
   {
-    name: "Microsoft",
-    icon: <PanelsTopLeft className="h-5 w-5 text-indigo-200" />,
-    sub: "Outlook & Teams",
+    name: "WooCommerce",
+    icon: <Store className="h-5 w-5 text-violet-300" />,
+    sub: "Any store platform",
   },
   {
-    name: "Gmail",
-    icon: <Mail className="h-5 w-5 text-sky-200" />,
-    sub: "Threads & labels",
+    name: "Magento",
+    icon: <Layers className="h-5 w-5 text-orange-500" />,
+    sub: "Enterprise stores",
+    cardClass: "group-hover:border-orange-500/30",
   },
 ];
 
@@ -25,13 +35,13 @@ const rightSatellites = [
     sub: "Tickets & agents",
   },
   {
-    name: "Microsoft",
-    icon: <PanelsTopLeft className="h-5 w-5 text-indigo-200" />,
-    sub: "Outlook & Teams",
+    name: "Outlook",
+    icon: <AppWindow className="h-5 w-5 text-blue-200" />,
+    sub: "Send & track",
   },
   {
     name: "Gmail",
-    icon: <Mail className="h-5 w-5 text-sky-200" />,
+    icon: <Mail className="h-5 w-5 text-rose-200" />,
     sub: "Threads & labels",
   },
 ];
@@ -52,42 +62,71 @@ export default function IntegrationsSection() {
             Your apps, unified in Sona
           </h2>
           <p className="max-w-2xl text-sm text-slate-300 sm:text-base">
-            Connect Shopify, email, and support tools to one AI core. Everything syncs automatically
+            Connect your webshop, email, and support tools to one AI core. Everything syncs automatically
             in the background.
           </p>
         </header>
 
-        <div className="relative w-full max-w-4xl">
-          <div className="relative mx-auto h-[520px] w-full">
-            {/* center node */}
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-              <div className="absolute inset-0 rounded-3xl bg-sky-500/20 blur-3xl" aria-hidden />
-              <div className="relative flex h-28 w-28 items-center justify-center rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-sky-900/40 backdrop-blur animate-pulse">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500/40 to-indigo-500/40">
-                  <Sparkles className="h-7 w-7 text-white" />
-                </div>
-              </div>
+        <div className="relative w-full max-w-5xl">
+          <div className="relative mx-auto flex flex-col items-center justify-center gap-8 lg:flex-row lg:items-center lg:gap-16">
+            {/* left column */}
+            <div className="hidden flex-col items-end gap-12 lg:flex">
+              {leftSatellites.map((sat) => (
+                <IntegrationCard key={sat.name} {...sat} align="left" />
+              ))}
             </div>
 
-            {/* left column */}
-            <div className="absolute left-0 top-1/2 flex -translate-y-1/2 flex-col gap-12">
+            {/* mobile: inputs grid */}
+            <div className="grid w-full max-w-sm grid-cols-1 gap-4 lg:hidden">
               {leftSatellites.map((sat) => (
-                <div key={sat.name} className="relative flex items-center gap-4">
-                  <span className="pointer-events-none h-px w-24 animate-pulse bg-gradient-to-r from-slate-700/20 via-slate-500/80 to-slate-700/20" />
-                  <IntegrationCard {...sat} />
-                </div>
+                <IntegrationCard key={sat.name} {...sat} align="left" fullWidth />
               ))}
+            </div>
+
+            {/* center node */}
+            <div className="relative z-10 flex h-40 w-40 shrink-0 flex-col items-center justify-center rounded-3xl border border-white/10 bg-[#0B1120] shadow-2xl shadow-sky-900/30 shadow-[inset_0_0_20px_rgba(59,130,246,0.1)]">
+              <SonaLogo size={80} />
+              <span className="mt-2 text-[10px] tracking-[0.3em] text-blue-200/70 drop-shadow-md">
+                SONA AI
+              </span>
+            </div>
+
+            {/* mobile: down arrow */}
+            <div className="flex items-center justify-center lg:hidden">
+              <ArrowDown className="h-6 w-6 text-slate-400" />
             </div>
 
             {/* right column */}
-            <div className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col items-end gap-12">
+            <div className="hidden flex-col items-start gap-12 lg:flex">
               {rightSatellites.map((sat) => (
-                <div key={sat.name} className="relative flex items-center gap-4">
-                  <IntegrationCard {...sat} />
-                  <span className="pointer-events-none h-px w-24 animate-pulse bg-gradient-to-l from-slate-700/20 via-slate-500/80 to-slate-700/20" />
-                </div>
+                <IntegrationCard key={sat.name} {...sat} align="right" />
               ))}
             </div>
+
+            {/* mobile: outputs grid */}
+            <div className="grid w-full max-w-sm grid-cols-1 gap-4 lg:hidden">
+              {rightSatellites.map((sat) => (
+                <IntegrationCard key={sat.name} {...sat} align="left" fullWidth />
+              ))}
+            </div>
+
+            {/* connectors (desktop only) */}
+            <svg
+              className="pointer-events-none absolute inset-0 hidden h-full w-full opacity-20 lg:block"
+              viewBox="0 0 1200 800"
+              preserveAspectRatio="xMidYMid meet"
+              aria-hidden>
+              {[
+                { y: 220, leftX: 250, rightX: 950 },
+                { y: 400, leftX: 250, rightX: 950 },
+                { y: 580, leftX: 250, rightX: 950 },
+              ].map(({ y, leftX, rightX }, idx) => (
+                <g key={idx} stroke="rgba(100,116,139,0.35)" strokeWidth="1" fill="none">
+                  <line x1={leftX} y1={y} x2={600} y2={400} />
+                  <line x1={600} y1={400} x2={rightX} y2={y} />
+                </g>
+              ))}
+            </svg>
           </div>
         </div>
       </div>
@@ -96,17 +135,17 @@ export default function IntegrationsSection() {
 }
 
 // Lille kortkomponent for hver integration
-const IntegrationCard = ({ icon, name, sub, cardClass }) => {
+const IntegrationCard = ({ icon, name, sub, align = "left", fullWidth = false, cardClass }) => {
   return (
     <div
-      className={`flex w-40 items-center gap-3 rounded-2xl border border-slate-700/60 bg-slate-900/80 px-4 py-3 shadow-md shadow-black/40 backdrop-blur ${cardClass}`}
+      className={`group flex h-20 ${fullWidth ? "w-full max-w-sm" : "w-64"} items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 shadow-md shadow-black/40 backdrop-blur transition-colors ${align === "right" ? "flex-row-reverse text-right" : ""} ${cardClass}`}
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5">
         {icon}
       </div>
-      <div className="flex flex-col">
-        <span className="text-sm font-semibold text-white">{name}</span>
-        <span className="text-xs text-slate-400">{sub}</span>
+      <div className={`flex flex-col ${align === "right" ? "items-end" : ""}`}>
+        <span className="truncate text-sm font-semibold text-white">{name}</span>
+        <span className="truncate text-xs text-slate-400">{sub}</span>
       </div>
     </div>
   );

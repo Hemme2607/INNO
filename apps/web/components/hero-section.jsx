@@ -17,6 +17,41 @@ const fadeIn = {
 
 // Hero med leadform og demo-preview, animeret via AnimatedGroup
 export default function HeroSection() {
+  const [email, setEmail] = React.useState("");
+  const [status, setStatus] = React.useState("idle"); // idle | loading | success | error
+  const [error, setError] = React.useState("");
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError("");
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const isValidEmail = /\S+@\S+\.\S+/.test(trimmedEmail);
+    if (!isValidEmail) {
+      setError("Indtast en gyldig email.");
+      return;
+    }
+
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/landing-signups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmedEmail, source: "landing-hero" }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "Kunne ikke gemme emailen lige nu.");
+      }
+
+      setStatus("success");
+    } catch (err) {
+      setError(err.message || "Noget gik galt. Prøv igen.");
+      setStatus("error");
+    }
+  };
+
   return (
     <section className="relative overflow-hidden bg-slate-950">
       <HeroHeader />
@@ -46,17 +81,29 @@ export default function HeroSection() {
             </div>
 
             <div className="space-y-3">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <form className="flex flex-col gap-3 sm:flex-row sm:items-center" onSubmit={handleSubmit}>
                 <Input
                   type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Your email"
+                  autoComplete="email"
                   className="h-11 border-white/10 bg-slate-900/60 text-white placeholder:text-slate-400 shadow-[0_0_0_1px_rgba(255,255,255,0.04)] focus-visible:border-cyan-400/50 focus-visible:ring-2 focus-visible:ring-cyan-400/30 focus-visible:shadow-[0_0_0_1px_rgba(56,189,248,0.5),0_0_24px_rgba(56,189,248,0.25)] sm:h-12"
+                  aria-label="Email for early access"
                 />
-                <Button className="h-11 gap-2 bg-sky-500 px-5 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400 sm:h-12">
-                  Get early access
+                <Button
+                  type="submit"
+                  disabled={status === "loading"}
+                  className="h-11 gap-2 bg-sky-500 px-5 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400 sm:h-12 disabled:opacity-70"
+                >
+                  {status === "success" ? "Tilmeldt" : status === "loading" ? "Sender..." : "Get early access"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
-              </div>
+              </form>
+              {error && <p className="text-sm text-rose-300">{error}</p>}
+              {status === "success" && !error && (
+                <p className="text-sm text-emerald-300">Tak! Vi giver lyd så snart vi åbner mere op.</p>
+              )}
             </div>
           </div>
 

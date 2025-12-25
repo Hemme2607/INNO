@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Truck, Sparkles, Mail } from "lucide-react";
+import { Truck, Mail } from "lucide-react";
 import Image from "next/image";
 import shopifyLogo from "../../../assets/Shopify-Logo.png";
+import { SonaLogo } from "@/components/ui/SonaLogo";
 
 const StepCard = ({ icon, title, subtext, status, statusIcon, tone = "sky", active, done }) => {
   const toneColor =
@@ -80,7 +81,7 @@ export default function ProcessingDemo() {
     },
     {
       key: "generate_draft",
-      icon: <Sparkles className="h-5 w-5 text-indigo-200" />,
+      icon: <SonaLogo size={34} />,
       title: "generate_draft",
       subtext: "Sona AI",
       status: "Writing...",
