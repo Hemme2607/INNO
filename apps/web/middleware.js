@@ -4,6 +4,7 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/api/landing-signups(.*)",
   "/api/outlook/webhook(.*)",
 ]);
 

@@ -102,7 +102,7 @@ export default function HeroSection() {
               </form>
               {error && <p className="text-sm text-rose-300">{error}</p>}
               {status === "success" && !error && (
-                <p className="text-sm text-emerald-300">Tak! Vi giver lyd så snart vi åbner mere op.</p>
+                <p className="text-sm text-emerald-300">Thanks! We’ll email you as soon as we open more spots.</p>
               )}
             </div>
           </div>

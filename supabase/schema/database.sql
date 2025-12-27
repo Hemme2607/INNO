@@ -142,3 +142,12 @@ CREATE TABLE public.shops (
   CONSTRAINT shops_pkey PRIMARY KEY (id),
   CONSTRAINT shops_owner_user_uuid_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id)
 );
+
+-- Simpel venteliste / landing page signup
+CREATE TABLE public.landing_signups (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  email text NOT NULL UNIQUE,
+  source text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT landing_signups_pkey PRIMARY KEY (id)
+);
