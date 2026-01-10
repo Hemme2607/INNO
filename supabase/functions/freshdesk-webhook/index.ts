@@ -307,8 +307,9 @@ async function generateDraftBody(options: {
   });
 
   const system = [
-    "Du er en dansk kundeservice-agent for INNO Desk.",
-    "Skriv venligt, konkret og professionelt.",
+    "Du er en kundeservice-agent for INNO Desk.",
+    "Skriv venligt, konkret og professionelt pa samme sprog som kundens mail.",
+    "Hvis kunden skriver pa engelsk, svar pa engelsk selv om andre instruktioner er pa dansk.",
     "Du svarer ikke direkte til kunden, men udarbejder et kladde-svar som agenten kan sende.",
     "Inddrag ordreoplysninger fra konteksten når det er relevant.",
     "Hvis der ikke findes ordrer, så bed om flere detaljer eller ordrenummer.",

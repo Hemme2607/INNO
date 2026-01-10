@@ -78,7 +78,8 @@ export async function classifyEmail(input: ClassifyEmailInput): Promise<EmailCla
 
   const apiKey = Deno.env.get("OPENAI_API_KEY");
   if (!apiKey) {
-    return { process: false, reason: "classifier_unavailable" };
+    // Mangler nøgle – lad mailen passere fremfor at blokere.
+    return { process: true, reason: "classifier_unavailable_allow" };
   }
 
   const body = (input.body ?? "").slice(0, 500);
@@ -103,12 +104,12 @@ export async function classifyEmail(input: ClassifyEmailInput): Promise<EmailCla
 
     const json = await res.json().catch(() => null);
     if (!res.ok) {
-      return { process: false, reason: "classifier_error" };
+      return { process: true, reason: "classifier_error_allow" };
     }
 
     const content = json?.choices?.[0]?.message?.content;
     if (!content || typeof content !== "string") {
-      return { process: false, reason: "classifier_empty" };
+      return { process: true, reason: "classifier_empty_allow" };
     }
 
     const parsed = JSON.parse(content);
@@ -120,8 +121,8 @@ export async function classifyEmail(input: ClassifyEmailInput): Promise<EmailCla
     if (category === "spam" || category === "notification") {
       return { process: false, reason: "not_support", category, explanation };
     }
-    return { process: false, reason: "classifier_invalid" };
+    return { process: true, reason: "classifier_invalid_allow" };
   } catch {
-    return { process: false, reason: "classifier_error" };
+    return { process: true, reason: "classifier_error_allow" };
   }
 }

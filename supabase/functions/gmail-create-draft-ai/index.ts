@@ -431,12 +431,13 @@ Deno.serve(async (req) => {
     try {
       if (OPENAI_API_KEY) {
         const automationGuidance = buildAutomationGuidance(automation);
-        const personaGuidance = `Persona instruktionsnoter: ${
-          persona.instructions?.trim() || "Hold tonen venlig og effektiv."
-        }\nAfslut ikke med signatur – signaturen tilføjes automatisk senere.`;
+        const personaGuidance = `Sprogregel har altid forrang; ignorer persona-instruktioner om sprogvalg.
+Persona instruktionsnoter: ${persona.instructions?.trim() || "Hold tonen venlig og effektiv."}
+Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
         const systemMsgBase = [
-          "Du er en dansk kundeservice-assistent.",
-          "Skriv kort, venligt og professionelt på dansk.",
+          "Du er en kundeservice-assistent.",
+          "Skriv kort, venligt og professionelt pa samme sprog som kundens mail.",
+          "Hvis kunden skriver pa engelsk, svar pa engelsk selv om andre instruktioner er pa dansk.",
           "Brug KONTEKST-sektionen til at finde relevante oplysninger og nævn dem eksplicit i svaret.",
           personaGuidance,
           "Automationsregler:",
