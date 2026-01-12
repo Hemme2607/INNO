@@ -1,6 +1,6 @@
 export default function ContentSection() {
   // Use Loom embed URL (not share URL) to render the player.
-  const loomUrl = "https://www.loom.com/share/cdc4b73c27a4454f870d1f8cefd3885a";
+  const loomUrl = "https://www.loom.com/embed/cdc4b73c27a4454f870d1f8cefd3885a";
 
   return (
     <section className="relative py-24">

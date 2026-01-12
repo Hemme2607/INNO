@@ -41,7 +41,7 @@ export default function FinalCta() {
   };
 
   return (
-    <section className="py-16 md:py-20">
+    <section id="final-cta" className="py-16 md:py-20">
       <div className="mx-auto max-w-3xl px-6 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Get started</p>
         <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">

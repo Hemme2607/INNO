@@ -4,7 +4,6 @@ import { Menu, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 
 const menuItems = [
     { name: 'Demo', href: '#demo', sectionIndex: 2 },
@@ -110,34 +109,9 @@ export const HeroHeader = () => {
                                 </ul>
                             </div>
                             <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                                <SignedOut>
-                                    <SignInButton mode="modal">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className={cn(isScrolled && 'lg:hidden')}>
-                                            <span>Log ind</span>
-                                        </Button>
-                                    </SignInButton>
-                                    <SignUpButton mode="modal">
-                                        <Button size="sm" className={cn(isScrolled && 'lg:hidden')}>
-                                            <span>Opret konto</span>
-                                        </Button>
-                                    </SignUpButton>
-                                    <SignUpButton mode="modal">
-                                        <Button
-                                            size="sm"
-                                            className={cn(isScrolled ? 'lg:inline-flex' : 'hidden')}>
-                                            <span>Kom i gang</span>
-                                        </Button>
-                                    </SignUpButton>
-                                </SignedOut>
-                                <SignedIn>
-                                    <Button asChild size="sm" className="bg-white text-black hover:bg-white/95 shadow-sm">
-                                        <Link href="/dashboard">Dashboard</Link>
-                                    </Button>
-                                    <UserButton afterSignOutUrl="/" />
-                                </SignedIn>
+                                <Button asChild size="sm" className={cn(isScrolled && 'lg:hidden')}>
+                                    <Link href="#final-cta">Get early access</Link>
+                                </Button>
                             </div>
                         </div>
                     </div>
