@@ -64,7 +64,7 @@ export default function FAQsTwo() {
           </Accordion>
 
           <p className="mt-6 px-2 text-sm text-slate-400">
-            Can't find what you're looking for? Contact our{" "}
+            Can&apos;t find what you&apos;re looking for? Contact our{" "}
             <Link href="#" className="text-cyan-300 font-medium hover:text-cyan-200">
               customer support team
             </Link>

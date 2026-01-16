@@ -102,7 +102,7 @@ export default function ProcessingDemo() {
     }, stepIntervals[activeStep % stepIntervals.length]);
 
     return () => clearTimeout(timer);
-  }, [activeStep, totalSteps]);
+  }, [activeStep, totalSteps, stepIntervals]);
 
   return (
     <div className="relative min-h-[360px] w-full max-w-[620px] p-2 sm:min-h-[420px]">
