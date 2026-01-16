@@ -428,11 +428,11 @@ function RichTextarea({ value, onValueChange, placeholder, disabled, variant = "
   };
 
   const baseClass =
-    "min-h-[600px] lg:h-[65vh] w-full resize-y rounded-xl px-6 py-6 text-base leading-7 text-gray-800 shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2";
+    "min-h-[600px] lg:h-[65vh] w-full resize-y rounded-xl px-6 py-6 text-gray-800 shadow-inner focus-visible:ring-2 focus-visible:ring-blue-500/30 focus-visible:ring-offset-2";
   const variantClass =
     variant === "internal"
-      ? "border border-blue-200 bg-blue-50"
-      : "border border-gray-200 bg-white";
+      ? "border border-blue-200 bg-blue-50 text-base leading-7"
+      : "border border-gray-200 bg-white text-sm leading-6";
 
   return (
     <div className="space-y-3">

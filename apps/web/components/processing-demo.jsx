@@ -23,7 +23,7 @@ const StepCard = ({ icon, title, subtext, status, statusIcon, tone = "sky", acti
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
       transition={{ duration: 0.4 }}
-      className="flex w-full items-center justify-between gap-4 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-900/80 px-5 py-4 shadow-sm backdrop-blur"
+      className="flex w-full flex-col items-start justify-between gap-3 rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-slate-900/80 px-5 py-4 shadow-sm backdrop-blur sm:flex-row sm:items-center sm:gap-4"
     >
       <div className="flex items-center gap-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5">
@@ -105,7 +105,7 @@ export default function ProcessingDemo() {
   }, [activeStep, totalSteps]);
 
   return (
-    <div className="relative min-h-[420px] w-full p-2 max-w-[620px]">
+    <div className="relative min-h-[360px] w-full max-w-[620px] p-2 sm:min-h-[420px]">
       <div className="flex h-full w-full flex-col space-y-4">
         <motion.div
           key="ticket"

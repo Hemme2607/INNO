@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { ShopifyConnectCard } from "@/components/integrations/ShopifyConnectCard";
 import { FreshdeskConnectCard } from "@/components/integrations/FreshdeskConnectCard";
+import { GorgiasConnectCard } from "@/components/integrations/GorgiasConnectCard";
 
 export default async function IntegrationsPage() {
   const { userId } = await auth();
@@ -47,6 +48,7 @@ export default async function IntegrationsPage() {
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           <FreshdeskConnectCard />
+          <GorgiasConnectCard />
         </div>
       </section>
     </main>
