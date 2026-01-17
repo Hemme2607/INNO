@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { KnowledgePageClient } from "@/components/knowledge/KnowledgePageClient";
+import { DashboardPageShell } from "@/components/dashboard-page-shell";
 
 export default async function KnowledgePage() {
   const { userId } = await auth();
@@ -10,8 +11,8 @@ export default async function KnowledgePage() {
   }
 
   return (
-    <main className="min-h-screen space-y-6 px-4 py-6 lg:px-10 lg:py-10">
+    <DashboardPageShell>
       <KnowledgePageClient />
-    </main>
+    </DashboardPageShell>
   );
 }

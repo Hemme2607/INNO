@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { ShopifyConnectCard } from "@/components/integrations/ShopifyConnectCard";
 import { FreshdeskConnectCard } from "@/components/integrations/FreshdeskConnectCard";
 import { GorgiasConnectCard } from "@/components/integrations/GorgiasConnectCard";
+import { DashboardPageShell } from "@/components/dashboard-page-shell";
 
 export default async function IntegrationsPage() {
   const { userId } = await auth();
@@ -12,7 +13,7 @@ export default async function IntegrationsPage() {
   }
 
   return (
-    <main className="px-4 py-6 lg:px-10 lg:py-8 space-y-6">
+    <DashboardPageShell>
       <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-sm uppercase tracking-widest text-muted-foreground">
@@ -51,6 +52,6 @@ export default async function IntegrationsPage() {
           <GorgiasConnectCard />
         </div>
       </section>
-    </main>
+    </DashboardPageShell>
   );
 }

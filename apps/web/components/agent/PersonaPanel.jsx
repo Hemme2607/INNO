@@ -107,7 +107,7 @@ export function PersonaPanel({ children }) {
               description="Shown at the bottom of every reply - supports line breaks."
               value={form.signature}
               onChange={handleChange("signature")}
-              placeholder={"Best regards\nINNO Support"}
+              placeholder={"Best regards\n Sona AI"}
               rows={4}
             />
             <EditorField

@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { PersonaPanel } from "@/components/agent/PersonaPanel";
 import { PersonaPageHeader } from "@/components/agent/PersonaPageHeader";
+import { DashboardPageShell } from "@/components/dashboard-page-shell";
 
 export default async function AgentPersonaPage() {
   const { userId } = await auth();
@@ -10,10 +11,10 @@ export default async function AgentPersonaPage() {
   }
 
   return (
-    <main className="space-y-6 bg-white px-4 py-6 lg:px-10 lg:py-10">
+    <DashboardPageShell>
       <PersonaPanel>
         <PersonaPageHeader />
       </PersonaPanel>
-    </main>
+    </DashboardPageShell>
   );
 }
