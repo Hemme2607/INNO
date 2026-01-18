@@ -1,4 +1,4 @@
-// Skærm der viser mail-indbakke med AI-kladder og handlinger.
+// Skærm der viser indbakken og AI-udkast.
 import { View, Text, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from "react-native";
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { LinearGradient } from "expo-linear-gradient";
@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 
+// Mailudbydere vi kan hente mails fra (rækkefølgen kan ændres).
 const MAIL_PROVIDERS = [
   {
     id: "gmail",
@@ -22,19 +23,25 @@ const MAIL_PROVIDERS = [
 ];
 
 export default function InboxScreen() {
+  // Login og session.
   const { getToken, sessionId } = useAuth();
   const { user } = useUser();
+  // Status for knappen "Opret udkast".
   const [creatingDraftId, setCreatingDraftId] = useState(null);
+  // Data til indbakken og loading.
   const [inboxItems, setInboxItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  // Hvilken udbyder der gav os data.
   const [activeMailProvider, setActiveMailProvider] = useState(null);
+  // Gemmer tid og lås for at undgå for mange kald.
   const lastFetchRef = useRef(0);
   const isFetchingRef = useRef(false);
 
-  const MIN_FETCH_INTERVAL = 60 * 1000; //så vi ikke spammer Clerk
+  const MIN_FETCH_INTERVAL = 60 * 1000; // så vi ikke spørger for tit
 
+  // Tilsluttede konti prøves først.
   const prioritizedProviders = useMemo(() => {
     const connected = new Set(
       (user?.externalAccounts ?? [])
@@ -52,14 +59,16 @@ export default function InboxScreen() {
     return [...connectedMail, ...fallbackMail];
   }, [user]);
 
+  // Tekst til tom tilstand.
   const activeProviderLabel = useMemo(() => {
     const provider = MAIL_PROVIDERS.find((item) => item.id === activeMailProvider);
     return provider?.label ?? null;
   }, [activeMailProvider]);
 
-  // Henter indbakke fra prioriterede mailudbydere med simpel rate limiting
+  // Hent indbakke med enkel rate limiting.
   const fetchInbox = useCallback(
     async ({ showLoader = true, force = false } = {}) => {
+      // Ingen session = ingen mails.
       if (!sessionId) {
         setInboxItems([]);
         setActiveMailProvider(null);
@@ -67,6 +76,7 @@ export default function InboxScreen() {
         return;
       }
 
+      // Undgå flere kald på samme tid.
       if (isFetchingRef.current) {
         return;
       }
@@ -84,10 +94,12 @@ export default function InboxScreen() {
         setLoading(true);
       }
 
+      // Ryd fejl før nyt kald.
       setErrorMessage(null);
       isFetchingRef.current = true;
 
       try {
+        // Supabase config fra appens env.
         const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
         const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
         if (!supabaseUrl) {
@@ -101,6 +113,7 @@ export default function InboxScreen() {
           );
         }
 
+        // Hent token til edge functions.
         const sessionToken = await getToken();
         if (!sessionToken) {
           throw new Error(
@@ -112,9 +125,11 @@ export default function InboxScreen() {
         let fetched = false;
         let lastError = null;
 
+        // Prøv alle udbydere i rækkefølge.
         for (const provider of prioritizedProviders) {
           const endpoint = `${baseUrl}/functions/v1/${provider.functionName}`;
           try {
+            // Edge function der henter mails.
             const response = await fetch(endpoint, {
               headers: {
                 Authorization: `Bearer ${sessionToken}`,
@@ -133,6 +148,7 @@ export default function InboxScreen() {
                 `Kunne ikke hente mails fra ${provider.label}: ${message}`
               );
               if ([401, 403, 404].includes(response.status)) {
+                // Ofte betyder det, at udbyderen ikke er koblet til.
                 lastError = error;
                 continue;
               }
@@ -140,6 +156,7 @@ export default function InboxScreen() {
             }
 
             const payload = await response.json();
+            // Backenden kan bruge items eller messages.
             const rawItems = Array.isArray(payload?.items)
               ? payload.items
               : Array.isArray(payload?.messages)
@@ -147,7 +164,7 @@ export default function InboxScreen() {
               : [];
 
             const mapped = rawItems.map((message) => {
-              // Forvent både "from" og "sender" afhængigt af backend-version
+              // "from" eller "sender" afhængigt af backend.
               const rawSender =
                 typeof message?.sender === "string"
                   ? message.sender
@@ -155,6 +172,7 @@ export default function InboxScreen() {
                   ? message.from
                   : "";
 
+              // Fjern <mail@domæne> så vi kun viser navn.
               const cleanSender = rawSender.replace(/<.*?>/g, "").trim();
 
               let timeLabel = "";
@@ -163,7 +181,7 @@ export default function InboxScreen() {
                 message?.internalDate ??
                 message?.receivedAt ??
                 null;
-              // Gmail og Outlook kan give unix-timestamp eller ISO string → parse det
+              // Gmail/Outlook kan give unix-tid eller tekst → parse det.
               if (dateSource) {
                 const normalizedDate =
                   typeof dateSource === "string" && /^\d+$/.test(dateSource)
@@ -181,24 +199,30 @@ export default function InboxScreen() {
               }
 
               return {
-                  id: message?.id ?? Math.random().toString(36),
-                  // Keep both a cleaned sender for display and the raw header for extracting email addresses
-                  rawFrom: (typeof message?.from === "string" ? message.from : (typeof message?.sender === "string" ? message.sender : "")),
-                  sender: cleanSender || "Ukendt afsender",
-                  subject:
-                    typeof message?.subject === "string"
-                      ? message.subject
-                      : "(ingen emne)",
-                  preview:
-                    typeof message?.preview === "string"
-                      ? message.preview
-                      : typeof message?.snippet === "string"
-                      ? message.snippet
-                      : "",
-                  time: timeLabel,
-                };
+                id: message?.id ?? Math.random().toString(36),
+                // Gem rå header så vi kan finde e-mail senere.
+                rawFrom:
+                  typeof message?.from === "string"
+                    ? message.from
+                    : typeof message?.sender === "string"
+                    ? message.sender
+                    : "",
+                sender: cleanSender || "Ukendt afsender",
+                subject:
+                  typeof message?.subject === "string"
+                    ? message.subject
+                    : "(ingen emne)",
+                preview:
+                  typeof message?.preview === "string"
+                    ? message.preview
+                    : typeof message?.snippet === "string"
+                    ? message.snippet
+                    : "",
+                time: timeLabel,
+              };
             });
 
+            // Opdater state og stop ved første succes.
             setInboxItems(mapped);
             setActiveMailProvider(provider.id);
             fetched = true;
@@ -212,6 +236,7 @@ export default function InboxScreen() {
         }
 
         if (!fetched) {
+          // Ingen udbydere gav data → vis fejl.
           setActiveMailProvider(null);
           if (lastError) {
             throw lastError;
@@ -219,10 +244,12 @@ export default function InboxScreen() {
           throw new Error("Kunne ikke hente mails fra nogen mailudbyder.");
         }
       } catch (error) {
+        // Fejl → nulstil data og vis besked.
         setInboxItems([]);
         setActiveMailProvider(null);
         setErrorMessage(error.message);
       } finally {
+        // Ryd lås og opdater tid.
         isFetchingRef.current = false;
         if (showLoader) {
           setLoading(false);
@@ -234,25 +261,28 @@ export default function InboxScreen() {
   );
 
   useEffect(() => {
+    // Hent indbakke ved start.
     fetchInbox();
   }, [fetchInbox]);
 
+  // Base URL til edge functions.
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
 
-  // Trækker e-mailadresse ud fra mail-headeren
+  // Finder e-mailadresse i mail-headeren.
   const extractEmail = (raw) => {
     if (!raw || typeof raw !== "string") return null;
-    // If raw contains angle-bracket address use that
+    // Hvis der er <mail@domæne>, brug den.
     const angle = raw.match(/<([^>]+)>/);
     if (angle) return angle[1];
-    // Otherwise, try to find an email anywhere in the string
+    // Ellers find en mail i teksten.
     const simple = raw.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i);
     return simple ? simple[1] : null;
   };
 
-  // Kalder Supabase edge function for at oprette et AI-udkast for en given mail
+  // Kalder edge function for at lave et AI-udkast.
   const createDraft = async (item) => {
+    // Mangler base URL, kan vi ikke kalde serveren.
     if (!functionsBase) {
       Alert.alert("Funktionen ikke konfigureret", "Supabase functions base URL mangler.");
       return;
@@ -260,12 +290,15 @@ export default function InboxScreen() {
 
     setCreatingDraftId(item.id);
     try {
+      // Token til server-kald.
       const token = await getToken();
       if (!token) throw new Error("Kunne ikke hente session token.");
 
+      // Find modtager-mail i header.
       const to = extractEmail(item.rawFrom ?? item.sender);
       if (!to) throw new Error("Kunne ikke udtrække e-mailadresse fra afsender.");
 
+      // Simpelt udkast (serveren kan gøre det bedre).
       const body = `Hej ${item.sender.split(" <")[0]},\n\nTak for din besked — her er et udkast til svar.\n\nMvh`;
 
       const resp = await fetch(`${functionsBase}/gmail-create-draft-ai`, {
@@ -274,7 +307,7 @@ export default function InboxScreen() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        // Provide messageId so the server can fetch the full message and build context (shopify orders, etc.)
+        // Send messageId så serveren kan hente fuld mail og mere kontekst.
         body: JSON.stringify({ messageId: item.id, to, subject: `Re: ${item.subject ?? ""}`, body }),
       });
 
@@ -284,11 +317,13 @@ export default function InboxScreen() {
         throw new Error(message);
       }
 
+      // Besked ved succes.
       Alert.alert(
         "AI-udkast oprettet",
         "Et AI-genereret udkast er blevet oprettet i din Gmail-indbakke."
       );
     } catch (err) {
+      // Besked ved fejl.
       Alert.alert("Kunne ikke oprette udkast", err?.message ?? String(err));
     } finally {
       setCreatingDraftId(null);
@@ -296,6 +331,7 @@ export default function InboxScreen() {
   };
 
   const onRefresh = useCallback(async () => {
+    // Pull-to-refresh: tving et nyt kald.
     setRefreshing(true);
     try {
       await fetchInbox({ showLoader: false, force: true });
@@ -304,7 +340,7 @@ export default function InboxScreen() {
     }
   }, [fetchInbox]);
 
-  // Render-funktion for hver indbakke-post
+  // Render for hver mail.
   const renderItem = ({ item }) => (
     <View style={GlobalStyles.inboxRow}>
       <View style={GlobalStyles.inboxAvatar}>
@@ -339,6 +375,7 @@ export default function InboxScreen() {
               onPress={() => createDraft(item)}
               disabled={creatingDraftId === item.id}
             >
+              {/* Spinner mens udkast laves */}
               {creatingDraftId === item.id ? (
                 <ActivityIndicator size="small" color={COLORS.background} />
               ) : (
@@ -351,7 +388,7 @@ export default function InboxScreen() {
     </View>
   );
 
-  // Opbygning af InboxScreen-komponenten
+  // Selve skærmen.
   return (
     <LinearGradient
       colors={[COLORS.background, COLORS.surfaceAlt]}
@@ -359,6 +396,7 @@ export default function InboxScreen() {
       end={{ x: 0.8, y: 1 }}
       style={GlobalStyles.inboxScreen}
     >
+      {/* Lille streg øverst */}
       <View style={GlobalStyles.inboxTopDivider} />
       <View style={GlobalStyles.inboxHeader}>
         <View>
@@ -376,7 +414,7 @@ export default function InboxScreen() {
         </View>
       </View>
 
-
+      {/* Indbakke-listen */}
       <FlatList
         data={inboxItems}
         keyExtractor={(item, index) => item.id ?? String(index)}
@@ -396,6 +434,7 @@ export default function InboxScreen() {
         ItemSeparatorComponent={() => <View style={GlobalStyles.inboxSeparator} />}
         ListEmptyComponent={
           <View style={GlobalStyles.inboxEmptyState}>
+            {/* Skifter mellem loading, fejl, tom indbakke og login */}
             {loading ? (
               <>
                 <ActivityIndicator color={COLORS.primary} size="large" />

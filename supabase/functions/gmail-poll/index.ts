@@ -103,6 +103,10 @@ async function pollSingleUser(user: AutomationUser) {
   if (!supabase) throw new Error("Supabase klient ikke konfigureret");
   try {
     const gmailToken = await getGmailAccessToken(user.clerk_user_id);
+    const shopId = await resolveShopId(user.user_id);
+    if (shopId) {
+      await syncDraftStatuses(shopId, gmailToken);
+    }
     const state = await loadPollState(user.clerk_user_id);
     const candidates = await fetchCandidateMessages(gmailToken, state);
 
@@ -209,6 +213,111 @@ async function triggerDraft(clerkUserId: string, messageId: string) {
     }
   }
   return null;
+}
+
+async function resolveShopId(ownerUserId: string): Promise<string | null> {
+  if (!supabase || !ownerUserId) return null;
+  const { data, error } = await supabase
+    .from("shops")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("gmail-poll: failed to resolve shop id", error.message);
+  }
+  return data?.id ?? null;
+}
+
+async function gmailDraftExists(token: string, draftId: string): Promise<boolean | null> {
+  const url = `${GMAIL_BASE}/drafts/${encodeURIComponent(draftId)}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    console.warn("gmail-poll: draft check failed", {
+      draftId,
+      status: res.status,
+      body: text?.slice(0, 500) || "",
+    });
+    return null;
+  }
+  return true;
+}
+
+async function threadHasSentSince(
+  token: string,
+  threadId: string,
+  sinceMs: number,
+): Promise<boolean | null> {
+  const url = `${GMAIL_BASE}/threads/${encodeURIComponent(threadId)}?format=metadata`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const text = await res.text().catch(() => "");
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if (!res.ok) {
+    console.warn("gmail-poll: thread check failed", {
+      threadId,
+      status: res.status,
+      body: text?.slice(0, 500) || "",
+    });
+    return null;
+  }
+  const messages = Array.isArray(json?.messages) ? json.messages : [];
+  return messages.some((msg: any) => {
+    const labels = Array.isArray(msg?.labelIds) ? msg.labelIds : [];
+    const internalDate = Number(msg?.internalDate ?? 0);
+    return labels.includes("SENT") && internalDate >= sinceMs;
+  });
+}
+
+async function syncDraftStatuses(shopId: string, token: string) {
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from("drafts")
+    .select("id,draft_id,thread_id,created_at")
+    .eq("shop_id", shopId)
+    .eq("platform", "gmail")
+    .eq("status", "pending")
+    .not("draft_id", "is", null);
+  if (error) {
+    console.warn("gmail-poll: failed to load pending drafts", error.message);
+    return;
+  }
+  const toMarkSent: string[] = [];
+  for (const row of data ?? []) {
+    const draftId = (row as any)?.draft_id;
+    if (!draftId) continue;
+    const exists = await gmailDraftExists(token, String(draftId));
+    if (exists === false) {
+      toMarkSent.push((row as any).id);
+      continue;
+    }
+    if (exists === true) {
+      const threadId = (row as any)?.thread_id;
+      const createdAtRaw = (row as any)?.created_at;
+      const createdAtMs = Date.parse(createdAtRaw || "");
+      if (threadId && Number.isFinite(createdAtMs)) {
+        const sentInThread = await threadHasSentSince(token, String(threadId), createdAtMs);
+        if (sentInThread === true) {
+          toMarkSent.push((row as any).id);
+        }
+      }
+    }
+  }
+  if (!toMarkSent.length) return;
+  const { error: updateError } = await supabase
+    .from("drafts")
+    .update({ status: "sent" })
+    .in("id", toMarkSent);
+  if (updateError) {
+    console.warn("gmail-poll: failed to update draft status", updateError.message);
+  }
 }
 
 async function fetchMessageMeta(id: string, token: string) {

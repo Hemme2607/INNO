@@ -165,6 +165,50 @@ function stripHtml(input?: string | null): string {
   return input.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function stripTrailingSignoff(text: string): string {
+  const closings = [
+    "venlig hilsen",
+    "med venlig hilsen",
+    "mvh",
+    "best regards",
+    "kind regards",
+    "regards",
+    "sincerely",
+    "cheers",
+  ];
+  const lines = text.split("\n");
+  let i = lines.length - 1;
+  while (i >= 0 && !lines[i].trim()) i -= 1;
+  if (i < 0) return text;
+  const last = lines[i].trim().toLowerCase();
+  if (closings.includes(last)) {
+    lines.splice(i, 1);
+    while (lines.length && !lines[lines.length - 1].trim()) {
+      lines.pop();
+    }
+    return lines.join("\n");
+  }
+  return text;
+}
+
+async function resolveShopId(
+  supabaseClient: ReturnType<typeof createClient> | null,
+  ownerUserId: string | null,
+): Promise<string | null> {
+  if (!supabaseClient || !ownerUserId) return null;
+  const { data, error } = await supabaseClient
+    .from("shops")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("outlook-create-draft-ai: failed to resolve shop id", error.message);
+  }
+  return data?.id ?? null;
+}
+
 // Genererer embeddings til produktmatch i Supabase
 async function embedText(input: string): Promise<number[]> {
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
@@ -487,6 +531,7 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     let finalText = aiText.trim();
     const signature = persona.signature?.trim();
     if (signature && signature.length && !finalText.includes(signature)) {
+      finalText = stripTrailingSignoff(finalText);
       finalText = `${finalText}\n\n${signature}`;
     }
 
@@ -499,6 +544,27 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
       messageId,
       bodyHtml: htmlBody,
     });
+    const draftInsertPromise = (async () => {
+      if (!supabase || !supabaseUserId) return;
+      const shopId = await resolveShopId(supabase, supabaseUserId);
+      if (!shopId) {
+        console.warn("outlook-create-draft-ai: no shop id found, skipping draft log");
+        return;
+      }
+      const { error } = await supabase.from("drafts").insert({
+        shop_id: shopId,
+        customer_email: fromAddress || "",
+        subject,
+        platform: "outlook",
+        status: "pending",
+        draft_id: draft?.id ?? null,
+        message_id: draft?.id ?? null,
+        created_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.warn("outlook-create-draft-ai: failed to log draft", error.message);
+      }
+    })();
 
     const automationResults = await executeAutomationActions({
       supabase,
@@ -530,6 +596,8 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
         ),
       );
     }
+
+    await draftInsertPromise;
 
     return new Response(
       JSON.stringify({

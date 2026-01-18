@@ -90,6 +90,10 @@ async function pollSingleUser(user: AutomationUser) {
   if (!supabase) throw new Error("Supabase klient ikke konfigureret");
   try {
     const token = await getOutlookAccessToken(user.clerk_user_id);
+    const shopId = await resolveShopId(user.user_id);
+    if (shopId) {
+      await syncDraftStatuses(shopId, token);
+    }
     const state = await loadPollState(user.clerk_user_id);
     const candidates = await fetchCandidateMessages(token, state);
 
@@ -295,6 +299,72 @@ async function savePollState(
     last_received_ts: lastReceivedTs,
     updated_at: new Date().toISOString(),
   });
+}
+
+async function resolveShopId(ownerUserId: string): Promise<string | null> {
+  if (!supabase || !ownerUserId) return null;
+  const { data, error } = await supabase
+    .from("shops")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("outlook-poll: failed to resolve shop id", error.message);
+  }
+  return data?.id ?? null;
+}
+
+async function outlookDraftIsDraft(token: string, draftId: string): Promise<boolean | null> {
+  const url = `${GRAPH_BASE}/me/messages/${encodeURIComponent(draftId)}?$select=id,isDraft`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const text = await res.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    const message = json?.error?.message || json?.message || text || `HTTP ${res.status}`;
+    console.warn("outlook-poll: draft check failed", draftId, message);
+    return null;
+  }
+  return json?.isDraft === true;
+}
+
+async function syncDraftStatuses(shopId: string, token: string) {
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from("drafts")
+    .select("id,draft_id")
+    .eq("shop_id", shopId)
+    .eq("platform", "outlook")
+    .eq("status", "pending")
+    .not("draft_id", "is", null);
+  if (error) {
+    console.warn("outlook-poll: failed to load pending drafts", error.message);
+    return;
+  }
+  const toMarkSent: string[] = [];
+  for (const row of data ?? []) {
+    const draftId = (row as any)?.draft_id;
+    if (!draftId) continue;
+    const isDraft = await outlookDraftIsDraft(token, String(draftId));
+    if (isDraft === false) {
+      toMarkSent.push((row as any).id);
+    }
+  }
+  if (!toMarkSent.length) return;
+  const { error: updateError } = await supabase
+    .from("drafts")
+    .update({ status: "sent" })
+    .in("id", toMarkSent);
+  if (updateError) {
+    console.warn("outlook-poll: failed to update draft status", updateError.message);
+  }
 }
 
 async function fetchJson<T>(url: string, token: string): Promise<T> {

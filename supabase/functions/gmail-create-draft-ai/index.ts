@@ -217,6 +217,50 @@ function extractPlainTextFromPayload(payload: any): string {
   return "";
 }
 
+function stripTrailingSignoff(text: string): string {
+  const closings = [
+    "venlig hilsen",
+    "med venlig hilsen",
+    "mvh",
+    "best regards",
+    "kind regards",
+    "regards",
+    "sincerely",
+    "cheers",
+  ];
+  const lines = text.split("\n");
+  let i = lines.length - 1;
+  while (i >= 0 && !lines[i].trim()) i -= 1;
+  if (i < 0) return text;
+  const last = lines[i].trim().toLowerCase();
+  if (closings.includes(last)) {
+    lines.splice(i, 1);
+    while (lines.length && !lines[lines.length - 1].trim()) {
+      lines.pop();
+    }
+    return lines.join("\n");
+  }
+  return text;
+}
+
+async function resolveShopId(
+  supabaseClient: ReturnType<typeof createClient> | null,
+  ownerUserId: string | null,
+): Promise<string | null> {
+  if (!supabaseClient || !ownerUserId) return null;
+  const { data, error } = await supabaseClient
+    .from("shops")
+    .select("id")
+    .eq("owner_user_id", ownerUserId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    console.warn("gmail-create-draft-ai: failed to resolve shop id", error.message);
+  }
+  return data?.id ?? null;
+}
+
 // Henter fuld Gmail-besked (payload) med auth token
 async function fetchGmailMessage(messageId: string, token: string) {
   const url = `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}?format=full`;
@@ -470,6 +514,7 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     let finalText = aiText.trim();
     const signature = persona.signature?.trim();
     if (signature && signature.length && !finalText.includes(signature)) {
+      finalText = stripTrailingSignoff(finalText);
       finalText = `${finalText}\n\n${signature}`;
     }
     aiText = finalText;
@@ -488,6 +533,28 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     const rawMessage = rawLines.join("\r\n");
 
     const draft = await createGmailDraft(rawMessage, gmailToken, threadId ?? undefined);
+    const draftInsertPromise = (async () => {
+      if (!supabase || !supabaseUserId) return;
+      const shopId = await resolveShopId(supabase, supabaseUserId);
+      if (!shopId) {
+        console.warn("gmail-create-draft-ai: no shop id found, skipping draft log");
+        return;
+      }
+      const { error } = await supabase.from("drafts").insert({
+        shop_id: shopId,
+        customer_email: fromEmail || from,
+        subject,
+        platform: "gmail",
+        status: "pending",
+        draft_id: draft?.id ?? null,
+        message_id: draft?.message?.id ?? null,
+        thread_id: draft?.message?.threadId ?? threadId ?? null,
+        created_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.warn("gmail-create-draft-ai: failed to log draft", error.message);
+      }
+    })();
     const automationResults = await executeAutomationActions({
       supabase,
       supabaseUserId,
@@ -497,6 +564,8 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
       apiVersion: SHOPIFY_API_VERSION,
     });
     emitDebugLog("gmail-create-draft-ai: automation results", automationResults);
+
+    await draftInsertPromise;
 
     return new Response(JSON.stringify({ success: true, draft, automation: automationResults }), {
       status: 200,
