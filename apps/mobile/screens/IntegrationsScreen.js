@@ -8,6 +8,7 @@ import GlobalStyles, { COLORS } from "../styles/GlobalStyles";
 import { useClerkSupabase } from "../lib/supabaseClient";
 import { useShopDomain } from "../lib/hooks/useShopDomain";
 
+// Indhold til integrationssektioner
 const sections = [
   {
     id: "mail",
@@ -47,7 +48,9 @@ const sections = [
 ];
 
 export default function IntegrationsScreen() {
+  // Clerk token til edge functions
   const { getToken } = useAuth();
+  // Supabase klient via Clerk auth
   const supabase = useClerkSupabase();
   const {
     shopDomain: shopifyConnectedDomain,
@@ -56,17 +59,25 @@ export default function IntegrationsScreen() {
     refresh: refreshShopDomain,
   } =
     useShopDomain();
+  // Modal-state til Shopify
   const [shopifyModalVisible, setShopifyModalVisible] = useState(false);
+  // Input-felter i modal
   const [shopifyDomainInput, setShopifyDomainInput] = useState("");
   const [shopifyTokenInput, setShopifyTokenInput] = useState("");
+  // Fejlbesked til Shopify
   const [shopifyError, setShopifyError] = useState(null);
+  // Loader mens shop-domæne hentes
   const isLoadingConnection = !isShopDomainLoaded;
+  // Loader til alle mutationer
   const [isMutating, setIsMutating] = useState(false);
+  // Loader til test af Shopify
   const [isTestingShopify, setIsTestingShopify] = useState(false);
 
+  // Base URL til Supabase functions
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
   const functionsBase = supabaseUrl ? `${supabaseUrl}/functions/v1` : null;
 
+  // Rens og normaliser domæne
   const normalizeDomain = useCallback(
     (value) =>
       value.trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "").toLowerCase(),
@@ -75,6 +86,7 @@ export default function IntegrationsScreen() {
 
   // Åbner modal med eksisterende butik udfyldt så brugeren kan opdatere
   const openShopifyModal = () => {
+    // Ryd fejl og indsæt nuværende domæne
     setShopifyError(null);
     setShopifyDomainInput(shopifyConnectedDomain ?? "");
     setShopifyTokenInput("");
@@ -87,6 +99,7 @@ export default function IntegrationsScreen() {
       setShopifyError("Supabase url ikke sat i miljøvariabler.");
       return;
     }
+    // Normaliser input før vi sender det
     const domain = normalizeDomain(shopifyDomainInput);
     const tokenValue = shopifyTokenInput.trim();
 
@@ -100,15 +113,18 @@ export default function IntegrationsScreen() {
       return;
     }
 
+    // Start loader
     setIsMutating(true);
     setShopifyError(null);
 
     try {
+      // Hent Clerk token til edge function
       const sessionToken = await getToken();
       if (!sessionToken) {
         throw new Error("Kunne ikke hente Clerk session token.");
       }
 
+      // Kald edge function der gemmer integrationen
       const response = await fetch(`${functionsBase}/shopify-connect`, {
         method: "POST",
         headers: {
@@ -127,6 +143,7 @@ export default function IntegrationsScreen() {
         throw new Error(message);
       }
 
+      // Opdater lokal data og luk modal
       await refreshShopDomain();
       setShopifyModalVisible(false);
       setShopifyTokenInput("");
@@ -135,6 +152,7 @@ export default function IntegrationsScreen() {
       const message = error instanceof Error ? error.message : "Ukendt fejl ved forbindelse til Shopify.";
       setShopifyError(message);
     } finally {
+      // Stop loader
       setIsMutating(false);
     }
   };
@@ -145,6 +163,7 @@ export default function IntegrationsScreen() {
       return;
     }
 
+    // Start loader
     setIsMutating(true);
     try {
       const { error } = await supabase
@@ -156,6 +175,7 @@ export default function IntegrationsScreen() {
         throw error;
       }
 
+      // Opdater lokal data og luk modal
       await refreshShopDomain();
       setShopifyModalVisible(false);
       Alert.alert("Shopify frakoblet", "Butikken er fjernet fra din konto.");
@@ -164,6 +184,7 @@ export default function IntegrationsScreen() {
         error instanceof Error ? error.message : "Ukendt fejl ved frakobling af Shopify.";
       Alert.alert("Kunne ikke fjerne integrationen", message);
     } finally {
+      // Stop loader
       setIsMutating(false);
     }
   };
@@ -175,8 +196,10 @@ export default function IntegrationsScreen() {
       return;
     }
 
+    // Start test-loader
     setIsTestingShopify(true);
     try {
+      // Token til edge function
       const clerkToken = await getToken();
       if (!clerkToken) {
         throw new Error("Kunne ikke hente Clerk session token.");
@@ -198,6 +221,7 @@ export default function IntegrationsScreen() {
         throw new Error(message);
       }
 
+      // Vis status med antal ordre i testen
       const orderCount = Array.isArray(payload?.orders) ? payload.orders.length : 0;
       Alert.alert(
         "Shopify test",
@@ -209,6 +233,7 @@ export default function IntegrationsScreen() {
       const message = error instanceof Error ? error.message : "Ukendt fejl under testen.";
       Alert.alert("Shopify test fejlede", message);
     } finally {
+      // Stop test-loader
       setIsTestingShopify(false);
     }
   }, [functionsBase, supabase]);
@@ -216,6 +241,7 @@ export default function IntegrationsScreen() {
   // Bekræfter med brugeren før integrationen slettes
   const confirmDisconnectShopify = () => {
     if (!shopifyConnectedDomain) return;
+    // Native alert med bekræftelse
     Alert.alert(
       "Fjern Shopify",
       "Er du sikker på, at du vil fjerne forbindelsen til Shopify?",
@@ -232,22 +258,30 @@ export default function IntegrationsScreen() {
 
   // Placeholder for andre integrationer indtil de implementeres
   const handleGenericIntegration = (name) => {
+    // Vis besked om at det kommer snart
     Alert.alert("Kommer snart", `${name} integrationen er på vej. Indtil da kan du forbinde Shopify.`);
   };
 
   return (
     <LinearGradient
+      // Baggrundsgradient
       colors={[COLORS.background, COLORS.surfaceAlt]}
+      // Retning for gradient
       start={{ x: 0, y: 0 }}
       end={{ x: 0.8, y: 1 }}
+      // Container-stil
       style={GlobalStyles.integrationsScreen}
     >
       <ScrollView
+        // Fyld pladsen
         style={{ flex: 1 }}
+        // Indholdsstil med padding
         contentContainerStyle={GlobalStyles.integrationsContent}
+        // Skjul scrollbar
         showsVerticalScrollIndicator={false}
       >
         <View style={GlobalStyles.integrationsHeader}>
+          {/* Overskrift og intro */}
           <Text style={GlobalStyles.integrationsHeading}>Integrationer</Text>
           <Text style={GlobalStyles.integrationsSubtitle}>
             Tilføj de systemer Sona skal kunne hente data fra.
@@ -265,6 +299,7 @@ export default function IntegrationsScreen() {
 
             <View style={GlobalStyles.integrationCardGrid}>
               {section.integrations.map((integration) => {
+                // Vi har ekstra logik for Shopify
                 const isShopify = integration.id === "shopify";
                 const buttonLabel = isShopify
                   ? shopifyConnectedDomain
@@ -281,6 +316,7 @@ export default function IntegrationsScreen() {
                     <View style={GlobalStyles.integrationCardHeader}>
                       <View style={GlobalStyles.integrationIconWrapper}>
                         {integration.logo ? (
+                          // Brug logo-billede hvis det findes
                           <Image
                             source={integration.logo}
                             style={[
@@ -289,6 +325,7 @@ export default function IntegrationsScreen() {
                             ]}
                           />
                         ) : (
+                          // Fallback til ikon
                           <Ionicons
                             name={integration.icon}
                             size={20}
@@ -296,15 +333,18 @@ export default function IntegrationsScreen() {
                           />
                         )}
                       </View>
+                      {/* Integrationens navn */}
                       <Text style={GlobalStyles.integrationCardTitle}>
                         {integration.name}
                       </Text>
                     </View>
+                    {/* Beskrivelse af integrationen */}
                     <Text style={GlobalStyles.integrationCardDescription}>
                       {integration.description}
                     </Text>
                     {isShopify && shopifyConnectedDomain ? (
                       <>
+                        {/* Status for tilsluttet butik */}
                         <Text style={GlobalStyles.integrationCardStatus}>
                           Forbundet til {shopifyConnectedDomain}
                         </Text>
@@ -316,6 +356,7 @@ export default function IntegrationsScreen() {
                       </>
                     ) : null}
                     <TouchableOpacity
+                      // Knap til at forbinde/administrere integrationen
                       style={GlobalStyles.integrationCardButton}
                       activeOpacity={0.9}
                       onPress={onPress}
@@ -357,6 +398,7 @@ export default function IntegrationsScreen() {
                 </Text>
               ) : null}
               <TouchableOpacity
+                // Knap til at teste forbindelsen
                 style={GlobalStyles.integrationCardButton}
                 activeOpacity={0.9}
                 onPress={testShopifyConnection}
@@ -374,6 +416,7 @@ export default function IntegrationsScreen() {
       </ScrollView>
 
       <Modal
+        // Modal til at forbinde Shopify
         transparent
         visible={shopifyModalVisible}
         animationType="fade"
@@ -427,12 +470,14 @@ export default function IntegrationsScreen() {
             </View>
 
             {shopifyError ? (
+              // Fejlbesked i modal
               <Text style={GlobalStyles.integrationModalError}>
                 {shopifyError}
               </Text>
             ) : null}
 
             {isMutating ? (
+              // Loader mens vi gemmer eller fjerner
               <View style={GlobalStyles.integrationModalLoading}>
                 <ActivityIndicator size="small" color={COLORS.primary} />
                 <Text style={GlobalStyles.integrationModalHint}>

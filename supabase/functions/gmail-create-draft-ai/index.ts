@@ -1,5 +1,8 @@
+// Clerk klient til at hente OAuth tokens
 import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
+// JWT validering mod Clerk
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
+// Supabase klient til DB opslag
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   buildAutomationGuidance,
@@ -30,8 +33,11 @@ import { classifyEmail } from "../_shared/classify-email.ts";
  * - Opret draft i Gmail og returner metadata
  */
 
+// Base URL til Gmail API
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+// Intern edge function til Shopify ordrer
 const SHOPIFY_ORDERS_FN = "/functions/v1/shopify-orders";
+// Slå debug logs til/fra via env
 const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
 // Lille helper så vi kan slå debug-logning til/fra uden at ændre resten af koden - Det brugte meget data i supabase
 const emitDebugLog = (...args: Array<unknown>) => {
@@ -40,6 +46,7 @@ const emitDebugLog = (...args: Array<unknown>) => {
   }
 };
 
+// Miljøvariabler til auth og integrationer
 const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
 const CLERK_JWT_ISSUER = Deno.env.get("CLERK_JWT_ISSUER");
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
@@ -52,6 +59,7 @@ const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
 const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 const OPENAI_EMBEDDING_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
 
+// Log tydelige advarsler ved manglende config
 if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – kan ikke kalde interne functions.");
@@ -64,10 +72,13 @@ if (!SHOPIFY_TOKEN_KEY)
 if (!INTERNAL_AGENT_SECRET)
   console.warn("INTERNAL_AGENT_SECRET mangler – interne automatiske kald er ikke sikret.");
 
+// Clerk klient bruges til OAuth tokens
 const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
+// JWKS til JWT validering fra Clerk
 const JWKS = CLERK_JWT_ISSUER
   ? createRemoteJWKSet(new URL(`${CLERK_JWT_ISSUER.replace(/\/$/, "")}/.well-known/jwks.json`))
   : null;
+// Supabase client med service role for server-side queries
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
@@ -78,7 +89,9 @@ type OpenAIResult = {
 
 // Laver embeddings så vi kan matche produkter mod mailindholdet
 async function embedText(input: string): Promise<number[]> {
+  // Stop hvis OpenAI ikke er konfigureret
   if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  // Kald embeddings endpoint
   const res = await fetch("https://api.openai.com/v1/embeddings", {
     method: "POST",
     headers: {
@@ -90,10 +103,13 @@ async function embedText(input: string): Promise<number[]> {
       input,
     }),
   });
+  // Forsøg at parse JSON svar
   const json = await res.json().catch(() => null);
   if (!res.ok) {
+    // Fejl fra OpenAI
     throw new Error(json?.error?.message || `OpenAI embedding error ${res.status}`);
   }
+  // Udtræk embedding-vektor
   const vector = json?.data?.[0]?.embedding;
   if (!Array.isArray(vector)) throw new Error("OpenAI embedding missing");
   return vector;
@@ -105,23 +121,29 @@ async function fetchProductContext(
   userId: string | null,
   text: string,
 ) {
+  // Hvis vi mangler data, returner tom tekst
   if (!supabaseClient || !userId || !text?.trim()) return "";
   try {
+    // Embed den første del af teksten for at spare tokens
     const embedding = await embedText(text.slice(0, 4000));
+    // Kald RPC der matcher produkter
     const { data, error } = await supabaseClient.rpc("match_products", {
       query_embedding: embedding,
       match_threshold: 0.2,
       match_count: 5,
       filter_shop_id: userId,
     });
+    // Returner tom hvis ingen matches
     if (error || !Array.isArray(data) || !data.length) return "";
     return data
       .map((item: any) => {
+        // Byg linje med produktinfo
         const price = item?.price ? `Price: ${item.price}.` : "";
         return `Product: ${item?.title ?? "Unknown"}. ${price} Details: ${item?.description ?? ""}`;
       })
       .join("\n");
   } catch (err) {
+    // Log og returner tom kontekst ved fejl
     console.warn("gmail-create-draft-ai: product context failed", err);
     return "";
   }
@@ -129,7 +151,9 @@ async function fetchProductContext(
 
 // Udtrækker Clerk bearer token fra headers
 function getBearerToken(req: Request): string {
+  // Læs authorization header
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization") ?? "";
+  // Match "Bearer <token>"
   const match = String(header).match(/^Bearer\s+(.+)$/i);
   if (!match) throw Object.assign(new Error("Missing Clerk session token"), { status: 401 });
   return match[1];
@@ -138,19 +162,23 @@ function getBearerToken(req: Request): string {
 // Tillader gmail-poll at kalde funktionen uden Clerk-session via delt secret
 function isInternalAutomationRequest(req: Request): boolean {
   if (!INTERNAL_AGENT_SECRET) return false;
+  // Tjek mulige header-navne for internal secret
   const candidate =
     req.headers.get("x-internal-secret") ??
     req.headers.get("X-Internal-Secret") ??
     req.headers.get("x-automation-secret") ??
     req.headers.get("X-Automation-Secret");
+  // Returner om secret matcher
   return candidate === INTERNAL_AGENT_SECRET;
 }
 
 // Parse JSON-body men returner tomt objekt ved fejl
 async function readJsonBody(req: Request) {
   try {
+    // Forsøg at parse JSON
     return await req.json();
   } catch {
+    // Returner tomt objekt ved fejl
     return {};
   }
 }
@@ -160,8 +188,11 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   if (!JWKS || !CLERK_JWT_ISSUER) {
     throw Object.assign(new Error("JWT verify ikke konfigureret (CLERK_JWT_ISSUER mangler)"), { status: 500 });
   }
+  // Hent bearer token fra request
   const token = getBearerToken(req);
+  // Verificer token mod JWKS
   const { payload } = await jwtVerify(token, JWKS, { issuer: CLERK_JWT_ISSUER });
+  // Udtræk bruger-id fra token
   const userId = payload?.sub;
   if (!userId || typeof userId !== "string") {
     throw Object.assign(new Error("Ugyldigt token: mangler user id"), { status: 401 });
@@ -171,16 +202,19 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
 
 // Henter eller fornyer gmail.send token fra Clerk
 async function getGmailAccessToken(userId: string): Promise<string> {
+  // Prøv at hente eksisterende token
   const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
   let accessToken = tokens?.data?.[0]?.token ?? null;
 
   if (!accessToken) {
+    // Forny token hvis det mangler
     await clerk.users.refreshUserOauthAccessToken(userId, "oauth_google");
     const refreshed = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
     accessToken = refreshed?.data?.[0]?.token ?? null;
   }
 
   if (!accessToken) {
+    // Stop hvis vi stadig mangler token
     throw Object.assign(new Error("Ingen Gmail adgangstoken fundet. Log ind via Google med gmail.send scope."), { status: 403 });
   }
   return accessToken;
@@ -188,12 +222,17 @@ async function getGmailAccessToken(userId: string): Promise<string> {
 
 // Dekoder Gmail base64-url encodede dele til tekst
 function decodeBase64Url(data: string): string {
+  // Konverter URL-safe base64 til normal base64
   const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  // Pad til korrekt længde
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  // Dekod til binary string
   const binaryString = atob(padded);
   try {
+    // Forsøg at dekode til UTF-8
     return decodeURIComponent(escape(binaryString));
   } catch {
+    // Fallback til rå string
     return binaryString;
   }
 }
@@ -201,12 +240,14 @@ function decodeBase64Url(data: string): string {
 // Finder plaintext fra Gmail MIME payload (fallback til HTML-strip)
 function extractPlainTextFromPayload(payload: any): string {
   if (!payload) return "";
+  // Brug body direkte hvis der er data
   if (payload.body?.data) {
     return decodeBase64Url(payload.body.data);
   }
   if (Array.isArray(payload.parts)) {
     for (const part of payload.parts) {
       const mime = part?.mimeType ?? "";
+      // Rekursiv søgning i nested parts
       const value = extractPlainTextFromPayload(part);
       if (!value) continue;
       if (mime.includes("text/plain")) return value;
@@ -218,6 +259,7 @@ function extractPlainTextFromPayload(payload: any): string {
 }
 
 function stripTrailingSignoff(text: string): string {
+  // Mulige signatur-fraser vi vil fjerne
   const closings = [
     "venlig hilsen",
     "med venlig hilsen",
@@ -228,13 +270,17 @@ function stripTrailingSignoff(text: string): string {
     "sincerely",
     "cheers",
   ];
+  // Del tekst op i linjer
   const lines = text.split("\n");
   let i = lines.length - 1;
+  // Skip tomme linjer i bunden
   while (i >= 0 && !lines[i].trim()) i -= 1;
   if (i < 0) return text;
   const last = lines[i].trim().toLowerCase();
   if (closings.includes(last)) {
+    // Fjern signatur-linjen
     lines.splice(i, 1);
+    // Fjern evt. tomme linjer bagefter
     while (lines.length && !lines[lines.length - 1].trim()) {
       lines.pop();
     }
@@ -247,7 +293,9 @@ async function resolveShopId(
   supabaseClient: ReturnType<typeof createClient> | null,
   ownerUserId: string | null,
 ): Promise<string | null> {
+  // Stop hvis vi mangler data
   if (!supabaseClient || !ownerUserId) return null;
+  // Hent seneste shop-id for ejeren
   const { data, error } = await supabaseClient
     .from("shops")
     .select("id")
@@ -263,30 +311,39 @@ async function resolveShopId(
 
 // Henter fuld Gmail-besked (payload) med auth token
 async function fetchGmailMessage(messageId: string, token: string) {
+  // Byg URL til Gmail API
   const url = `${GMAIL_BASE}/messages/${encodeURIComponent(messageId)}?format=full`;
+  // Kald Gmail API
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) {
+    // Læs fejltekst for bedre log
     const text = await res.text();
     throw Object.assign(new Error(`Gmail message fetch failed: ${text || res.status}`), { status: res.status });
   }
+  // Returner JSON payload
   return await res.json();
 }
 
 // Opretter Gmail draft ud fra rå MIME tekst
 async function createGmailDraft(rawMessage: string, token: string, threadId?: string) {
+  // Konverter tekst til base64url som Gmail kræver
   const toBase64Url = (input: string) => {
     const b64 = btoa(unescape(encodeURIComponent(input)));
     return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
   };
+  // Byg payload til Gmail API
   const payload: any = { message: { raw: toBase64Url(rawMessage) } };
   if (threadId) payload.message.threadId = threadId;
+  // Kald Gmail API for at oprette draft
   const res = await fetch(`${GMAIL_BASE}/drafts`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
+  // Læs tekst først så vi kan parse og logge fejl
   const text = await res.text();
   let json: any = null;
+  // Prøv at parse JSON hvis muligt
   try { json = text ? JSON.parse(text) : null; } catch {}
   if (!res.ok) throw Object.assign(new Error(`Gmail draft failed: ${text || res.status}`), { status: res.status });
   return json;
@@ -294,10 +351,14 @@ async function createGmailDraft(rawMessage: string, token: string, threadId?: st
 
 // Kalder OpenAI med JSON schema så vi får reply + handlinger
 async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
+  // Returner tomt svar hvis OpenAI ikke er aktivt
   if (!OPENAI_API_KEY) return { reply: null, actions: [] };
   const messages: any[] = [];
+  // System prompt først
   if (system) messages.push({ role: "system", content: system });
+  // Bruger prompt til sidst
   messages.push({ role: "user", content: prompt });
+  // Body med schema-response så vi får struktureret JSON
   const body = {
     model: OPENAI_MODEL,
     temperature: 0.3,
@@ -308,18 +369,22 @@ async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult
     },
     max_tokens: 800,
   };
+  // Kald OpenAI chat endpoint
   const res = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  // Parse JSON svar
   const json = await res.json();
   if (!res.ok) throw new Error(json?.error?.message || `OpenAI error ${res.status}`);
+  // Læs content fra første choice
   const content = json?.choices?.[0]?.message?.content;
   if (!content || typeof content !== "string") {
     return { reply: null, actions: [] };
   }
   try {
+    // Parse den JSON vi bad om
     const parsed = JSON.parse(content);
     const reply = typeof parsed?.reply === "string" ? parsed.reply : null;
     const actions = Array.isArray(parsed?.actions)
@@ -327,20 +392,25 @@ async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult
       : [];
     return { reply, actions };
   } catch (_err) {
+    // Hvis parsing fejler returner tomt svar
     return { reply: null, actions: [] };
   }
 }
 
 Deno.serve(async (req) => {
   try {
+    // Kun POST er tilladt
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
+    // Læs body som JSON (kan være tom)
     const body = await readJsonBody(req);
+    // Tjek om kaldet er internt
     const internalRequest = isInternalAutomationRequest(req);
 
     let clerkToken: string | null = null;
     let clerkUserId: string;
     if (internalRequest) {
+      // Ved interne kald forventes clerkUserId i body
       const providedUserId = typeof body?.clerkUserId === "string" ? body.clerkUserId.trim() : "";
       if (!INTERNAL_AGENT_SECRET) {
         return new Response(JSON.stringify({ error: "Internt secret ikke konfigureret" }), {
@@ -352,8 +422,10 @@ Deno.serve(async (req) => {
           status: 400,
         });
       }
+      // Brug den bruger vi fik i payload
       clerkUserId = providedUserId;
     } else {
+      // Almindeligt kald: brug JWT fra Authorization
       clerkToken = getBearerToken(req);
       clerkUserId = await requireUserIdFromJWT(req);
     }
@@ -361,6 +433,7 @@ Deno.serve(async (req) => {
     let supabaseUserId: string | null = null;
     if (supabase) {
       try {
+        // Find supabase user id ud fra Clerk bruger
         supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
       } catch (err) {
         console.warn(
@@ -369,24 +442,32 @@ Deno.serve(async (req) => {
         );
       }
     }
+    // Hent kontekst: persona, automation og policies
     const persona = await fetchPersona(supabase, supabaseUserId);
     const automation = await fetchAutomation(supabase, supabaseUserId);
     const policies = await fetchPolicies(supabase, supabaseUserId);
+    // Hent OAuth token til Gmail
     const gmailToken = await getGmailAccessToken(clerkUserId);
 
+    // messageId er obligatorisk
     const messageId = typeof body?.messageId === "string" ? body.messageId : null;
     if (!messageId) return new Response(JSON.stringify({ error: "messageId mangler" }), { status: 400 });
 
+    // Hent mail fra Gmail
     const message = await fetchGmailMessage(messageId, gmailToken);
     const headers = message.payload?.headers ?? [];
+    // Læs afsender og emne fra headers
     const from = headers.find((h: any) => h.name?.toLowerCase() === "from")?.value ?? "";
     const subject = headers.find((h: any) => h.name?.toLowerCase() === "subject")?.value ?? "Svar";
     const threadId = message.threadId ?? null;
+    // Uddrag plain text fra MIME payload
     const plain = extractPlainTextFromPayload(message.payload);
 
+    // Find afsender-mail hvis muligt
     const emailMatch = from.match(/<([^>]+)>/);
     const fromEmail = emailMatch ? emailMatch[1] : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
 
+    // Klassificer mail for at se om vi skal svare
     const classification = await classifyEmail({
       from,
       subject,
@@ -394,6 +475,7 @@ Deno.serve(async (req) => {
       headers,
     });
     if (!classification.process) {
+      // Log debug og returner "skipped"
       emitDebugLog("gmail-create-draft-ai: gatekeeper skip", {
         reason: classification.reason,
         category: classification.category,
@@ -416,13 +498,16 @@ Deno.serve(async (req) => {
       clerkToken && PROJECT_URL
         ? async (email?: string | null) => {
             try {
+              // Byg URL til shopify-orders function
               const url = new URL(`${PROJECT_URL}${SHOPIFY_ORDERS_FN}`);
               if (email?.trim()) url.searchParams.set("email", email.trim());
               url.searchParams.set("limit", "5");
+              // Kald med Clerk token
               const res = await fetch(url.toString(), {
                 headers: { Authorization: `Bearer ${clerkToken}` },
               });
               if (!res.ok) return null;
+              // Parse og returner orders array
               const json = await res.json().catch(() => null);
               return Array.isArray(json?.orders) ? json.orders : null;
             } catch (err) {
@@ -432,6 +517,7 @@ Deno.serve(async (req) => {
           }
         : null;
 
+    // Hent ordre-kontekst baseret på e-mail og emne
     const { orders, matchedSubjectNumber } = await resolveOrderContext({
       supabase,
       userId: supabaseUserId,
@@ -447,15 +533,17 @@ Deno.serve(async (req) => {
       matchedSubjectNumber,
     });
 
+    // Byg kort resume af ordrer
     const orderSummary = buildOrderSummary(orders);
+    // Hent ekstra produktkontekst via embeddings
     const productContext = await fetchProductContext(
       supabase,
       supabaseUserId,
       plain || subject || ""
     );
 
-  // Byg base prompt til OpenAI: med email-tekst, ordre-resume, persona-instruktioner og policies.
-  const promptBase = buildMailPrompt({
+    // Byg base prompt til OpenAI: med email-tekst, ordre-resume, persona-instruktioner og policies.
+    const promptBase = buildMailPrompt({
       emailBody: plain,
       orderSummary,
       personaInstructions: persona.instructions,
@@ -465,19 +553,22 @@ Deno.serve(async (req) => {
       signature: persona.signature,
       policies,
     });
+    // Tilføj produktkontekst hvis vi har det
     const prompt = productContext
       ? `${promptBase}\n\nPRODUKTKONTEKST:\n${productContext}`
       : promptBase;
 
-  // Kald OpenAI (eller fallback) for at få forslag til svar og eventuelle automation actions
-  let aiText: string | null = null;
-  let automationActions: AutomationAction[] = [];
+    // Kald OpenAI (eller fallback) for at få forslag til svar og eventuelle automation actions
+    let aiText: string | null = null;
+    let automationActions: AutomationAction[] = [];
     try {
       if (OPENAI_API_KEY) {
+        // Byg guidance til automation og persona
         const automationGuidance = buildAutomationGuidance(automation);
         const personaGuidance = `Sprogregel har altid forrang; ignorer persona-instruktioner om sprogvalg.
 Persona instruktionsnoter: ${persona.instructions?.trim() || "Hold tonen venlig og effektiv."}
 Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
+        // System prompt med regler og schema
         const systemMsgBase = [
           "Du er en kundeservice-assistent.",
           "Skriv kort, venligt og professionelt pa samme sprog som kundens mail.",
@@ -492,54 +583,69 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
           "For update_shipping_address skal payload.shipping_address mindst indeholde name, address1, city, zip/postal_code og country.",
           "Afslut ikke med signatur – signaturen tilføjes automatisk senere.",
         ].join("\n");
+        // Tilføj info om ordrenummer hvis vi fandt det
         const systemMsg = matchedSubjectNumber
           ? systemMsgBase + ` Hvis KONTEKST indeholder et ordrenummer (fx #${matchedSubjectNumber}), brug dette ordrenummer som reference i svaret og spørg IKKE efter ordrenummer igen.`
           : systemMsgBase;
+        // Kald OpenAI og hent reply/actions
         const { reply, actions } = await callOpenAI(prompt, systemMsg);
         aiText = reply;
         automationActions = actions ?? [];
       } else {
+        // Ingen OpenAI = fallback
         aiText = null;
       }
     } catch (e) {
+      // Log fejl og brug fallback
       console.warn("OpenAI fejl", e?.message || e);
       aiText = null;
     }
 
     if (!aiText) {
+      // Fallback tekst hvis AI ikke svarer
       aiText = `Hej ${from.split(" <")[0] || "kunde"},\n\nTak for din besked. Jeg har kigget på din sag${
         orders.length ? ` og fandt ${orders.length} ordre(r) relateret til din e-mail.` : "."
       }\n\n${orderSummary}\nVi vender tilbage hurtigst muligt med en opdatering.`;
     }
+    // Ryd op i whitespace og tilføj signatur
     let finalText = aiText.trim();
     const signature = persona.signature?.trim();
     if (signature && signature.length && !finalText.includes(signature)) {
+      // Fjern evt. signatur fra AI så vi ikke får dobbelt
       finalText = stripTrailingSignoff(finalText);
+      // Tilføj signatur manuelt
       finalText = `${finalText}\n\n${signature}`;
     }
     aiText = finalText;
 
-  // opret et draft i Gmail
-  const rawLines = [] as string[];
+    // Opret et draft i Gmail
+    const rawLines = [] as string[];
     rawLines.push(`To: ${fromEmail || from}`);
     rawLines.push(`Subject: Re: ${subject}`);
     if (threadId) {
+      // Behold svar-tråd i Gmail
       rawLines.push(`In-Reply-To: ${messageId}`);
       rawLines.push(`References: ${messageId}`);
     }
+    // MIME header for plain text
     rawLines.push("Content-Type: text/plain; charset=UTF-8");
     rawLines.push("");
+    // Selve mail-teksten
     rawLines.push(aiText);
     const rawMessage = rawLines.join("\r\n");
 
+    // Opret draft i Gmail
     const draft = await createGmailDraft(rawMessage, gmailToken, threadId ?? undefined);
+    // Log draft i Supabase async
     const draftInsertPromise = (async () => {
       if (!supabase || !supabaseUserId) return;
+      // Find shop id til logging
       const shopId = await resolveShopId(supabase, supabaseUserId);
       if (!shopId) {
         console.warn("gmail-create-draft-ai: no shop id found, skipping draft log");
         return;
       }
+      // Indsæt draft metadata i DB
       const { error } = await supabase.from("drafts").insert({
         shop_id: shopId,
         customer_email: fromEmail || from,
@@ -555,6 +661,7 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
         console.warn("gmail-create-draft-ai: failed to log draft", error.message);
       }
     })();
+    // Udfør eventuelle automation actions i Shopify
     const automationResults = await executeAutomationActions({
       supabase,
       supabaseUserId,
@@ -565,12 +672,15 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     });
     emitDebugLog("gmail-create-draft-ai: automation results", automationResults);
 
+    // Vent på at draft loggen er færdig
     await draftInsertPromise;
 
+    // Returner success payload
     return new Response(JSON.stringify({ success: true, draft, automation: automationResults }), {
       status: 200,
     });
   } catch (err: any) {
+    // Håndter fejl samlet
     const status = typeof err?.status === "number" ? err.status : 500;
     const message = err?.message || "Ukendt fejl";
     console.error("gmail-create-draft-ai error:", message);

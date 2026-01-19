@@ -11,26 +11,33 @@ export default function AgentKnowledgeTemplatesScreen({
 }) {
   // Navigerer til editor for at oprette et nyt standardsvar
   const handleCreateTemplate = () => {
+    // Åbner editor uden template-id
     navigation.navigate("AgentKnowledgeTemplateEditor");
   };
 
   // Åbner editoren med valgt template-id for redigering
   const handleEditTemplate = (templateId) => {
+    // Sender template-id med til editor
     navigation.navigate("AgentKnowledgeTemplateEditor", { templateId });
   };
 
   return (
     <ScrollView
+      // Skærmens standard-baggrund
       style={GlobalStyles.screen}
+      // Indholdsstil med padding
       contentContainerStyle={styles.contentContainer}
+      // Skjul scrollbar
       showsVerticalScrollIndicator={false}
     >
+      {/* Overskrift og intro */}
       <Text style={styles.heading}>Standardsvar</Text>
       <Text style={styles.subheading}>
         Her kan du oprette og redigere standardsvar, som agenten bruger som udgangspunkt til at personalisere svar.
       </Text>
 
       <TouchableOpacity
+        // Primær CTA til at tilføje nyt standardsvar
         style={[styles.primaryButton, processing && styles.primaryButtonDisabled]}
         activeOpacity={0.88}
         onPress={handleCreateTemplate}
@@ -42,6 +49,7 @@ export default function AgentKnowledgeTemplatesScreen({
 
       {loading ? (
         <View style={styles.loadingRow}>
+          {/* Loader mens data hentes */}
           <ActivityIndicator size="small" color={COLORS.primary} />
           <Text style={styles.loadingText}>Henter standardsvar…</Text>
         </View>
@@ -54,6 +62,7 @@ export default function AgentKnowledgeTemplatesScreen({
               activeOpacity={0.88}
               onPress={() => handleEditTemplate(template.id)}
             >
+              {/* Titel og beskrivelse for template */}
               <Text style={styles.cardTitle}>{template.title}</Text>
               {template.description ? (
                 <Text style={styles.cardDescription}>{template.description}</Text>
@@ -64,6 +73,7 @@ export default function AgentKnowledgeTemplatesScreen({
         </View>
       ) : (
         <View style={styles.emptyState}>
+          {/* Tom-tilstand når der ikke findes templates */}
           <Ionicons name="chatbubbles-outline" size={24} color="rgba(148, 163, 196, 0.6)" />
           <Text style={styles.emptyTitle}>Ingen standardsvar endnu</Text>
           <Text style={styles.emptyDescription}>
@@ -78,22 +88,26 @@ export default function AgentKnowledgeTemplatesScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    // Standard spacing til skærmen
     paddingHorizontal: 24,
     paddingVertical: 32,
     gap: 18,
     backgroundColor: COLORS.background,
   },
   heading: {
+    // Overskriftstypografi
     fontSize: 22,
     fontWeight: "700",
     color: COLORS.text,
   },
   subheading: {
+    // Undertekst for kontekst
     fontSize: 14,
     color: COLORS.muted,
     lineHeight: 20,
   },
   primaryButton: {
+    // Primær knap-stil
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
@@ -106,27 +120,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   primaryButtonDisabled: {
+    // Vis disabled-state
     opacity: 0.75,
   },
   primaryButtonText: {
+    // Tekst til primær knap
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.text,
   },
   list: {
+    // Liste med cards
     gap: 12,
   },
   loadingRow: {
+    // Layout for loader-rækken
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     paddingVertical: 12,
   },
   loadingText: {
+    // Tekst ved loading
     fontSize: 13,
     color: COLORS.muted,
   },
   card: {
+    // Card-stil for hver template
     borderRadius: 18,
     borderWidth: 1,
     borderColor: "rgba(77, 124, 255, 0.16)",
@@ -135,21 +155,25 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   cardTitle: {
+    // Titel i card
     fontSize: 16,
     fontWeight: "700",
     color: COLORS.text,
   },
   cardDescription: {
+    // Beskrivelse i card
     fontSize: 13,
     lineHeight: 19,
     color: COLORS.muted,
   },
   cardLink: {
+    // Tekst til redigering
     fontSize: 13,
     color: COLORS.primary,
     fontWeight: "700",
   },
   emptyState: {
+    // Tom-state container
     marginTop: 16,
     borderRadius: 18,
     borderWidth: 1,
@@ -160,11 +184,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   emptyTitle: {
+    // Titel i tom-state
     fontSize: 15,
     fontWeight: "700",
     color: COLORS.text,
   },
   emptyDescription: {
+    // Beskrivelse i tom-state
     fontSize: 13,
     color: COLORS.muted,
     lineHeight: 18,

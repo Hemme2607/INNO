@@ -22,6 +22,7 @@ export default function AgentOverviewScreen({
   onAutomationToggle,
   onToggleAutoDraft,
 }) {
+  // Er auto-draft aktiv?
   const isAgentActive = Boolean(automationSettings?.autoDraftEnabled);
   // Holder knaptekst i sync med autoDraft-flaget og viser spinner-tekst ved gem
   const heroLoading = automationSaving || automationLoading;
@@ -31,6 +32,7 @@ export default function AgentOverviewScreen({
     onToggleAutoDraft(!isAgentActive);
   };
 
+  // Tekst og styling baseret på agent-status
   const heroButtonLabel = heroLoading
     ? "Gemmer…"
     : isAgentActive
@@ -45,10 +47,14 @@ export default function AgentOverviewScreen({
 
   return (
     <ScrollView
+      // Standard baggrundsstil
       style={GlobalStyles.screen}
+      // Indholdsstil for spacing
       contentContainerStyle={styles.contentContainer}
+      // Skjul scrollbar
       showsVerticalScrollIndicator={false}
     >
+      {/* Hero-område med status og CTA */}
       <AgentHero
         onPrimaryActionPress={handleHeroPress}
         primaryActionLabel={heroButtonLabel}
@@ -57,6 +63,7 @@ export default function AgentOverviewScreen({
         primaryActionIcon={heroButtonIcon}
         primaryActionColors={heroButtonColors}
       />
+      {/* Persona-resume med info og genveje */}
       <AgentPersonaSummary
         onConfigurePress={onOpenPersona}
         signature={personaConfig?.signature ?? ""}
@@ -66,7 +73,9 @@ export default function AgentOverviewScreen({
         scenario={personaConfig?.scenario ?? ""}
         instructions={personaConfig?.instructions ?? ""}
       />
+      {/* Sektion med skabeloner og dokumenter */}
       <AgentKnowledgeSection onOpenTemplates={onOpenTemplates} onOpenDocuments={onOpenDocuments} />
+      {/* Automation-indstillinger */}
       <AgentAutomationSection
         settings={automationSettings}
         loading={automationLoading}
@@ -81,6 +90,7 @@ export default function AgentOverviewScreen({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    // Ens spacing og baggrund for hele skærmen
     paddingHorizontal: 24,
     paddingVertical: 40,
     gap: 28,

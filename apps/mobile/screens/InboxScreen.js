@@ -43,24 +43,29 @@ export default function InboxScreen() {
 
   // Tilsluttede konti prøves først.
   const prioritizedProviders = useMemo(() => {
+    // Saml alle forbundne provider-keys fra Clerk
     const connected = new Set(
       (user?.externalAccounts ?? [])
         .map((account) => account?.provider)
         .filter((provider) => typeof provider === "string")
     );
 
+    // Udbydere der allerede er tilsluttet
     const connectedMail = MAIL_PROVIDERS.filter((provider) =>
       connected.has(provider.providerKey)
     );
+    // Resten kommer bagefter som fallback
     const fallbackMail = MAIL_PROVIDERS.filter(
       (provider) => !connected.has(provider.providerKey)
     );
 
+    // Returner liste med tilsluttede først
     return [...connectedMail, ...fallbackMail];
   }, [user]);
 
   // Tekst til tom tilstand.
   const activeProviderLabel = useMemo(() => {
+    // Find label for aktiv udbyder
     const provider = MAIL_PROVIDERS.find((item) => item.id === activeMailProvider);
     return provider?.label ?? null;
   }, [activeMailProvider]);
@@ -81,6 +86,7 @@ export default function InboxScreen() {
         return;
       }
 
+      // Rate limit baseret på sidste kald
       const now = Date.now();
       if (!force && now - lastFetchRef.current < MIN_FETCH_INTERVAL) {
         // Har allerede hentet indenfor intervallet → spring over
@@ -91,6 +97,7 @@ export default function InboxScreen() {
       }
 
       if (showLoader) {
+        // Vis loader mens vi henter
         setLoading(true);
       }
 
@@ -121,6 +128,7 @@ export default function InboxScreen() {
           );
         }
 
+        // Normaliser base URL til edge functions
         const baseUrl = supabaseUrl.replace(/\/$/, "");
         let fetched = false;
         let lastError = null;
@@ -163,6 +171,7 @@ export default function InboxScreen() {
               ? payload.messages
               : [];
 
+            // Kort map til UI-format
             const mapped = rawItems.map((message) => {
               // "from" eller "sender" afhængigt af backend.
               const rawSender =
@@ -228,6 +237,7 @@ export default function InboxScreen() {
             fetched = true;
             break;
           } catch (providerError) {
+            // Gem sidste fejl og prøv næste udbyder
             lastError =
               providerError instanceof Error
                 ? providerError
@@ -288,6 +298,7 @@ export default function InboxScreen() {
       return;
     }
 
+    // Markerer hvilke mail der er i gang
     setCreatingDraftId(item.id);
     try {
       // Token til server-kald.
@@ -326,6 +337,7 @@ export default function InboxScreen() {
       // Besked ved fejl.
       Alert.alert("Kunne ikke oprette udkast", err?.message ?? String(err));
     } finally {
+      // Ryd loading-indikator
       setCreatingDraftId(null);
     }
   };
@@ -343,6 +355,7 @@ export default function InboxScreen() {
   // Render for hver mail.
   const renderItem = ({ item }) => (
     <View style={GlobalStyles.inboxRow}>
+      {/* Avatar-venlig initial */}
       <View style={GlobalStyles.inboxAvatar}>
         <Text style={GlobalStyles.inboxAvatarLabel}>
           {(item.sender ?? "?").charAt(0).toUpperCase()}
@@ -391,9 +404,12 @@ export default function InboxScreen() {
   // Selve skærmen.
   return (
     <LinearGradient
+      // Baggrundsgradient
       colors={[COLORS.background, COLORS.surfaceAlt]}
+      // Retning for gradient
       start={{ x: 0, y: 0 }}
       end={{ x: 0.8, y: 1 }}
+      // Container-stil
       style={GlobalStyles.inboxScreen}
     >
       {/* Lille streg øverst */}
@@ -405,6 +421,7 @@ export default function InboxScreen() {
             Se nye mails og AI-klargjorte svar her.
           </Text>
         </View>
+        {/* Placeholder for søge-knap */}
         <View style={GlobalStyles.inboxHeaderButton}>
           <Ionicons
             name="search-outline"
@@ -416,13 +433,18 @@ export default function InboxScreen() {
 
       {/* Indbakke-listen */}
       <FlatList
+        // Data til listen
         data={inboxItems}
+        // Sikker key til hver række
         keyExtractor={(item, index) => item.id ?? String(index)}
+        // Render-metode for hver mail
         renderItem={renderItem}
+        // Padding og tom-state styling
         contentContainerStyle={[
           GlobalStyles.inboxListContent,
           inboxItems.length === 0 && GlobalStyles.inboxListEmptyContent,
         ]}
+        // Pull-to-refresh styring
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -431,7 +453,9 @@ export default function InboxScreen() {
             colors={[COLORS.primary]}
           />
         }
+        // Separator mellem mails
         ItemSeparatorComponent={() => <View style={GlobalStyles.inboxSeparator} />}
+        // Tom tilstand: loading, fejl, tom liste eller ikke logget ind
         ListEmptyComponent={
           <View style={GlobalStyles.inboxEmptyState}>
             {/* Skifter mellem loading, fejl, tom indbakke og login */}

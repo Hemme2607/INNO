@@ -17,6 +17,7 @@ import { useAgentAutomation } from "../lib/hooks/useAgentAutomation";
 import { useClerkSupabase } from "../lib/supabaseClient";
 const AgentStack = createNativeStackNavigator();
 
+// Mailudbydere vi kan slå op i via edge functions
 const MAIL_PROVIDERS = [
   {
     id: "gmail",
@@ -39,28 +40,36 @@ export default function AgentScreen() {
   const { getToken, sessionId } = useAuth();
   const { user } = useUser();
   const supabase = useClerkSupabase();
+  // Supabase-id kan ligge i Clerk metadata
   const metadataSupabaseId =
     typeof user?.publicMetadata?.supabase_uuid === "string" &&
     user.publicMetadata.supabase_uuid.length
       ? user.publicMetadata.supabase_uuid
       : null;
+  // State til at gemme supabase user id
   const [supabaseUserId, setSupabaseUserId] = useState(metadataSupabaseId);
+  // Loader når vi slår supabase id op
   const [isResolvingSupabaseId, setIsResolvingSupabaseId] = useState(false);
+  // Ref til at undgå dobbeltopslag
   const supabaseIdLookupAttempted = useRef(false);
 
   // Hydrer persona-formen fra Supabase første gang (men lad manuelle ændringer stå)
   useEffect(() => {
+    // Opdater lokal state ved metadata-ændring
     setSupabaseUserId(metadataSupabaseId);
     if (metadataSupabaseId) {
+      // Markér at vi allerede har forsøgt
       supabaseIdLookupAttempted.current = true;
     }
   }, [metadataSupabaseId]);
 
   useEffect(() => {
+    // Nulstil lookup når bruger skifter
     supabaseIdLookupAttempted.current = false;
   }, [user?.id]);
 
   useEffect(() => {
+    // Lokal flag til at stoppe state updates efter unmount
     let cancelled = false;
     if (
       supabaseUserId ||
@@ -73,6 +82,7 @@ export default function AgentScreen() {
       };
     }
 
+    // Start lookup af supabase id
     setIsResolvingSupabaseId(true);
     supabaseIdLookupAttempted.current = true;
 
@@ -94,9 +104,11 @@ export default function AgentScreen() {
           setSupabaseUserId(null);
           return;
         }
+        // Gem id i state
         setSupabaseUserId(fetchedId);
         if (!metadataSupabaseId && user) {
           try {
+            // Cache id i Clerk metadata for næste gang
             await user.update({
               publicMetadata: {
                 ...(user.publicMetadata ?? {}),
@@ -110,6 +122,7 @@ export default function AgentScreen() {
       })
       .finally(() => {
         if (!cancelled) {
+          // Stop loader når kaldet er færdigt
           setIsResolvingSupabaseId(false);
         }
       });
@@ -119,6 +132,7 @@ export default function AgentScreen() {
     };
   }, [metadataSupabaseId, supabase, supabaseUserId, user, isResolvingSupabaseId]);
 
+  // Hent persona-konfiguration
   const {
     persona,
     loading: personaLoading,
@@ -126,12 +140,14 @@ export default function AgentScreen() {
     saving: personaSaving,
     error: personaError,
   } = useAgentPersonaConfig({ userId: supabaseUserId, lazy: false });
+  // Hent templates
   const {
     templates,
     loading: templatesLoading,
     processing: templatesProcessing,
     createTemplate,
   } = useAgentTemplates({ userId: supabaseUserId, lazy: !supabaseUserId });
+  // Hent automation-indstillinger
   const {
     settings: automationSettings,
     loading: automationLoading,
@@ -141,25 +157,31 @@ export default function AgentScreen() {
     error: automationError,
   } = useAgentAutomation({ userId: supabaseUserId, lazy: !supabaseUserId });
 
+  // Lokal state til persona-felter
   const [personaConfig, setPersonaConfig] = useState({
     signature: "",
     scenario: "",
     instructions: "",
   });
+  // Flags for init og ændringer
   const [hasHydratedPersona, setHasHydratedPersona] = useState(false);
   const [isPersonaModified, setIsPersonaModified] = useState(false);
+  // Lokal state til templatesøgning
   const [templateSearchResults, setTemplateSearchResults] = useState([]);
   const [templateSearchError, setTemplateSearchError] = useState(null);
   const [isSearchingTemplates, setIsSearchingTemplates] = useState(false);
+  // Lokal state for valgt mail og tekstfelter
   const [selectedTemplateMailId, setSelectedTemplateMailId] = useState(null);
   const [templateBody, setTemplateBody] = useState("");
   const [templateSourceBody, setTemplateSourceBody] = useState("");
   const [templateSourceError, setTemplateSourceError] = useState(null);
   const [isFetchingTemplateSource, setIsFetchingTemplateSource] = useState(false);
+  // State til persona-test
   const [personaTestResult, setPersonaTestResult] = useState("");
   const [personaTestError, setPersonaTestError] = useState(null);
   const [isTestingPersonaResponse, setIsTestingPersonaResponse] = useState(false);
 
+  // Standard signatur baseret på bruger og shop
   const defaultSignature = useMemo(() => {
     const trimmedName = displayName?.trim();
     const trimmedShop = shopDomain?.trim();
@@ -171,6 +193,7 @@ export default function AgentScreen() {
   }, [displayName, shopDomain]);
 
   useEffect(() => {
+    // Hydrer formularen når persona findes og ingen lokale ændringer
     if (persona && !isPersonaModified) {
       setPersonaConfig({
         signature: persona.signature ?? "",
@@ -181,6 +204,7 @@ export default function AgentScreen() {
       return;
     }
 
+    // Hvis der ikke er persona endnu, brug default signatur
     if (!persona && !hasHydratedPersona) {
       setPersonaConfig({
         signature: defaultSignature,
@@ -192,29 +216,35 @@ export default function AgentScreen() {
   }, [persona, defaultSignature, hasHydratedPersona, isPersonaModified]);
 
   useEffect(() => {
+    // Nulstil flags når supabase bruger skifter
     setHasHydratedPersona(false);
     setIsPersonaModified(false);
   }, [supabaseUserId]);
 
   // Sorterer mailudbydere så allerede forbundne vises først
   const prioritizedProviders = useMemo(() => {
+    // Udtræk provider-keys fra Clerk
     const connected = new Set(
       (user?.externalAccounts ?? [])
         .map((account) => account?.provider)
         .filter((provider) => typeof provider === "string")
     );
 
+    // Tilsluttede udbydere
     const connectedMail = MAIL_PROVIDERS.filter((provider) =>
       connected.has(provider.providerKey)
     );
+    // Fallback-udbydere
     const fallbackMail = MAIL_PROVIDERS.filter(
       (provider) => !connected.has(provider.providerKey)
     );
 
+    // Returner sammensat liste
     return [...connectedMail, ...fallbackMail];
   }, [user]);
 
   const personaErrorMessage = useMemo(() => {
+    // Normaliser fejl til tekst
     if (!personaError) {
       return null;
     }
@@ -230,10 +260,12 @@ export default function AgentScreen() {
   // Lokal state for formularfelterne – gem først når brugeren klikker
   const handlePersonaConfigUpdate = useCallback(
     (updates) => {
+      // Merge felter i state
       setPersonaConfig((prev) => {
         const next = { ...prev, ...updates };
         return next;
       });
+      // Markér at der er ændringer
       setIsPersonaModified(true);
     },
     []
@@ -241,8 +273,10 @@ export default function AgentScreen() {
 
   // Sender persona-data til backend og nulstiller modified-flag på succes
   const handlePersonaSave = useCallback(() => {
+    // Gem via hook
     savePersona(personaConfig)
       .then(() => {
+        // Ryd modified-flag når gemt
         setIsPersonaModified(false);
       })
       .catch(() => null);
@@ -250,17 +284,20 @@ export default function AgentScreen() {
 
   // Genererer et AI-testsvar via edge funktionen
   const handlePersonaTest = useCallback(async () => {
+    // Læs Supabase URL fra env
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
     if (!supabaseUrl) {
       setPersonaTestError("Supabase URL mangler i miljøvariablerne.");
       return;
     }
 
+    // Nulstil gamle resultater
     setPersonaTestError(null);
     setPersonaTestResult("");
     setIsTestingPersonaResponse(true);
 
     try {
+      // Token til edge function
       const token = await getToken();
       if (!token) {
         throw new Error("Kunne ikke hente session token.");
@@ -288,6 +325,7 @@ export default function AgentScreen() {
         throw new Error(message);
       }
 
+      // Vis svar fra testen
       const reply =
         typeof payload?.reply === "string" && payload.reply.trim().length
           ? payload.reply.trim()
@@ -297,6 +335,7 @@ export default function AgentScreen() {
       const message = error instanceof Error ? error.message : "Ukendt fejl ved testen.";
       setPersonaTestError(message);
     } finally {
+      // Stop loader
       setIsTestingPersonaResponse(false);
     }
   }, [personaConfig, defaultSignature, getToken]);
@@ -304,6 +343,7 @@ export default function AgentScreen() {
   // Søg efter mails i forbundne mailudbydere og map resultatet til templates
   const handleTemplateSearch = useCallback(
     async (query) => {
+      // Trim query og stop hvis tom
       const trimmedQuery = query.trim();
       if (!sessionId || !trimmedQuery) {
         setTemplateSearchResults([]);
@@ -311,6 +351,7 @@ export default function AgentScreen() {
         return;
       }
 
+      // Læs Supabase konfiguration
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
       const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !supabaseAnonKey) {
@@ -318,10 +359,12 @@ export default function AgentScreen() {
         return;
       }
 
+      // Start loader og ryd fejl
       setIsSearchingTemplates(true);
       setTemplateSearchError(null);
 
       try {
+        // Token til edge functions
         const token = await getToken();
         if (!token) {
           throw new Error("Kunne ikke hente session token.");
@@ -346,6 +389,7 @@ export default function AgentScreen() {
               const errorBody = await response.text();
               const message = errorBody?.trim() || `HTTP ${response.status}`;
               if ([401, 403, 404].includes(response.status)) {
+                // Udbyder ikke tilsluttet, spring videre
                 continue;
               }
               throw new Error(message);
@@ -362,6 +406,7 @@ export default function AgentScreen() {
               continue;
             }
 
+            // Map til lokalt template-format
             const mapped = rawItems.map((message) => {
               const rawSender =
                 typeof message?.sender === "string"
@@ -388,6 +433,7 @@ export default function AgentScreen() {
               };
             });
 
+            // Brug første udbyder der giver resultater
             aggregatedResults = mapped;
             break;
           } catch (error) {
@@ -396,6 +442,7 @@ export default function AgentScreen() {
           }
         }
 
+        // Opdater search state
         setTemplateSearchResults(aggregatedResults);
         if (!aggregatedResults.length) {
           setSelectedTemplateMailId(null);
@@ -407,6 +454,7 @@ export default function AgentScreen() {
           error instanceof Error ? error.message : "Kunne ikke søge i indbakken."
         );
       } finally {
+        // Stop loader
         setIsSearchingTemplates(false);
       }
     },
@@ -416,22 +464,26 @@ export default function AgentScreen() {
   // Henter mailindhold for et specifikt provider-id
   const fetchMailBody = useCallback(
     async (providerId, mailId) => {
+      // Læs Supabase konfiguration
       const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
       const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       if (!supabaseUrl || !supabaseAnonKey) {
         throw new Error("Supabase konfiguration mangler.");
       }
 
+      // Find udbyder i listen
       const provider = MAIL_PROVIDERS.find((item) => item.id === providerId);
       if (!provider) {
         throw new Error("Mailudbyder ikke understøttet.");
       }
 
+      // Token til edge function
       const token = await getToken();
       if (!token) {
         throw new Error("Kunne ikke hente session token.");
       }
 
+      // Byg endpoint med messageId
       const baseUrl = supabaseUrl.replace(/\/$/, "");
       const endpoint = `${baseUrl}/functions/v1/${provider.functionName}?messageId=${encodeURIComponent(mailId)}`;
       const response = await fetch(endpoint, {
@@ -456,6 +508,7 @@ export default function AgentScreen() {
   // Markerer valgt mail i state og forsøger at hente dens tekst
   const handleSelectTemplateMail = useCallback(
     async (mailId) => {
+      // Ryd fejl ved nyt valg
       setTemplateSourceError(null);
 
       if (!mailId) {
@@ -465,6 +518,7 @@ export default function AgentScreen() {
       }
 
       if (selectedTemplateMailId === mailId) {
+        // Klik igen fjerner valget
         setSelectedTemplateMailId(null);
         setTemplateSourceBody("");
         return;
@@ -478,6 +532,7 @@ export default function AgentScreen() {
         return;
       }
 
+      // Vælg provider, ellers fallback
       const providerId = mail.providerId ?? prioritizedProviders[0]?.id ?? "";
       if (!providerId) {
         setTemplateSourceBody(mail.preview || "");
@@ -485,6 +540,7 @@ export default function AgentScreen() {
       }
 
       try {
+        // Hent fuldt mailindhold
         setIsFetchingTemplateSource(true);
         const body = await fetchMailBody(providerId, mailId);
         setTemplateSourceBody(body || mail.preview || "");
@@ -494,6 +550,7 @@ export default function AgentScreen() {
         );
         setTemplateSourceBody(mail.preview || "");
       } finally {
+        // Stop loader
         setIsFetchingTemplateSource(false);
       }
     },
@@ -502,12 +559,15 @@ export default function AgentScreen() {
 
   // Opdaterer svar-tekstfeltet mens brugeren skriver
   const handleChangeTemplateBody = useCallback((value) => {
+    // Gem nyt template body
     setTemplateBody(value);
   }, []);
 
   // Overskriver kilde-tekst og rydder evt. valgt mail, hvis brugeren skriver selv
   const handleChangeTemplateSourceBody = useCallback((value) => {
+    // Opdater source body
     setTemplateSourceBody(value);
+    // Fravælg mail hvis brugeren redigerer selv
     setSelectedTemplateMailId(null);
     setTemplateSourceError(null);
   }, []);
@@ -519,10 +579,12 @@ export default function AgentScreen() {
         return false;
       }
 
+      // Find mail for at få provider-id
       const mail = templateSearchResults.find((item) => item.id === mailId);
       const providerId = mail?.providerId ?? null;
 
       try {
+        // Gem template via hook
         await createTemplate({
           title: body.split("\n")[0]?.slice(0, 64) || "Nyt standardsvar",
           body,
@@ -530,6 +592,7 @@ export default function AgentScreen() {
           linkedMailId: mailId ?? null,
           linkedMailProvider: providerId,
         });
+        // Ryd formular og søgning efter gem
         setTemplateBody("");
         setSelectedTemplateMailId(null);
         setTemplateSourceBody("");
@@ -562,6 +625,7 @@ export default function AgentScreen() {
   // Gemmer automation-flags enkeltvis når brugeren toggler et felt
   const handleAutomationToggle = useCallback(
     (key, value) => {
+      // Gem kun det felt der blev ændret
       saveAutomation({ [key]: value }).catch(() => null);
     },
     [saveAutomation]
@@ -572,6 +636,7 @@ export default function AgentScreen() {
     async (nextValue) => {
       if (automationSaving) return;
       try {
+        // Gem autoDraftEnabled flaget
         await saveAutomation({ autoDraftEnabled: nextValue });
         Alert.alert(
           nextValue ? "Agent aktiveret" : "Agent deaktiveret",
@@ -608,6 +673,7 @@ export default function AgentScreen() {
         },
       }}
     >
+      {/* Overbliksskærmen */}
       <AgentStack.Screen
         name="AgentOverview"
         options={{ headerShown: false }}
@@ -636,6 +702,7 @@ export default function AgentScreen() {
           />
         )}
       </AgentStack.Screen>
+      {/* Skærm til persona */}
       <AgentStack.Screen
         name="AgentPersonaDetails"
         options={{ title: "Tilpas agent" }}
@@ -656,6 +723,7 @@ export default function AgentScreen() {
           />
         )}
       </AgentStack.Screen>
+      {/* Skærm til standardsvar */}
       <AgentStack.Screen
         name="AgentKnowledgeTemplates"
         options={{ title: "Standardsvar" }}
@@ -669,6 +737,7 @@ export default function AgentScreen() {
           />
         )}
       </AgentStack.Screen>
+      {/* Skærm til dokumenter */}
       <AgentStack.Screen
         name="AgentKnowledgeDocuments"
         options={{ title: "Dokumentbibliotek" }}
@@ -681,6 +750,7 @@ export default function AgentScreen() {
           />
         )}
       </AgentStack.Screen>
+      {/* Editor til standardsvar */}
       <AgentStack.Screen
         name="AgentKnowledgeTemplateEditor"
         options={{ title: "Redigér standardsvar" }}
