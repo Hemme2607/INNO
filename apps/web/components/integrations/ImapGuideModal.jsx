@@ -99,7 +99,7 @@ export function ImapGuideModal({ isOpen, onClose }) {
 
         <div className="mt-6 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
           <p>
-            <span className="font-semibold">💡 Pro Tip:</span> This gives you Gmail's
+            <span className="font-semibold">💡 Pro Tip:</span> This gives you Gmail&apos;s
             superior spam filtering and search, while your customers still only see your
             professional info@ address.
           </p>

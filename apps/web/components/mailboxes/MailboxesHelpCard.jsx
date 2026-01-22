@@ -22,7 +22,7 @@ export function MailboxesHelpCard() {
               </h3>
               <p className="mt-1 text-sm text-blue-800/80">
                 You can use Sona with any provider by connecting via a Gmail proxy.
-                It's free, secure, and gives you better spam filtering.
+                It&apos;s free, secure, and gives you better spam filtering.
               </p>
             </div>
           </div>
