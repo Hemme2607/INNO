@@ -48,6 +48,139 @@ type GmailMessageMeta = {
   payload?: { headers?: Array<{ name: string; value: string }> };
 };
 
+type ParsedFrom = {
+  name: string | null;
+  email: string | null;
+};
+
+function parseFromHeader(value = ""): ParsedFrom {
+  const emailMatch = value.match(/<([^>]+)>/);
+  const email =
+    emailMatch?.[1] ??
+    (value.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
+  const name = value.replace(/<[^>]+>/, "").replace(/\"/g, "").trim();
+  return {
+    name: name || null,
+    email: email || null,
+  };
+}
+
+function buildSnippet(input = "", maxLength = 180) {
+  const cleaned = input.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength).trim()}…` : cleaned;
+}
+
+async function upsertThread({
+  mailboxId,
+  userId,
+  providerThreadId,
+  subject,
+  snippet,
+  lastMessageAt,
+  isRead,
+}: {
+  mailboxId: string;
+  userId: string;
+  providerThreadId: string | null;
+  subject: string;
+  snippet: string;
+  lastMessageAt: string | null;
+  isRead: boolean;
+}) {
+  if (!supabase || !providerThreadId) return null;
+  const { data } = await supabase
+    .from("mail_threads")
+    .select("id, unread_count")
+    .eq("mailbox_id", mailboxId)
+    .eq("provider_thread_id", providerThreadId)
+    .maybeSingle();
+
+  if (data?.id) {
+    const updates: Record<string, unknown> = {
+      subject,
+      snippet,
+      last_message_at: lastMessageAt,
+      updated_at: new Date().toISOString(),
+    };
+    await supabase.from("mail_threads").update(updates).eq("id", data.id);
+    return data.id as string;
+  }
+
+  const unreadCount = isRead ? 0 : 1;
+  const { data: inserted } = await supabase
+    .from("mail_threads")
+    .insert({
+      user_id: userId,
+      mailbox_id: mailboxId,
+      provider: "gmail",
+      provider_thread_id: providerThreadId,
+      subject,
+      snippet,
+      last_message_at: lastMessageAt,
+      unread_count: unreadCount,
+    })
+    .select("id")
+    .maybeSingle();
+  return (inserted as any)?.id ?? null;
+}
+
+async function upsertMessage({
+  mailboxId,
+  userId,
+  threadId,
+  providerMessageId,
+  subject,
+  snippet,
+  bodyText,
+  fromName,
+  fromEmail,
+  isRead,
+  receivedAt,
+}: {
+  mailboxId: string;
+  userId: string;
+  threadId: string | null;
+  providerMessageId: string;
+  subject: string;
+  snippet: string;
+  bodyText: string;
+  fromName: string | null;
+  fromEmail: string | null;
+  isRead: boolean;
+  receivedAt: string | null;
+}) {
+  if (!supabase) return;
+  const { data } = await supabase
+    .from("mail_messages")
+    .select("id")
+    .eq("mailbox_id", mailboxId)
+    .eq("provider_message_id", providerMessageId)
+    .maybeSingle();
+
+  const payload: Record<string, unknown> = {
+    user_id: userId,
+    mailbox_id: mailboxId,
+    thread_id: threadId,
+    provider: "gmail",
+    provider_message_id: providerMessageId,
+    subject,
+    snippet,
+    body_text: bodyText,
+    from_name: fromName,
+    from_email: fromEmail,
+    is_read: isRead,
+    received_at: receivedAt,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data?.id) {
+    await supabase.from("mail_messages").update(payload).eq("id", data.id);
+  } else {
+    await supabase.from("mail_messages").insert(payload);
+  }
+}
+
 function isAuthorized(req: Request) {
   if (!GMAIL_POLL_SECRET) return false;
   const header =
@@ -335,8 +468,22 @@ async function callGenerateDraft(
 
 Deno.serve(async (req) => {
   try {
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
     if (!isAuthorized(req)) return new Response("Unauthorized", { status: 401 });
+    if (req.method === "GET") {
+      const googleEnvKeys = [];
+      for (const key of ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI", "GOOGLE_OAUTH_REDIRECT_URI", "NEXT_PUBLIC_GOOGLE_CLIENT_ID"]) {
+        if (Deno.env.get(key)) googleEnvKeys.push(key);
+      }
+      return Response.json({
+        hasClientId: Boolean(GOOGLE_CLIENT_ID),
+        hasClientSecret: Boolean(GOOGLE_CLIENT_SECRET),
+        hasRedirect:
+          Boolean(Deno.env.get("GOOGLE_REDIRECT_URI")) ||
+          Boolean(Deno.env.get("GOOGLE_OAUTH_REDIRECT_URI")),
+        googleEnvKeys,
+      });
+    }
+    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
     if (!supabase) return new Response("Supabase client missing", { status: 500 });
 
     const body = await readJson(req);
@@ -346,7 +493,6 @@ Deno.serve(async (req) => {
       .from("mail_accounts")
       .select("id, user_id, access_token_enc, refresh_token_enc, token_expires_at, metadata")
       .eq("provider", "gmail")
-      .eq("status", "active")
       .limit(limit);
     if (error) {
       throw new Error(error.message);
@@ -361,10 +507,6 @@ Deno.serve(async (req) => {
       }
 
       const shopId = await resolveShopId(userId);
-      if (!shopId) {
-        results.push({ userId, error: "No shop found for user" });
-        continue;
-      }
 
       try {
         const accessToken = await decryptToken(account.access_token_enc);
@@ -426,21 +568,51 @@ Deno.serve(async (req) => {
           const threadId = full?.threadId ?? meta.threadId ?? null;
           const messageId = full?.id ?? meta.id ?? null;
           const plain = extractPlainTextFromPayload(full?.payload);
-          const emailMatch = from.match(/<([^>]+)>/);
-          const fromEmail = emailMatch
-            ? emailMatch[1]
-            : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
-
-          await callGenerateDraft(shopId, freshAccessToken, {
-            messageId,
-            threadId,
+          const parsedFrom = parseFromHeader(from);
+          const labelIds = Array.isArray(full?.labelIds) ? full.labelIds : [];
+          const isRead = !labelIds.includes("UNREAD");
+          const internalDate = full?.internalDate ? Number(full.internalDate) : NaN;
+          const receivedAt = Number.isFinite(internalDate)
+            ? new Date(internalDate).toISOString()
+            : null;
+          const snippet = buildSnippet(plain);
+          const threadRecordId = await upsertThread({
+            mailboxId: account.id,
+            userId,
+            providerThreadId: threadId,
             subject,
-            from,
-            fromEmail,
-            body: plain,
+            snippet,
+            lastMessageAt: receivedAt,
+            isRead,
           });
+          if (messageId) {
+            await upsertMessage({
+              mailboxId: account.id,
+              userId,
+              threadId: threadRecordId,
+              providerMessageId: messageId,
+              subject,
+              snippet,
+              bodyText: plain,
+              fromName: parsedFrom.name,
+              fromEmail: parsedFrom.email,
+              isRead,
+              receivedAt,
+            });
+          }
+
+          if (shopId) {
+            await callGenerateDraft(shopId, freshAccessToken, {
+              messageId,
+              threadId,
+              subject,
+              from,
+              fromEmail: parsedFrom.email,
+              body: plain,
+            });
+            draftsCreated += 1;
+          }
           processed += 1;
-          draftsCreated += 1;
         }
 
         if (newHistoryId) {
@@ -456,7 +628,7 @@ Deno.serve(async (req) => {
           }
         }
 
-        emitDebugLog("gmail-poll", shopId, {
+        emitDebugLog("gmail-poll", shopId ?? userId, {
           candidates: candidates.length,
           draftsCreated,
         });

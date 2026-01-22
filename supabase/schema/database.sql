@@ -95,6 +95,65 @@ CREATE TABLE public.mail_accounts (
   CONSTRAINT mail_accounts_pkey PRIMARY KEY (id),
   CONSTRAINT mail_accounts_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.mail_threads (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  mailbox_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  provider_thread_id text,
+  subject text,
+  snippet text,
+  last_message_at timestamp with time zone,
+  unread_count integer NOT NULL DEFAULT 0,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT mail_threads_pkey PRIMARY KEY (id),
+  CONSTRAINT mail_threads_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT mail_threads_mailbox_id_fkey FOREIGN KEY (mailbox_id) REFERENCES public.mail_accounts(id)
+);
+CREATE TABLE public.mail_messages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  mailbox_id uuid NOT NULL,
+  thread_id uuid,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  provider_message_id text NOT NULL,
+  subject text,
+  snippet text,
+  body_text text,
+  body_html text,
+  from_name text,
+  from_email text,
+  to_emails text[],
+  cc_emails text[],
+  bcc_emails text[],
+  is_read boolean NOT NULL DEFAULT false,
+  sent_at timestamp with time zone,
+  received_at timestamp with time zone,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT mail_messages_pkey PRIMARY KEY (id),
+  CONSTRAINT mail_messages_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT mail_messages_mailbox_id_fkey FOREIGN KEY (mailbox_id) REFERENCES public.mail_accounts(id),
+  CONSTRAINT mail_messages_thread_id_fkey FOREIGN KEY (thread_id) REFERENCES public.mail_threads(id)
+);
+CREATE TABLE public.mail_attachments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  mailbox_id uuid NOT NULL,
+  message_id uuid NOT NULL,
+  provider text NOT NULL CHECK (provider = ANY (ARRAY['gmail'::text, 'outlook'::text])),
+  provider_attachment_id text,
+  filename text,
+  mime_type text,
+  size_bytes bigint,
+  storage_path text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT mail_attachments_pkey PRIMARY KEY (id),
+  CONSTRAINT mail_attachments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT mail_attachments_mailbox_id_fkey FOREIGN KEY (mailbox_id) REFERENCES public.mail_accounts(id),
+  CONSTRAINT mail_attachments_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.mail_messages(id)
+);
 -- Gemmer historik så gmail-poll ikke laver duplikerede drafts
 CREATE TABLE public.gmail_poll_state (
   clerk_user_id text NOT NULL,

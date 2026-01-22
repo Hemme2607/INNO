@@ -54,6 +54,132 @@ type GraphMessageMeta = {
   isRead?: boolean;
 };
 
+type MailboxTarget = {
+  user_id: string;
+  mailbox_id: string;
+};
+
+function buildSnippet(input = "", maxLength = 180) {
+  const cleaned = input.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "";
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength).trim()}…` : cleaned;
+}
+
+async function upsertThread({
+  mailboxId,
+  userId,
+  providerThreadId,
+  subject,
+  snippet,
+  lastMessageAt,
+  isRead,
+}: {
+  mailboxId: string;
+  userId: string;
+  providerThreadId: string | null;
+  subject: string;
+  snippet: string;
+  lastMessageAt: string | null;
+  isRead: boolean;
+}) {
+  if (!supabase || !providerThreadId) return null;
+  const { data } = await supabase
+    .from("mail_threads")
+    .select("id, unread_count")
+    .eq("mailbox_id", mailboxId)
+    .eq("provider_thread_id", providerThreadId)
+    .maybeSingle();
+
+  if (data?.id) {
+    await supabase
+      .from("mail_threads")
+      .update({
+        subject,
+        snippet,
+        last_message_at: lastMessageAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    return data.id as string;
+  }
+
+  const unreadCount = isRead ? 0 : 1;
+  const { data: inserted } = await supabase
+    .from("mail_threads")
+    .insert({
+      user_id: userId,
+      mailbox_id: mailboxId,
+      provider: "outlook",
+      provider_thread_id: providerThreadId,
+      subject,
+      snippet,
+      last_message_at: lastMessageAt,
+      unread_count: unreadCount,
+    })
+    .select("id")
+    .maybeSingle();
+  return (inserted as any)?.id ?? null;
+}
+
+async function upsertMessage({
+  mailboxId,
+  userId,
+  threadId,
+  providerMessageId,
+  subject,
+  snippet,
+  bodyText,
+  bodyHtml,
+  fromName,
+  fromEmail,
+  isRead,
+  receivedAt,
+}: {
+  mailboxId: string;
+  userId: string;
+  threadId: string | null;
+  providerMessageId: string;
+  subject: string;
+  snippet: string;
+  bodyText: string;
+  bodyHtml: string;
+  fromName: string | null;
+  fromEmail: string | null;
+  isRead: boolean;
+  receivedAt: string | null;
+}) {
+  if (!supabase) return;
+  const { data } = await supabase
+    .from("mail_messages")
+    .select("id")
+    .eq("mailbox_id", mailboxId)
+    .eq("provider_message_id", providerMessageId)
+    .maybeSingle();
+
+  const payload: Record<string, unknown> = {
+    user_id: userId,
+    mailbox_id: mailboxId,
+    thread_id: threadId,
+    provider: "outlook",
+    provider_message_id: providerMessageId,
+    subject,
+    snippet,
+    body_text: bodyText,
+    body_html: bodyHtml,
+    from_name: fromName,
+    from_email: fromEmail,
+    is_read: isRead,
+    received_at: receivedAt,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (data?.id) {
+    await supabase.from("mail_messages").update(payload).eq("id", data.id);
+  } else {
+    await supabase.from("mail_messages").insert(payload);
+  }
+}
+
 denoAssertConfig();
 
 Deno.serve(async (req) => {
@@ -68,15 +194,20 @@ Deno.serve(async (req) => {
     ? [body.userId]
     : null;
 
-  const targets = explicitUsers?.length
-    ? explicitUsers.map((userId) => ({ user_id: userId }))
-    : await loadAutoDraftUsers(
+  const autoDraftUsers = await loadAutoDraftUsers(
+    Math.min(MAX_USERS_PER_RUN, Number(body?.userLimit ?? MAX_USERS_PER_RUN)),
+  );
+  const autoDraftSet = new Set(autoDraftUsers.map((row) => row.user_id));
+
+  const targets: MailboxTarget[] = explicitUsers?.length
+    ? await loadOutlookMailboxesByUsers(explicitUsers)
+    : await loadActiveOutlookMailboxes(
         Math.min(MAX_USERS_PER_RUN, Number(body?.userLimit ?? MAX_USERS_PER_RUN)),
       );
 
     const results = [] as Array<Record<string, unknown>>;
     for (const target of targets) {
-      const outcome = await pollSingleUser(target);
+      const outcome = await pollSingleMailbox(target, autoDraftSet.has(target.user_id));
       results.push(outcome);
     }
 
@@ -90,15 +221,15 @@ Deno.serve(async (req) => {
 });
 
 // Poller enkelt bruger: henter nye mails og trigger draft-funktion
-async function pollSingleUser(user: AutomationUser) {
+async function pollSingleMailbox(target: MailboxTarget, shouldDraft: boolean) {
   if (!supabase) throw new Error("Supabase klient ikke konfigureret");
   try {
-    const token = await getFreshOutlookAccessToken(user.user_id);
-    const shopId = await resolveShopId(user.user_id);
+    const token = await getFreshOutlookAccessToken(target.user_id);
+    const shopId = await resolveShopId(target.user_id);
     if (shopId) {
       await syncDraftStatuses(shopId, token);
     }
-    const state = await loadPollState(user.user_id);
+    const state = await loadPollState(target.user_id);
     const candidates = await fetchCandidateMessages(token, state);
 
     let handled = 0;
@@ -108,10 +239,57 @@ async function pollSingleUser(user: AutomationUser) {
     for (const msg of candidates) {
       if (handled >= MAX_MESSAGES_PER_USER) break;
       if (!msg?.id) continue;
-      if (!shopId) continue;
+      const message = await fetchGraphMessageDetail(token, msg.id);
+      const subject = message?.subject ?? msg?.subject ?? "";
+      const fromAddress = message?.from?.emailAddress?.address ?? "";
+      const fromName = message?.from?.emailAddress?.name ?? "";
+      const rawBody = message?.body?.content ?? message?.bodyPreview ?? "";
+      const bodyHtml =
+        (message?.body?.contentType ?? "").toLowerCase() === "html"
+          ? String(rawBody ?? "")
+          : "";
+      const bodyText =
+        (message?.body?.contentType ?? "").toLowerCase() === "html"
+          ? stripHtml(rawBody)
+          : String(rawBody ?? "");
+      const receivedAt = message?.receivedDateTime ?? msg?.receivedDateTime ?? null;
+      const isRead = msg?.isRead ?? false;
+      const snippet = buildSnippet(message?.bodyPreview ?? bodyText);
+      const providerThreadId = message?.conversationId ?? null;
+      const providerMessageId = message?.id ?? msg.id;
+      const threadRecordId = await upsertThread({
+        mailboxId: target.mailbox_id,
+        userId: target.user_id,
+        providerThreadId,
+        subject,
+        snippet,
+        lastMessageAt: receivedAt,
+        isRead,
+      });
+      await upsertMessage({
+        mailboxId: target.mailbox_id,
+        userId: target.user_id,
+        threadId: threadRecordId,
+        providerMessageId,
+        subject,
+        snippet,
+        bodyText,
+        bodyHtml,
+        fromName,
+        fromEmail: fromAddress,
+        isRead,
+        receivedAt,
+      });
+
+      if (!shopId || !shouldDraft) {
+        handled += 1;
+        const ts = Date.parse(receivedAt ?? "") || 0;
+        if (ts > maxTs) maxTs = ts;
+        continue;
+      }
       const outcome = await triggerDraft(shopId, token, msg.id);
       handled += 1;
-      const ts = Date.parse(msg.receivedDateTime ?? "") || 0;
+      const ts = Date.parse(receivedAt ?? "") || 0;
       if (ts > maxTs) maxTs = ts;
       if (outcome?.skipped) {
         skipped += 1;
@@ -122,13 +300,13 @@ async function pollSingleUser(user: AutomationUser) {
 
     if (handled && maxTs) {
       await savePollState(
-        user.user_id,
+        target.user_id,
         candidates[candidates.length - 1]?.id ?? null,
         maxTs,
       );
     }
 
-    emitDebugLog("outlook-poll", user.user_id, {
+    emitDebugLog("outlook-poll", target.user_id, {
       candidates: candidates.length,
       drafts: draftsCreated,
       skipped,
@@ -137,16 +315,16 @@ async function pollSingleUser(user: AutomationUser) {
     });
 
     return {
-      supabaseUserId: user.user_id,
+      supabaseUserId: target.user_id,
       candidates: candidates.length,
       draftsCreated,
       skipped,
       processed: handled,
     };
   } catch (err: any) {
-    console.warn("outlook-poll user failed", user.user_id, err?.message || err);
+    console.warn("outlook-poll user failed", target.user_id, err?.message || err);
     return {
-      supabaseUserId: user.user_id,
+      supabaseUserId: target.user_id,
       error: err?.message || String(err),
     };
   }
@@ -200,7 +378,7 @@ async function fetchGraphMessageDetail(token: string, messageId: string) {
   const url = new URL(`${GRAPH_BASE}/me/messages/${encodeURIComponent(messageId)}`);
   url.searchParams.set(
     "$select",
-    "id,subject,from,body,bodyPreview,conversationId,internetMessageId",
+    "id,subject,from,body,bodyPreview,conversationId,internetMessageId,receivedDateTime",
   );
   return await fetchJson<any>(url.toString(), token);
 }
@@ -376,6 +554,40 @@ async function loadAutoDraftUsers(limit: number): Promise<AutomationUser[]> {
     .map((row) => row.user_id)
     .filter((id: unknown): id is string => typeof id === "string")
     .map((id) => ({ user_id: id }));
+}
+
+async function loadActiveOutlookMailboxes(limit: number): Promise<MailboxTarget[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("mail_accounts")
+    .select("id,user_id")
+    .eq("provider", "outlook")
+    .eq("status", "active")
+    .limit(limit);
+  if (error || !data?.length) return [];
+  return data
+    .filter((row) => row?.id && row?.user_id)
+    .map((row) => ({
+      mailbox_id: row.id as string,
+      user_id: row.user_id as string,
+    }));
+}
+
+async function loadOutlookMailboxesByUsers(userIds: string[]): Promise<MailboxTarget[]> {
+  if (!supabase || !userIds.length) return [];
+  const { data, error } = await supabase
+    .from("mail_accounts")
+    .select("id,user_id")
+    .eq("provider", "outlook")
+    .eq("status", "active")
+    .in("user_id", userIds);
+  if (error || !data?.length) return [];
+  return data
+    .filter((row) => row?.id && row?.user_id)
+    .map((row) => ({
+      mailbox_id: row.id as string,
+      user_id: row.user_id as string,
+    }));
 }
 
 async function loadPollState(userId: string): Promise<PollState | null> {
