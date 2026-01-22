@@ -1,5 +1,4 @@
 // supabase/functions/outlook-poll/index.ts
-import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
@@ -14,31 +13,34 @@ const emitDebugLog = (...args: Array<unknown>) => {
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
+const MICROSOFT_CLIENT_ID = Deno.env.get("MICROSOFT_CLIENT_ID");
+const MICROSOFT_CLIENT_SECRET = Deno.env.get("MICROSOFT_CLIENT_SECRET");
+const MICROSOFT_TENANT_ID = Deno.env.get("MICROSOFT_TENANT_ID") ?? "common";
 const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 const OUTLOOK_POLL_SECRET = Deno.env.get("OUTLOOK_POLL_SECRET") ?? INTERNAL_AGENT_SECRET;
 const MAX_USERS_PER_RUN = Number(Deno.env.get("OUTLOOK_POLL_MAX_USERS") ?? "5");
-const MAX_MESSAGES_PER_USER = Number(Deno.env.get("OUTLOOK_POLL_MAX_MESSAGES") ?? "3");
+const MAX_MESSAGES_PER_USER = Number(Deno.env.get("OUTLOOK_POLL_MAX_MESSAGES") ?? "20");
+const IGNORE_SPAM_FILTER = Deno.env.get("OUTLOOK_IGNORE_SPAM") !== "false";
 
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – outlook-poll kan ikke kalde edge functions.");
 if (!SERVICE_ROLE_KEY) console.warn("SERVICE_ROLE_KEY mangler – outlook-poll kan ikke læse tabeller.");
-if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler – outlook-poll kan ikke hente tokens.");
+if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+  console.warn("MICROSOFT_CLIENT_ID/SECRET mangler – outlook-poll kan ikke forny tokens.");
+}
 if (!INTERNAL_AGENT_SECRET)
   console.warn("INTERNAL_AGENT_SECRET mangler – kald til outlook-create-draft-ai kan ikke sikres.");
 if (!OUTLOOK_POLL_SECRET)
   console.warn("OUTLOOK_POLL_SECRET mangler – outlook-poll er ikke beskyttet mod offentlige kald.");
 
-const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
 type AutomationUser = {
-  clerk_user_id: string;
   user_id: string;
 };
 
 type PollState = {
-  clerk_user_id: string;
+  user_id: string;
   last_message_id: string | null;
   last_received_ts: number | null;
 };
@@ -59,16 +61,18 @@ Deno.serve(async (req) => {
     if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
     if (!isAuthorized(req)) return new Response("Unauthorized", { status: 401 });
 
-    const body = await readJson(req);
-    const explicitUsers: string[] | null = Array.isArray(body?.clerkUserIds)
-      ? body.clerkUserIds.filter((id: unknown) => typeof id === "string")
-      : null;
+  const body = await readJson(req);
+  const explicitUsers: string[] | null = Array.isArray(body?.userIds)
+    ? body.userIds.filter((id: unknown) => typeof id === "string")
+    : typeof body?.userId === "string"
+    ? [body.userId]
+    : null;
 
-    const targets = explicitUsers?.length
-      ? await mapClerkUsers(explicitUsers)
-      : await loadAutoDraftUsers(
-          Math.min(MAX_USERS_PER_RUN, Number(body?.userLimit ?? MAX_USERS_PER_RUN)),
-        );
+  const targets = explicitUsers?.length
+    ? explicitUsers.map((userId) => ({ user_id: userId }))
+    : await loadAutoDraftUsers(
+        Math.min(MAX_USERS_PER_RUN, Number(body?.userLimit ?? MAX_USERS_PER_RUN)),
+      );
 
     const results = [] as Array<Record<string, unknown>>;
     for (const target of targets) {
@@ -89,12 +93,12 @@ Deno.serve(async (req) => {
 async function pollSingleUser(user: AutomationUser) {
   if (!supabase) throw new Error("Supabase klient ikke konfigureret");
   try {
-    const token = await getOutlookAccessToken(user.clerk_user_id);
+    const token = await getFreshOutlookAccessToken(user.user_id);
     const shopId = await resolveShopId(user.user_id);
     if (shopId) {
       await syncDraftStatuses(shopId, token);
     }
-    const state = await loadPollState(user.clerk_user_id);
+    const state = await loadPollState(user.user_id);
     const candidates = await fetchCandidateMessages(token, state);
 
     let handled = 0;
@@ -104,7 +108,8 @@ async function pollSingleUser(user: AutomationUser) {
     for (const msg of candidates) {
       if (handled >= MAX_MESSAGES_PER_USER) break;
       if (!msg?.id) continue;
-      const outcome = await triggerDraft(user.clerk_user_id, msg.id);
+      if (!shopId) continue;
+      const outcome = await triggerDraft(shopId, token, msg.id);
       handled += 1;
       const ts = Date.parse(msg.receivedDateTime ?? "") || 0;
       if (ts > maxTs) maxTs = ts;
@@ -117,13 +122,13 @@ async function pollSingleUser(user: AutomationUser) {
 
     if (handled && maxTs) {
       await savePollState(
-        user.clerk_user_id,
+        user.user_id,
         candidates[candidates.length - 1]?.id ?? null,
         maxTs,
       );
     }
 
-    emitDebugLog("outlook-poll", user.clerk_user_id, {
+    emitDebugLog("outlook-poll", user.user_id, {
       candidates: candidates.length,
       drafts: draftsCreated,
       skipped,
@@ -132,7 +137,6 @@ async function pollSingleUser(user: AutomationUser) {
     });
 
     return {
-      clerkUserId: user.clerk_user_id,
       supabaseUserId: user.user_id,
       candidates: candidates.length,
       draftsCreated,
@@ -140,9 +144,8 @@ async function pollSingleUser(user: AutomationUser) {
       processed: handled,
     };
   } catch (err: any) {
-    console.warn("outlook-poll user failed", user.clerk_user_id, err?.message || err);
+    console.warn("outlook-poll user failed", user.user_id, err?.message || err);
     return {
-      clerkUserId: user.clerk_user_id,
       supabaseUserId: user.user_id,
       error: err?.message || String(err),
     };
@@ -151,7 +154,7 @@ async function pollSingleUser(user: AutomationUser) {
 
 async function fetchCandidateMessages(token: string, state: PollState | null) {
   const url = new URL(`${GRAPH_BASE}/me/mailFolders('Inbox')/messages`);
-  url.searchParams.set("$top", "20");
+  url.searchParams.set("$top", "50");
   url.searchParams.set("$select", "id,subject,from,receivedDateTime,isDraft,isRead");
   url.searchParams.set("$orderby", "receivedDateTime desc");
   if (state?.last_received_ts) {
@@ -168,6 +171,7 @@ async function fetchCandidateMessages(token: string, state: PollState | null) {
   const filtered = value
     .filter((m) => !m?.isDraft)
     .filter((m) => {
+      if (IGNORE_SPAM_FILTER) return true;
       const from = (m?.from?.emailAddress?.address || "").toLowerCase();
       const subject = (m?.subject || "").toLowerCase();
       if (from.includes("no-reply") || from.includes("noreply")) return false;
@@ -188,23 +192,61 @@ async function fetchCandidateMessages(token: string, state: PollState | null) {
   return filtered;
 }
 
-async function triggerDraft(clerkUserId: string, messageId: string) {
-  if (!PROJECT_URL) throw new Error("PROJECT_URL mangler");
-  if (!INTERNAL_AGENT_SECRET)
-    throw new Error("INTERNAL_AGENT_SECRET mangler – kan ikke kalde outlook-create-draft-ai");
+function stripHtml(input = ""): string {
+  return input.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
 
-  const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/outlook-create-draft-ai`;
+async function fetchGraphMessageDetail(token: string, messageId: string) {
+  const url = new URL(`${GRAPH_BASE}/me/messages/${encodeURIComponent(messageId)}`);
+  url.searchParams.set(
+    "$select",
+    "id,subject,from,body,bodyPreview,conversationId,internetMessageId",
+  );
+  return await fetchJson<any>(url.toString(), token);
+}
+
+async function triggerDraft(
+  shopId: string,
+  accessToken: string,
+  messageId: string,
+) {
+  if (!PROJECT_URL) throw new Error("PROJECT_URL mangler");
+  const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/generate-draft-unified`;
+
+  const message = await fetchGraphMessageDetail(accessToken, messageId);
+  const subject = message?.subject ?? "";
+  const fromAddress = message?.from?.emailAddress?.address ?? "";
+  const fromName = message?.from?.emailAddress?.name ?? "";
+  const from = fromName ? `${fromName} <${fromAddress}>` : fromAddress;
+  const rawBody = message?.body?.content ?? message?.bodyPreview ?? "";
+  const body =
+    (message?.body?.contentType ?? "").toLowerCase() === "html"
+      ? stripHtml(rawBody)
+      : String(rawBody ?? "");
+
   const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-internal-secret": INTERNAL_AGENT_SECRET,
     },
-    body: JSON.stringify({ userId: clerkUserId, messageId }),
+    body: JSON.stringify({
+      provider: "outlook",
+      shop_id: shopId,
+      access_token: accessToken,
+      email_data: {
+        messageId: message?.internetMessageId ?? message?.id ?? messageId,
+        threadId: message?.conversationId ?? null,
+        subject,
+        from,
+        fromEmail: fromAddress,
+        body,
+        headers: [],
+      },
+    }),
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`outlook-create-draft-ai fejlede ${res.status}: ${text}`);
+    throw new Error(`generate-draft-unified fejlede ${res.status}: ${text}`);
   }
   if (text) {
     try {
@@ -216,18 +258,110 @@ async function triggerDraft(clerkUserId: string, messageId: string) {
   return null;
 }
 
-async function getOutlookAccessToken(clerkUserId: string) {
-  const tokens = await clerk.users.getUserOauthAccessToken(clerkUserId, "oauth_microsoft");
-  let accessToken = tokens?.data?.[0]?.token ?? null;
-  if (!accessToken) {
-    await clerk.users.refreshUserOauthAccessToken(clerkUserId, "oauth_microsoft");
-    const refreshed = await clerk.users.getUserOauthAccessToken(clerkUserId, "oauth_microsoft");
-    accessToken = refreshed?.data?.[0]?.token ?? null;
+function encodeToken(value: string): string {
+  return btoa(value);
+}
+
+function decodeToken(value: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith("\\x")) {
+    const hex = value.slice(2);
+    if (!hex || hex.length % 2 !== 0) return null;
+    let out = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      out += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16));
+    }
+    const maybeBase64 = decodeBase64String(out);
+    return maybeBase64 ?? out;
   }
-  if (!accessToken) {
-    throw new Error("Ingen Outlook adgangstoken fundet for brugeren");
+  try {
+    return atob(value);
+  } catch {
+    return value;
   }
-  return accessToken;
+}
+
+function decodeBase64String(value: string): string | null {
+  if (!/^[A-Za-z0-9+/=]+$/.test(value)) return null;
+  if (value.length % 4 !== 0) return null;
+  try {
+    return atob(value);
+  } catch {
+    return null;
+  }
+}
+
+async function getFreshOutlookAccessToken(userId: string): Promise<string> {
+  if (!supabase) throw new Error("Supabase klient ikke konfigureret");
+  const { data, error } = await supabase
+    .from("mail_accounts")
+    .select("access_token_enc, refresh_token_enc, token_expires_at")
+    .eq("user_id", userId)
+    .eq("provider", "outlook")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const accessToken = decodeToken((data as any)?.access_token_enc ?? null);
+  const refreshToken = decodeToken((data as any)?.refresh_token_enc ?? null);
+  if (!accessToken || !refreshToken) {
+    throw new Error("Ingen Outlook credentials fundet for user");
+  }
+
+  const expiresAt =
+    typeof (data as any)?.token_expires_at === "string"
+      ? Date.parse((data as any).token_expires_at)
+      : NaN;
+  const expiresSoon = !Number.isFinite(expiresAt) || expiresAt - Date.now() <= 60_000;
+  if (!expiresSoon) return accessToken;
+
+  if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+    throw new Error("Microsoft OAuth config mangler til token refresh");
+  }
+
+  const params = new URLSearchParams();
+  params.set("client_id", MICROSOFT_CLIENT_ID);
+  params.set("client_secret", MICROSOFT_CLIENT_SECRET);
+  params.set("refresh_token", refreshToken);
+  params.set("grant_type", "refresh_token");
+  params.set("scope", "offline_access Mail.ReadWrite User.Read");
+
+  const res = await fetch(
+    `https://login.microsoftonline.com/${MICROSOFT_TENANT_ID}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    },
+  );
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.error_description || payload?.error || `HTTP ${res.status}`;
+    throw new Error(`Token refresh fejlede: ${message}`);
+  }
+
+  const nextAccessToken = payload?.access_token;
+  const nextRefreshToken = payload?.refresh_token;
+  const expiresIn = Number(payload?.expires_in ?? 0);
+  if (!nextAccessToken) throw new Error("Token refresh mangler access_token");
+  const nextExpiresAt = new Date(Date.now() + Math.max(0, expiresIn) * 1000).toISOString();
+
+  const updatePayload: Record<string, unknown> = {
+    access_token_enc: encodeToken(nextAccessToken),
+    token_expires_at: nextExpiresAt,
+  };
+  if (nextRefreshToken) {
+    updatePayload.refresh_token_enc = encodeToken(nextRefreshToken);
+  }
+
+  const { error: updateError } = await supabase
+    .from("mail_accounts")
+    .update(updatePayload)
+    .eq("user_id", userId)
+    .eq("provider", "outlook");
+  if (updateError) {
+    console.warn("outlook-poll: failed to update tokens", updateError.message);
+  }
+
+  return nextAccessToken;
 }
 
 async function loadAutoDraftUsers(limit: number): Promise<AutomationUser[]> {
@@ -238,39 +372,18 @@ async function loadAutoDraftUsers(limit: number): Promise<AutomationUser[]> {
     .eq("auto_draft_enabled", true)
     .limit(limit);
   if (error || !automation?.length) return [];
-  const userIds = automation.map((row) => row.user_id);
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("user_id, clerk_user_id")
-    .in("user_id", userIds);
-  if (!profiles) return [];
-  return profiles
-    .filter((p): p is { user_id: string; clerk_user_id: string } =>
-      typeof p?.user_id === "string" && typeof p?.clerk_user_id === "string",
-    )
-    .map((p) => ({ clerk_user_id: p.clerk_user_id, user_id: p.user_id }));
+  return automation
+    .map((row) => row.user_id)
+    .filter((id: unknown): id is string => typeof id === "string")
+    .map((id) => ({ user_id: id }));
 }
 
-async function mapClerkUsers(ids: string[]): Promise<AutomationUser[]> {
-  if (!supabase || !ids.length) return [];
-  const { data } = await supabase
-    .from("profiles")
-    .select("user_id, clerk_user_id")
-    .in("clerk_user_id", ids);
-  if (!data) return [];
-  return data
-    .filter((p): p is { user_id: string; clerk_user_id: string } =>
-      typeof p?.user_id === "string" && typeof p?.clerk_user_id === "string",
-    )
-    .map((p) => ({ clerk_user_id: p.clerk_user_id, user_id: p.user_id }));
-}
-
-async function loadPollState(clerkUserId: string): Promise<PollState | null> {
+async function loadPollState(userId: string): Promise<PollState | null> {
   if (!supabase) return null;
   const { data } = await supabase
     .from("outlook_poll_state")
     .select("clerk_user_id,last_message_id,last_received_ts")
-    .eq("clerk_user_id", clerkUserId)
+    .eq("clerk_user_id", userId)
     .maybeSingle();
   if (!data) return null;
   const rawTs = (data as any).last_received_ts;
@@ -281,20 +394,20 @@ async function loadPollState(clerkUserId: string): Promise<PollState | null> {
       ? Number(rawTs)
       : null;
   return {
-    clerk_user_id: (data as any).clerk_user_id,
+    user_id: (data as any).clerk_user_id,
     last_message_id: (data as any).last_message_id ?? null,
     last_received_ts: Number.isFinite(parsedTs) ? Number(parsedTs) : null,
   };
 }
 
 async function savePollState(
-  clerkUserId: string,
+  userId: string,
   lastMessageId: string | null,
   lastReceivedTs: number,
 ) {
   if (!supabase) return;
   await supabase.from("outlook_poll_state").upsert({
-    clerk_user_id: clerkUserId,
+    clerk_user_id: userId,
     last_message_id: lastMessageId,
     last_received_ts: lastReceivedTs,
     updated_at: new Date().toISOString(),

@@ -216,7 +216,6 @@ export function KnowledgePageClient() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-2">
-          <p className="text-sm uppercase tracking-widest text-muted-foreground">Knowledge Base</p>
           <h1 className="text-3xl font-semibold text-foreground">Knowledge Base</h1>
           <p className="text-sm text-muted-foreground">
             Sync your policies, edit them, and add internal rules. The agent uses them directly in replies.

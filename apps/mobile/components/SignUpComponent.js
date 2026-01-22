@@ -49,7 +49,7 @@ export default function Signup() {
 
       if (result.status === "complete") {
         await setActive({ session: result.createdSessionId });
-        Alert.alert("Konto oprettet", "Velkommen til Lently!");
+        Alert.alert("Konto oprettet", "Velkommen til Sona AI!");
       } else if (result.status === "missing_requirements") {
         // Hvis der mangler verificering
         Alert.alert("Verificering påkrævet", "Tjek din email for verificeringslink");

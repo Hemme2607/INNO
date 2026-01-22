@@ -4,6 +4,7 @@ import { ShopifyConnectCard } from "@/components/integrations/ShopifyConnectCard
 import { FreshdeskConnectCard } from "@/components/integrations/FreshdeskConnectCard";
 import { GorgiasConnectCard } from "@/components/integrations/GorgiasConnectCard";
 import { DashboardPageShell } from "@/components/dashboard-page-shell";
+import { IntegrationsSuccessToast } from "@/components/integrations/IntegrationsSuccessToast";
 
 export default async function IntegrationsPage() {
   const { userId } = await auth();
@@ -13,21 +14,10 @@ export default async function IntegrationsPage() {
   }
 
   return (
-    <DashboardPageShell>
-      <header className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p className="text-sm uppercase tracking-widest text-muted-foreground">
-            Integrations
-          </p>
-          <h1 className="text-3xl font-semibold">Connect your systems</h1>
-        </div>
-      </header>
+    <DashboardPageShell className="space-y-14">
       <section className="space-y-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Store
-          </p>
-          <h2 className="text-2xl font-semibold">Stay on top of your store</h2>
+          <h2 className="text-2xl font-semibold">Sync with your e-commerce platform</h2>
           <p className="text-sm text-muted-foreground">
             Sync orders, customers, and inventory across your channels.
           </p>
@@ -37,11 +27,10 @@ export default async function IntegrationsPage() {
         </div>
       </section>
 
+    
+
       <section className="space-y-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Helpdesk
-          </p>
           <h2 className="text-2xl font-semibold">Unify customer conversations</h2>
           <p className="text-sm text-muted-foreground">
             Connect your helpdesk tools to Sona and get a complete overview of cases.
@@ -52,6 +41,7 @@ export default async function IntegrationsPage() {
           <GorgiasConnectCard />
         </div>
       </section>
+      <IntegrationsSuccessToast />
     </DashboardPageShell>
   );
 }

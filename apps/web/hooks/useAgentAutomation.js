@@ -179,6 +179,19 @@ export function useAgentAutomation(options = {}) {
           .maybeSingle();
 
         if (upsertError) throw upsertError;
+
+        if (Object.prototype.hasOwnProperty.call(updates, "autoDraftEnabled")) {
+          const res = await fetch("/api/agent/auto-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enabled: Boolean(updates.autoDraftEnabled) }),
+          });
+          const payload = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            throw new Error(payload?.error || "Could not update mail account status.");
+          }
+        }
+
         setSettings(mapAutomation(data));
         return data;
       } catch (err) {

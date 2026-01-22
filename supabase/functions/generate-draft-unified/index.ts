@@ -1,0 +1,502 @@
+// supabase/functions/generate-draft-unified/index.ts
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  buildAutomationGuidance,
+  fetchAutomation,
+  fetchPersona,
+  fetchPolicies,
+} from "../_shared/agent-context.ts";
+import { AutomationAction, executeAutomationActions } from "../_shared/automation-actions.ts";
+import { classifyEmail } from "../_shared/classify-email.ts";
+import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
+import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
+import { buildMailPrompt } from "../_shared/prompt.ts";
+import { formatEmailBody } from "../_shared/email.ts";
+
+const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
+const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
+
+const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
+const SERVICE_ROLE_KEY =
+  Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
+const OPENAI_EMBEDDING_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
+const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
+const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
+
+if (!PROJECT_URL) console.warn("PROJECT_URL mangler – generate-draft-unified kan ikke kalde Supabase.");
+if (!SERVICE_ROLE_KEY)
+  console.warn("SERVICE_ROLE_KEY mangler – generate-draft-unified kan ikke læse tabeller.");
+if (!OPENAI_API_KEY) console.warn("OPENAI_API_KEY mangler – AI udkast vil kun bruge fallback.");
+if (!Deno.env.get("OPENAI_MODEL")) console.warn("OPENAI_MODEL mangler – bruger default gpt-4o-mini.");
+if (!Deno.env.get("OPENAI_EMBEDDING_MODEL"))
+  console.warn("OPENAI_EMBEDDING_MODEL mangler – bruger default text-embedding-3-small.");
+
+// Service-role klient bruges til at læse/skrive på tværs af tenants.
+const supabase =
+  PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
+
+const emitDebugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) console.log(...args);
+};
+
+type EmailData = {
+  messageId?: string;
+  threadId?: string;
+  subject?: string;
+  from?: string;
+  fromEmail?: string;
+  body?: string;
+  headers?: Array<{ name: string; value: string }>;
+};
+
+type AgentContext = {
+  persona: Awaited<ReturnType<typeof fetchPersona>>;
+  automation: Awaited<ReturnType<typeof fetchAutomation>>;
+  policies: Awaited<ReturnType<typeof fetchPolicies>>;
+  orderSummary: string;
+  matchedSubjectNumber: string | null;
+};
+
+type OpenAIResult = {
+  reply: string | null;
+  actions: AutomationAction[];
+};
+
+// Find owner_user_id for shop så vi kan hente persona/policies/automation.
+async function resolveShopOwnerId(shopId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("shops")
+    .select("owner_user_id")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (error) {
+    console.warn("generate-draft-unified: failed to resolve shop owner", error.message);
+  }
+  return data?.owner_user_id ?? null;
+}
+
+// Laver embedding af mailtekst for at slå relevante produkter op via vector search.
+async function embedText(input: string): Promise<number[]> {
+  if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_EMBEDDING_MODEL,
+      input,
+    }),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) {
+    throw new Error(json?.error?.message || `OpenAI embedding error ${res.status}`);
+  }
+  const vector = json?.data?.[0]?.embedding;
+  if (!Array.isArray(vector)) throw new Error("OpenAI embedding missing");
+  return vector;
+}
+
+// Hent produktkontekst så svaret kan blive mere præcist.
+async function fetchProductContext(
+  supabaseClient: ReturnType<typeof createClient> | null,
+  userId: string | null,
+  text: string,
+) {
+  if (!supabaseClient || !userId || !text?.trim()) return "";
+  try {
+    const embedding = await embedText(text.slice(0, 4000));
+    const { data, error } = await supabaseClient.rpc("match_products", {
+      query_embedding: embedding,
+      match_threshold: 0.2,
+      match_count: 5,
+      filter_shop_id: userId,
+    });
+    if (error || !Array.isArray(data) || !data.length) return "";
+    return data
+      .map((item: any) => {
+        const price = item?.price ? `Price: ${item.price}.` : "";
+        return `Product: ${item?.title ?? "Unknown"}. ${price} Details: ${
+          item?.description ?? ""
+        }`;
+      })
+      .join("\n");
+  } catch (err) {
+    console.warn("generate-draft-unified: product context failed", err);
+    return "";
+  }
+}
+
+// Saml persona, automation flags, policies og ordre-kontekst for shoppen.
+async function getAgentContext(shopId: string, email?: string, subject?: string): Promise<AgentContext> {
+  const ownerUserId = await resolveShopOwnerId(shopId);
+  const persona = await fetchPersona(supabase, ownerUserId);
+  const automation = await fetchAutomation(supabase, ownerUserId);
+  const policies = await fetchPolicies(supabase, ownerUserId);
+  const { orders, matchedSubjectNumber } = await resolveOrderContext({
+    supabase,
+    userId: ownerUserId,
+    email,
+    subject,
+    tokenSecret: SHOPIFY_TOKEN_KEY,
+    apiVersion: SHOPIFY_API_VERSION,
+  });
+  const orderSummary = buildOrderSummary(orders);
+
+  return {
+    persona,
+    automation,
+    policies,
+    orderSummary,
+    matchedSubjectNumber,
+  };
+}
+
+function stripTrailingSignoff(text: string): string {
+  const closings = [
+    "venlig hilsen",
+    "med venlig hilsen",
+    "mvh",
+    "best regards",
+    "kind regards",
+    "regards",
+    "sincerely",
+    "cheers",
+  ];
+  const lines = text.split("\n");
+  let i = lines.length - 1;
+  while (i >= 0 && !lines[i].trim()) i -= 1;
+  if (i < 0) return text;
+  const last = lines[i].trim().toLowerCase();
+  if (closings.includes(last)) {
+    lines.splice(i, 1);
+    while (lines.length && !lines[lines.length - 1].trim()) {
+      lines.pop();
+    }
+    return lines.join("\n");
+  }
+  return text;
+}
+
+// Brug JSON schema så vi altid får reply + automation actions.
+async function callOpenAI(prompt: string, system?: string): Promise<OpenAIResult> {
+  if (!OPENAI_API_KEY) return { reply: null, actions: [] };
+  const messages: any[] = [];
+  if (system) messages.push({ role: "system", content: system });
+  messages.push({ role: "user", content: prompt });
+  const body = {
+    model: OPENAI_MODEL,
+    temperature: 0.3,
+    messages,
+    response_format: {
+      type: "json_schema",
+      json_schema: PERSONA_REPLY_JSON_SCHEMA,
+    },
+    max_tokens: 800,
+  };
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(json?.error?.message || `OpenAI error ${res.status}`);
+  const content = json?.choices?.[0]?.message?.content;
+  if (!content || typeof content !== "string") {
+    return { reply: null, actions: [] };
+  }
+  try {
+    const parsed = JSON.parse(content);
+    const reply = typeof parsed?.reply === "string" ? parsed.reply : null;
+    const actions = Array.isArray(parsed?.actions)
+      ? parsed.actions.filter((action: any) => typeof action?.type === "string")
+      : [];
+    return { reply, actions };
+  } catch (_err) {
+    return { reply: null, actions: [] };
+  }
+}
+
+// Gmail raw MIME kræver base64url.
+function toBase64Url(input: string): string {
+  const b64 = btoa(unescape(encodeURIComponent(input)));
+  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+// Opret Gmail draft med HTML body og tråd-reference.
+async function createGmailDraft(
+  accessToken: string,
+  emailData: EmailData,
+  htmlBody: string,
+) {
+  const subject = emailData.subject ? `Re: ${emailData.subject}` : "Re:";
+  const to = emailData.fromEmail || emailData.from || "";
+  const rawLines = [
+    `To: ${to}`,
+    `Subject: ${subject}`,
+  ];
+  if (emailData.messageId) {
+    rawLines.push(`In-Reply-To: ${emailData.messageId}`);
+    rawLines.push(`References: ${emailData.messageId}`);
+  }
+  rawLines.push("Content-Type: text/html; charset=utf-8");
+  rawLines.push("");
+  rawLines.push(htmlBody);
+
+  const payload: Record<string, unknown> = {
+    message: {
+      raw: toBase64Url(rawLines.join("\r\n")),
+    },
+  };
+  if (emailData.threadId) {
+    (payload.message as Record<string, unknown>).threadId = emailData.threadId;
+  }
+
+  const res = await fetch(`${GMAIL_BASE}/drafts`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Gmail draft failed: ${text || res.status}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+// Opret Outlook draft med HTML body.
+async function createOutlookDraft(
+  accessToken: string,
+  emailData: EmailData,
+  htmlBody: string,
+) {
+  const subject = emailData.subject ? `Re: ${emailData.subject}` : "Re:";
+  const to = emailData.fromEmail || emailData.from || "";
+  const payload = {
+    subject,
+    body: {
+      contentType: "HTML",
+      content: htmlBody,
+    },
+    toRecipients: to
+      ? [
+          {
+            emailAddress: {
+              address: to,
+            },
+          },
+        ]
+      : [],
+    isDraft: true,
+  };
+
+  const res = await fetch(`${GRAPH_BASE}/me/messages`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Outlook draft failed: ${text || res.status}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+Deno.serve(async (req) => {
+  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+
+  try {
+    const body = await req.json().catch(() => ({}));
+    const shopId = typeof body?.shop_id === "string" ? body.shop_id.trim() : "";
+    const provider = typeof body?.provider === "string" ? body.provider.trim() : "";
+    const accessToken = typeof body?.access_token === "string" ? body.access_token : "";
+    const emailData: EmailData = body?.email_data ?? {};
+
+    if (!shopId || !provider) {
+      return new Response(JSON.stringify({ error: "shop_id og provider er påkrævet." }), {
+        status: 400,
+      });
+    }
+
+    if (!accessToken) {
+      return new Response(JSON.stringify({ error: "access_token er påkrævet for Gmail/Outlook." }), {
+        status: 400,
+      });
+    }
+
+    const context = await getAgentContext(shopId, emailData.fromEmail, emailData.subject);
+    // Gatekeeper: spring over hvis mailen ikke skal behandles.
+    const classification = await classifyEmail({
+      from: emailData.from ?? "",
+      subject: emailData.subject ?? "",
+      body: emailData.body ?? "",
+      headers: emailData.headers ?? [],
+    });
+    if (!classification.process) {
+      emitDebugLog("generate-draft-unified: gatekeeper skip", {
+        reason: classification.reason,
+        category: classification.category,
+      });
+      return new Response(
+        JSON.stringify({
+          success: true,
+          skipped: true,
+          reason: classification.reason,
+          category: classification.category ?? null,
+          explanation: classification.explanation ?? null,
+        }),
+        { status: 200 },
+      );
+    }
+
+    const ownerUserId = await resolveShopOwnerId(shopId);
+    const productContext = await fetchProductContext(
+      supabase,
+      ownerUserId,
+      emailData.body || emailData.subject || "",
+    );
+
+    // Byg shared prompt med policies, automation-regler og ordre-kontekst.
+    const promptBase = buildMailPrompt({
+      emailBody: emailData.body || "(tomt indhold)",
+      orderSummary: context.orderSummary,
+      personaInstructions: context.persona.instructions,
+      matchedSubjectNumber: context.matchedSubjectNumber,
+      extraContext:
+        "Returner altid JSON hvor 'actions' beskriver konkrete handlinger du udfører i Shopify. Brug orderId (det numeriske id i parentes) når du udfylder actions. udfyld altid payload.shipping_address (brug nuværende adresse hvis den ikke ændres) og sæt payload.note og payload.tag til tom streng hvis de ikke bruges. Hvis kunden beder om adresseændring, udfyld shipping_address med alle felter (name, address1, address2, zip, city, country, phone). Hvis en handling ikke er tilladt i automationsreglerne, lad actions listen være tom og forklar brugeren at handlingen udføres manuelt.",
+      signature: context.persona.signature,
+      policies: context.policies,
+    });
+    const prompt = productContext
+      ? `${promptBase}\n\nPRODUKTKONTEKST:\n${productContext}`
+      : promptBase;
+
+    // Generer reply + actions med OpenAI JSON schema.
+    let aiText: string | null = null;
+    let automationActions: AutomationAction[] = [];
+    try {
+      if (OPENAI_API_KEY) {
+        const automationGuidance = buildAutomationGuidance(context.automation);
+        const personaGuidance = `Sprogregel har altid forrang; ignorer persona-instruktioner om sprogvalg.
+Persona instruktionsnoter: ${context.persona.instructions?.trim() || "Hold tonen venlig og effektiv."}
+Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
+        const systemMsgBase = [
+          "Du er en kundeservice-assistent.",
+          "Skriv kort, venligt og professionelt pa samme sprog som kundens mail.",
+          "Hvis kunden skriver pa engelsk, svar pa engelsk selv om andre instruktioner er pa dansk.",
+          "Brug KONTEKST-sektionen til at finde relevante oplysninger og nævn dem eksplicit i svaret.",
+          personaGuidance,
+          "Automationsregler:",
+          automationGuidance,
+          "Ud over forventet svar skal du returnere JSON med 'reply' og 'actions'.",
+          "Hvis en handling udføres (f.eks. opdater adresse, annuller ordre, tilføj note/tag), skal actions-listen indeholde et objekt med type, orderId og payload.",
+          "Tilladte actions: update_shipping_address, cancel_order, add_tag. Brug kun actions hvis automationsreglerne tillader det – ellers lad listen være tom og forklar kunden at handlingen udføres manuelt.",
+          "For update_shipping_address skal payload.shipping_address mindst indeholde name, address1, city, zip/postal_code og country.",
+          "Afslut ikke med signatur – signaturen tilføjes automatisk senere.",
+        ].join("\n");
+        const systemMsg = context.matchedSubjectNumber
+          ? systemMsgBase +
+            ` Hvis KONTEKST indeholder et ordrenummer (fx #${context.matchedSubjectNumber}), brug dette ordrenummer som reference i svaret og spørg IKKE efter ordrenummer igen.`
+          : systemMsgBase;
+        const { reply, actions } = await callOpenAI(prompt, systemMsg);
+        aiText = reply;
+        automationActions = actions ?? [];
+      } else {
+        aiText = null;
+      }
+    } catch (e) {
+      console.warn("OpenAI fejl", e?.message || e);
+      aiText = null;
+    }
+
+    // Fallback hvis AI fejler eller er slået fra.
+    if (!aiText) {
+      aiText = `Hej,\n\nTak for din besked. Vi vender tilbage hurtigst muligt med en opdatering.`;
+    }
+
+    let finalText = aiText.trim();
+    const signature = context.persona.signature?.trim();
+    if (signature && signature.length && !finalText.includes(signature)) {
+      finalText = stripTrailingSignoff(finalText);
+      finalText = `${finalText}\n\n${signature}`;
+    }
+
+    // Render HTML med konsistent styling og line breaks.
+    const htmlBody = formatEmailBody(finalText);
+
+    let draftResponse: any = null;
+    if (provider === "gmail") {
+      draftResponse = await createGmailDraft(accessToken, emailData, htmlBody);
+    } else if (provider === "outlook") {
+      draftResponse = await createOutlookDraft(accessToken, emailData, htmlBody);
+    } else {
+      return new Response(JSON.stringify({ error: "Unsupported provider." }), { status: 400 });
+    }
+
+    const draftId = draftResponse?.id ?? draftResponse?.message?.id ?? null;
+    const threadId = draftResponse?.message?.threadId ?? emailData.threadId ?? null;
+    const customerEmail = emailData.fromEmail || emailData.from || null;
+    const subject = emailData.subject || "";
+
+    // Log draft i Supabase til tracking.
+    if (supabase && shopId) {
+      const { error } = await supabase.from("drafts").insert({
+        shop_id: shopId,
+        customer_email: customerEmail,
+        subject,
+        platform: provider,
+        status: "pending",
+        draft_id: draftId,
+        thread_id: threadId,
+        created_at: new Date().toISOString(),
+      });
+      if (error) {
+        console.warn("generate-draft-unified: failed to log draft", error.message);
+      }
+    }
+
+    // Udfør godkendte Shopify-actions fra model output.
+    if (ownerUserId) {
+      const automationResults = await executeAutomationActions({
+        supabase,
+        supabaseUserId: ownerUserId,
+        actions: automationActions,
+        automation: context.automation,
+        tokenSecret: SHOPIFY_TOKEN_KEY,
+        apiVersion: SHOPIFY_API_VERSION,
+      });
+      emitDebugLog("generate-draft-unified: automation results", automationResults);
+    }
+
+    emitDebugLog("generate-draft-unified", {
+      provider,
+      shopId,
+      draftId,
+      threadId,
+    });
+
+    return new Response(JSON.stringify({ success: true, draftId }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err: any) {
+    const status = typeof err?.status === "number" ? err.status : 500;
+    const message = err?.message || "Ukendt fejl";
+    console.error("generate-draft-unified error:", message);
+    return new Response(JSON.stringify({ error: message }), { status });
+  }
+});

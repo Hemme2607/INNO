@@ -11,9 +11,6 @@ export function AutomationPageHeader() {
   return (
     <header className="flex w-full flex-wrap items-center justify-between gap-4">
       <div className="space-y-1">
-        <p className="text-sm uppercase tracking-widest text-muted-foreground">
-          AGENT • AUTOMATION
-        </p>
         <h1 className="text-3xl font-semibold text-foreground">Automation Rules</h1>
       </div>
       <Button

@@ -12,6 +12,7 @@ import {
   HelpCircleIcon,
   InboxIcon,
   LayoutDashboardIcon,
+  MailIcon,
   SearchIcon,
   SettingsIcon,
   UserRoundPenIcon,
@@ -53,6 +54,11 @@ const baseData = {
       title: "Inbox",
       url: "/inbox",
       icon: InboxIcon,
+    },
+    {
+      title: "Mailboxes",
+      url: "/mailboxes",
+      icon: MailIcon,
     },
   ],
   navSecondary: [

@@ -93,7 +93,7 @@ export function ShopifyConnectCard() {
           </div>
         ) : (
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Connect your Shopify store and sync orders and customers with Sona.
+            
           </p>
         )}
       </CardContent>

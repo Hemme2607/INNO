@@ -1,5 +1,4 @@
 // Clerk klient til at hente OAuth tokens
-import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 // JWT validering mod Clerk
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
 // Supabase klient til DB opslag
@@ -16,6 +15,7 @@ import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 import { classifyEmail } from "../_shared/classify-email.ts";
+import { formatEmailBody } from "../_shared/email.ts";
 
 /**
  * Gmail Create Draft AI
@@ -47,11 +47,12 @@ const emitDebugLog = (...args: Array<unknown>) => {
 };
 
 // Miljøvariabler til auth og integrationer
-const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
 const CLERK_JWT_ISSUER = Deno.env.get("CLERK_JWT_ISSUER");
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID");
+const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
@@ -60,7 +61,6 @@ const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 const OPENAI_EMBEDDING_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
 
 // Log tydelige advarsler ved manglende config
-if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – kan ikke kalde interne functions.");
 if (!SERVICE_ROLE_KEY)
@@ -71,9 +71,9 @@ if (!SHOPIFY_TOKEN_KEY)
   console.warn("SHOPIFY_TOKEN_KEY mangler – direkte Shopify-opslag fra interne kald er slået fra.");
 if (!INTERNAL_AGENT_SECRET)
   console.warn("INTERNAL_AGENT_SECRET mangler – interne automatiske kald er ikke sikret.");
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET)
+  console.warn("GOOGLE_CLIENT_ID/SECRET mangler – gmail-create-draft-ai kan ikke forny tokens.");
 
-// Clerk klient bruges til OAuth tokens
-const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 // JWKS til JWT validering fra Clerk
 const JWKS = CLERK_JWT_ISSUER
   ? createRemoteJWKSet(new URL(`${CLERK_JWT_ISSUER.replace(/\/$/, "")}/.well-known/jwks.json`))
@@ -86,6 +86,28 @@ type OpenAIResult = {
   reply: string | null;
   actions: AutomationAction[];
 };
+
+function encodeToken(value: string): string {
+  return btoa(value);
+}
+
+function decodeToken(value: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith("\\x")) {
+    const hex = value.slice(2);
+    if (!hex || hex.length % 2 !== 0) return null;
+    let out = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      out += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16));
+    }
+    return out;
+  }
+  try {
+    return atob(value);
+  } catch {
+    return value;
+  }
+}
 
 // Laver embeddings så vi kan matche produkter mod mailindholdet
 async function embedText(input: string): Promise<number[]> {
@@ -200,25 +222,71 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
-// Henter eller fornyer gmail.send token fra Clerk
-async function getGmailAccessToken(userId: string): Promise<string> {
-  // Prøv at hente eksisterende token
-  const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
-  let accessToken = tokens?.data?.[0]?.token ?? null;
-
-  if (!accessToken) {
-    // Forny token hvis det mangler
-    await clerk.users.refreshUserOauthAccessToken(userId, "oauth_google");
-    const refreshed = await clerk.users.getUserOauthAccessToken(userId, "oauth_google");
-    accessToken = refreshed?.data?.[0]?.token ?? null;
+async function getFreshGmailAccessToken(userId: string): Promise<string> {
+  if (!supabase) throw Object.assign(new Error("Supabase klient ikke konfigureret"), { status: 500 });
+  const { data, error } = await supabase
+    .from("mail_accounts")
+    .select("access_token_enc, refresh_token_enc, token_expires_at")
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .maybeSingle();
+  if (error) {
+    throw Object.assign(new Error(error.message), { status: 500 });
+  }
+  const accessToken = decodeToken((data as any)?.access_token_enc ?? null);
+  const refreshToken = decodeToken((data as any)?.refresh_token_enc ?? null);
+  if (!accessToken || !refreshToken) {
+    throw Object.assign(new Error("Ingen Gmail credentials fundet for user."), { status: 404 });
   }
 
-  if (!accessToken) {
-    // Stop hvis vi stadig mangler token
-    throw Object.assign(new Error("Ingen Gmail adgangstoken fundet. Log ind via Google med gmail.send scope."), { status: 403 });
+  const expiresAt =
+    typeof (data as any)?.token_expires_at === "string"
+      ? Date.parse((data as any).token_expires_at)
+      : NaN;
+  const expiresSoon = !Number.isFinite(expiresAt) || expiresAt - Date.now() <= 60_000;
+  if (!expiresSoon) return accessToken;
+
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    throw Object.assign(new Error("Google OAuth config mangler til token refresh."), { status: 500 });
   }
-  return accessToken;
+
+  const params = new URLSearchParams();
+  params.set("client_id", GOOGLE_CLIENT_ID);
+  params.set("client_secret", GOOGLE_CLIENT_SECRET);
+  params.set("refresh_token", refreshToken);
+  params.set("grant_type", "refresh_token");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.error_description || payload?.error || `HTTP ${res.status}`;
+    throw Object.assign(new Error(`Token refresh fejlede: ${message}`), { status: 502 });
+  }
+  const nextAccessToken = payload?.access_token;
+  const expiresIn = Number(payload?.expires_in ?? 0);
+  if (!nextAccessToken) {
+    throw Object.assign(new Error("Token refresh mangler access_token"), { status: 502 });
+  }
+  const nextExpiresAt = new Date(Date.now() + Math.max(0, expiresIn) * 1000).toISOString();
+  const { error: updateError } = await supabase
+    .from("mail_accounts")
+    .update({
+      access_token_enc: encodeToken(nextAccessToken),
+      token_expires_at: nextExpiresAt,
+    })
+    .eq("user_id", userId)
+    .eq("provider", "gmail");
+  if (updateError) {
+    console.warn("gmail-create-draft-ai: failed to update tokens", updateError.message);
+  }
+
+  return nextAccessToken;
 }
+
 
 // Dekoder Gmail base64-url encodede dele til tekst
 function decodeBase64Url(data: string): string {
@@ -408,46 +476,47 @@ Deno.serve(async (req) => {
     const internalRequest = isInternalAutomationRequest(req);
 
     let clerkToken: string | null = null;
-    let clerkUserId: string;
+    let supabaseUserId: string | null = null;
     if (internalRequest) {
-      // Ved interne kald forventes clerkUserId i body
-      const providedUserId = typeof body?.clerkUserId === "string" ? body.clerkUserId.trim() : "";
+      // Ved interne kald forventes userId i body
+      const providedUserId = typeof body?.userId === "string" ? body.userId.trim() : "";
       if (!INTERNAL_AGENT_SECRET) {
         return new Response(JSON.stringify({ error: "Internt secret ikke konfigureret" }), {
           status: 500,
         });
       }
       if (!providedUserId) {
-        return new Response(JSON.stringify({ error: "clerkUserId mangler for internt kald" }), {
+        return new Response(JSON.stringify({ error: "userId mangler for internt kald" }), {
           status: 400,
         });
       }
-      // Brug den bruger vi fik i payload
-      clerkUserId = providedUserId;
+      // Brug userId fra payload
+      supabaseUserId = providedUserId;
     } else {
       // Almindeligt kald: brug JWT fra Authorization
       clerkToken = getBearerToken(req);
-      clerkUserId = await requireUserIdFromJWT(req);
-    }
-
-    let supabaseUserId: string | null = null;
-    if (supabase) {
-      try {
-        // Find supabase user id ud fra Clerk bruger
-        supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
-      } catch (err) {
-        console.warn(
-          "gmail-create-draft-ai: kunne ikke hente supabase user id",
-          err?.message || err,
-        );
+      const clerkUserId = await requireUserIdFromJWT(req);
+      if (supabase) {
+        try {
+          // Find supabase user id ud fra Clerk bruger
+          supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
+        } catch (err) {
+          console.warn(
+            "gmail-create-draft-ai: kunne ikke hente supabase user id",
+            err?.message || err,
+          );
+        }
       }
+    }
+    if (!supabaseUserId) {
+      return new Response(JSON.stringify({ error: "supabase user id mangler" }), { status: 400 });
     }
     // Hent kontekst: persona, automation og policies
     const persona = await fetchPersona(supabase, supabaseUserId);
     const automation = await fetchAutomation(supabase, supabaseUserId);
     const policies = await fetchPolicies(supabase, supabaseUserId);
     // Hent OAuth token til Gmail
-    const gmailToken = await getGmailAccessToken(clerkUserId);
+    const gmailToken = await getFreshGmailAccessToken(supabaseUserId);
 
     // messageId er obligatorisk
     const messageId = typeof body?.messageId === "string" ? body.messageId : null;
@@ -617,6 +686,7 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
       finalText = `${finalText}\n\n${signature}`;
     }
     aiText = finalText;
+    const htmlBody = formatEmailBody(aiText);
 
     // Opret et draft i Gmail
     const rawLines = [] as string[];
@@ -627,11 +697,11 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
       rawLines.push(`In-Reply-To: ${messageId}`);
       rawLines.push(`References: ${messageId}`);
     }
-    // MIME header for plain text
-    rawLines.push("Content-Type: text/plain; charset=UTF-8");
+    // MIME header for HTML
+    rawLines.push("Content-Type: text/html; charset=utf-8");
     rawLines.push("");
     // Selve mail-teksten
-    rawLines.push(aiText);
+    rawLines.push(htmlBody);
     const rawMessage = rawLines.join("\r\n");
 
     // Opret draft i Gmail

@@ -1,5 +1,4 @@
 // supabase/functions/outlook-create-draft-ai/index.ts
-import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
 import { createRemoteJWKSet, jwtVerify } from "https://deno.land/x/jose@v5.2.0/index.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
@@ -14,6 +13,7 @@ import { buildOrderSummary, resolveOrderContext } from "../_shared/shopify.ts";
 import { PERSONA_REPLY_JSON_SCHEMA } from "../_shared/openai-schema.ts";
 import { buildMailPrompt } from "../_shared/prompt.ts";
 import { classifyEmail } from "../_shared/classify-email.ts";
+import { formatEmailBody } from "../_shared/email.ts";
 
 /**
  * Outlook Create Draft AI
@@ -34,11 +34,13 @@ const emitDebugLog = (...args: Array<unknown>) => {
 };
 
 // --- Env ---
-const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
 const CLERK_JWT_ISSUER = Deno.env.get("CLERK_JWT_ISSUER");
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const MICROSOFT_CLIENT_ID = Deno.env.get("MICROSOFT_CLIENT_ID");
+const MICROSOFT_CLIENT_SECRET = Deno.env.get("MICROSOFT_CLIENT_SECRET");
+const MICROSOFT_TENANT_ID = Deno.env.get("MICROSOFT_TENANT_ID") ?? "common";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
 const SHOPIFY_TOKEN_KEY = Deno.env.get("SHOPIFY_TOKEN_KEY");
@@ -46,11 +48,12 @@ const SHOPIFY_API_VERSION = Deno.env.get("SHOPIFY_API_VERSION") ?? "2024-07";
 const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 const OPENAI_EMBEDDING_MODEL = Deno.env.get("OPENAI_EMBEDDING_MODEL") ?? "text-embedding-3-small";
 
-if (!CLERK_SECRET_KEY) console.warn("CLERK_SECRET_KEY mangler (Supabase secret).");
 if (!CLERK_JWT_ISSUER) console.warn("CLERK_JWT_ISSUER mangler (Supabase secret).");
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – kan ikke kalde interne functions.");
 if (!SERVICE_ROLE_KEY)
   console.warn("SERVICE_ROLE_KEY mangler – outlook-create-draft-ai kan ikke læse Supabase tabeller.");
+if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET)
+  console.warn("MICROSOFT_CLIENT_ID/SECRET mangler – outlook-create-draft-ai kan ikke forny tokens.");
 if (!OPENAI_API_KEY) console.warn("OPENAI_API_KEY mangler – AI udkast vil kun bruge fallback.");
 if (!Deno.env.get("OPENAI_MODEL")) console.warn("OPENAI_MODEL mangler – bruger default gpt-4o-mini.");
 if (!SHOPIFY_TOKEN_KEY)
@@ -58,7 +61,6 @@ if (!SHOPIFY_TOKEN_KEY)
 if (!INTERNAL_AGENT_SECRET)
   console.warn("INTERNAL_AGENT_SECRET mangler – interne automatiske kald er ikke sikret.");
 
-const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const JWKS = CLERK_JWT_ISSUER
   ? createRemoteJWKSet(new URL(`${CLERK_JWT_ISSUER.replace(/\/$/, "")}/.well-known/jwks.json`))
   : null;
@@ -69,6 +71,28 @@ type OpenAIResult = {
   reply: string | null;
   actions: AutomationAction[];
 };
+
+function encodeToken(value: string): string {
+  return btoa(value);
+}
+
+function decodeToken(value: string | null): string | null {
+  if (!value) return null;
+  if (value.startsWith("\\x")) {
+    const hex = value.slice(2);
+    if (!hex || hex.length % 2 !== 0) return null;
+    let out = "";
+    for (let i = 0; i < hex.length; i += 2) {
+      out += String.fromCharCode(Number.parseInt(hex.slice(i, i + 2), 16));
+    }
+    return out;
+  }
+  try {
+    return atob(value);
+  } catch {
+    return value;
+  }
+}
 
 type GraphRecipient = {
   emailAddress?: {
@@ -138,25 +162,81 @@ async function requireUserIdFromJWT(req: Request): Promise<string> {
   return userId;
 }
 
-// Henter/fornyer Microsoft Graph access token via Clerk
-async function getMicrosoftAccessToken(userId: string): Promise<string> {
-  const tokens = await clerk.users.getUserOauthAccessToken(userId, "oauth_microsoft");
-  let token = tokens?.data?.[0]?.token ?? null;
-
-  if (!token) {
-    await clerk.users.refreshUserOauthAccessToken(userId, "oauth_microsoft");
-    const refreshed = await clerk.users.getUserOauthAccessToken(userId, "oauth_microsoft");
-    token = refreshed?.data?.[0]?.token ?? null;
+// Henter/fornyer Microsoft Graph access token via mail_accounts
+async function getFreshOutlookAccessToken(userId: string): Promise<string> {
+  if (!supabase) throw Object.assign(new Error("Supabase klient ikke konfigureret"), { status: 500 });
+  const { data, error } = await supabase
+    .from("mail_accounts")
+    .select("access_token_enc, refresh_token_enc, token_expires_at")
+    .eq("user_id", userId)
+    .eq("provider", "outlook")
+    .maybeSingle();
+  if (error) {
+    throw Object.assign(new Error(error.message), { status: 500 });
+  }
+  const accessToken = decodeToken((data as any)?.access_token_enc ?? null);
+  const refreshToken = decodeToken((data as any)?.refresh_token_enc ?? null);
+  if (!accessToken || !refreshToken) {
+    throw Object.assign(new Error("Ingen Outlook credentials fundet for user."), { status: 404 });
   }
 
-  if (!token) {
-    throw Object.assign(
-      new Error("Ingen Microsoft adgangstoken fundet. Log ind via Microsoft med Mail.Read/Write scope."),
-      { status: 403 },
-    );
+  const expiresAt =
+    typeof (data as any)?.token_expires_at === "string"
+      ? Date.parse((data as any).token_expires_at)
+      : NaN;
+  const expiresSoon = !Number.isFinite(expiresAt) || expiresAt - Date.now() <= 60_000;
+  if (!expiresSoon) return accessToken;
+
+  if (!MICROSOFT_CLIENT_ID || !MICROSOFT_CLIENT_SECRET) {
+    throw Object.assign(new Error("Microsoft OAuth config mangler til token refresh."), { status: 500 });
   }
 
-  return token;
+  const params = new URLSearchParams();
+  params.set("client_id", MICROSOFT_CLIENT_ID);
+  params.set("client_secret", MICROSOFT_CLIENT_SECRET);
+  params.set("refresh_token", refreshToken);
+  params.set("grant_type", "refresh_token");
+  params.set("scope", "offline_access Mail.ReadWrite User.Read");
+
+  const res = await fetch(
+    `https://login.microsoftonline.com/${MICROSOFT_TENANT_ID}/oauth2/v2.0/token`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    },
+  );
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.error_description || payload?.error || `HTTP ${res.status}`;
+    throw Object.assign(new Error(`Token refresh fejlede: ${message}`), { status: 502 });
+  }
+  const nextAccessToken = payload?.access_token;
+  const nextRefreshToken = payload?.refresh_token;
+  const expiresIn = Number(payload?.expires_in ?? 0);
+  if (!nextAccessToken) {
+    throw Object.assign(new Error("Token refresh mangler access_token"), { status: 502 });
+  }
+  const nextExpiresAt = new Date(Date.now() + Math.max(0, expiresIn) * 1000).toISOString();
+
+  const updatePayload: Record<string, unknown> = {
+    access_token_enc: encodeToken(nextAccessToken),
+    token_expires_at: nextExpiresAt,
+  };
+  if (nextRefreshToken) {
+    updatePayload.refresh_token_enc = encodeToken(nextRefreshToken);
+  }
+
+  const { error: updateError } = await supabase
+    .from("mail_accounts")
+    .update(updatePayload)
+    .eq("user_id", userId)
+    .eq("provider", "outlook");
+  if (updateError) {
+    console.warn("outlook-create-draft-ai: failed to update tokens", updateError.message);
+  }
+
+  return nextAccessToken;
 }
 
 // Fjerner HTML og komprimerer whitespace
@@ -408,18 +488,19 @@ Deno.serve(async (req) => {
   const debugEnabled = debug || EDGE_DEBUG_LOGS;
 
   try {
-    let clerkUserId: string | null = null;
+    let supabaseUserId: string | null = null;
 
     if (isInternalAutomationRequest(req)) {
-      clerkUserId = typeof body?.userId === "string" ? body.userId : null;
-      if (!clerkUserId) {
+      supabaseUserId = typeof body?.userId === "string" ? body.userId : null;
+      if (!supabaseUserId) {
         throw Object.assign(
           new Error("userId mangler i body for intern automation request"),
           { status: 400 },
         );
       }
     } else {
-      clerkUserId = await requireUserIdFromJWT(req);
+      const clerkUserId = await requireUserIdFromJWT(req);
+      supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
     }
 
     const messageId = (body?.messageId ?? body?.id ?? "").trim();
@@ -427,7 +508,11 @@ Deno.serve(async (req) => {
       throw Object.assign(new Error("messageId mangler i body"), { status: 400 });
     }
 
-    const accessToken = await getMicrosoftAccessToken(clerkUserId);
+    if (!supabaseUserId) {
+      throw Object.assign(new Error("supabase user id mangler"), { status: 400 });
+    }
+
+    const accessToken = await getFreshOutlookAccessToken(supabaseUserId);
     const message = await fetchGraphMessage(messageId, accessToken);
 
     const fromAddress = resolveFromAddress(message);
@@ -459,7 +544,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUserId = await resolveSupabaseUserId(supabase, clerkUserId);
     const persona = await fetchPersona(supabase, supabaseUserId);
     const automation = await fetchAutomation(supabase, supabaseUserId);
     const policies = await fetchPolicies(supabase, supabaseUserId);
@@ -535,9 +619,7 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
       finalText = `${finalText}\n\n${signature}`;
     }
 
-    const htmlBody = finalText.includes("<")
-      ? finalText
-      : finalText.replace(/\n/g, "<br>");
+    const htmlBody = formatEmailBody(finalText);
 
     const draft = await createOutlookDraftReply({
       accessToken,

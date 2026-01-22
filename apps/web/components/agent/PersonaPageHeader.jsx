@@ -11,9 +11,6 @@ export function PersonaPageHeader() {
   return (
     <header className="flex w-full flex-wrap items-start justify-between gap-4">
       <div className="space-y-1">
-        <p className="text-sm uppercase tracking-widest text-muted-foreground">
-          Agent • Persona
-        </p>
         <h1 className="text-3xl font-semibold text-foreground">Edit signature and instructions</h1>
         <p className="text-sm text-muted-foreground">
           Refine the AI&apos;s identity and test responses before saving.

@@ -1,428 +1,223 @@
-import { createClerkClient } from "https://esm.sh/@clerk/backend@1";
+// supabase/functions/gmail-poll/index.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
-const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
-const emitDebugLog = (...args: Array<unknown>) => {
-  if (EDGE_DEBUG_LOGS) {
-    console.log(...args);
-  }
-};
-
-// Kører som baggrundsjob der trigges af Supabase Cron
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
 const SERVICE_ROLE_KEY =
   Deno.env.get("SERVICE_ROLE_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const CLERK_SECRET_KEY = Deno.env.get("CLERK_SECRET_KEY");
+const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID");
+const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET");
+const GMAIL_POLL_SECRET = Deno.env.get("GMAIL_POLL_SECRET");
 const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
-const GMAIL_POLL_SECRET = Deno.env.get("GMAIL_POLL_SECRET") ?? INTERNAL_AGENT_SECRET;
+const ENCRYPTION_KEY = Deno.env.get("ENCRYPTION_KEY");
+const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
 const MAX_USERS_PER_RUN = Number(Deno.env.get("GMAIL_POLL_MAX_USERS") ?? "5");
-const MAX_MESSAGES_PER_USER = Number(Deno.env.get("GMAIL_POLL_MAX_MESSAGES") ?? "3");
-const MESSAGE_QUERY =
-  Deno.env.get("GMAIL_POLL_QUERY") ??
-  'label:inbox -category:promotions -category:social -in:chats -"List-Unsubscribe" -from:(no-reply noreply newsletter)';
+const MAX_MESSAGES_PER_USER = Number(Deno.env.get("GMAIL_POLL_MAX_MESSAGES") ?? "20");
+const IGNORE_SPAM_FILTER = Deno.env.get("GMAIL_IGNORE_SPAM") !== "false";
+
+const emitDebugLog = (...args: Array<unknown>) => {
+  if (EDGE_DEBUG_LOGS) console.log(...args);
+};
 
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – gmail-poll kan ikke kalde edge functions.");
 if (!SERVICE_ROLE_KEY) console.warn("SERVICE_ROLE_KEY mangler – gmail-poll kan ikke læse tabeller.");
-if (!CLERK_SECRET_KEY)
-  console.warn("CLERK_SECRET_KEY mangler – gmail-poll kan ikke hente Gmail tokens.");
-if (!INTERNAL_AGENT_SECRET)
-  console.warn("INTERNAL_AGENT_SECRET mangler – kald til gmail-create-draft-ai kan ikke sikres.");
+if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET)
+  console.warn("Google OAuth config mangler – gmail-poll kan ikke forny tokens.");
 if (!GMAIL_POLL_SECRET)
   console.warn("GMAIL_POLL_SECRET mangler – gmail-poll er ikke beskyttet mod offentlige kald.");
+if (!INTERNAL_AGENT_SECRET)
+  console.warn("INTERNAL_AGENT_SECRET mangler – gmail-poll kan ikke kalde generate-draft-unified.");
 
-console.log(
-  "gmail-poll startup",
-  JSON.stringify({
-    projectUrl: PROJECT_URL,
-    edgeDebugLogs: EDGE_DEBUG_LOGS,
-    gmailPollSecret: maskSecret(GMAIL_POLL_SECRET),
-    cronHeaderExpected: ["x-cron-secret", "x-internal-secret"],
-  }),
-);
-
-const clerk = createClerkClient({ secretKey: CLERK_SECRET_KEY! });
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
-type AutomationUser = {
-  clerk_user_id: string;
+type MailAccount = {
+  id: string;
   user_id: string;
+  access_token_enc: string | null;
+  refresh_token_enc: string | null;
+  token_expires_at: string | null;
+  metadata: { historyId?: string } | null;
 };
 
 type GmailMessageMeta = {
-  id: string;
+  id?: string;
+  threadId?: string;
   internalDate?: string;
-  payload?: { headers?: Array<{ name: string; value: string }> };
   snippet?: string;
+  payload?: { headers?: Array<{ name: string; value: string }> };
 };
 
-type PollState = {
-  clerk_user_id: string;
-  last_message_id: string | null;
-  last_internal_date: number | null;
-};
+function isAuthorized(req: Request) {
+  if (!GMAIL_POLL_SECRET) return false;
+  const header =
+    req.headers.get("x-cron-secret") ??
+    req.headers.get("X-Cron-Secret") ??
+    req.headers.get("x-internal-secret") ??
+    req.headers.get("X-Internal-Secret");
+  return header === GMAIL_POLL_SECRET;
+}
 
-denoAssertConfig();
-
-Deno.serve(async (req) => {
+async function readJson(req: Request) {
   try {
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
-    const auth = authorize(req);
-    if (!auth.ok) {
-      console.warn("gmail-poll unauthorized request", auth.reason, auth.meta);
-      return new Response(JSON.stringify({ error: auth.reason }), { status: 401 });
-    }
-
-    const body = await readJson(req);
-    const explicitUsers: string[] | null = Array.isArray(body?.clerkUserIds)
-      ? body.clerkUserIds.filter((id: unknown) => typeof id === "string")
-      : null;
-
-    const targets = explicitUsers?.length
-      ? await mapClerkUsers(explicitUsers)
-      : await loadAutoDraftUsers(Math.min(MAX_USERS_PER_RUN, Number(body?.userLimit ?? MAX_USERS_PER_RUN)));
-
-    const results = [] as Array<Record<string, unknown>>;
-    for (const target of targets) {
-      const outcome = await pollSingleUser(target);
-      results.push(outcome);
-    }
-
-    return Response.json({ success: true, processed: results.length, results });
-  } catch (err: any) {
-    console.error("gmail-poll error", err?.message || err);
-    return new Response(JSON.stringify({ error: err?.message || "Ukendt fejl" }), {
-      status: typeof err?.status === "number" ? err.status : 500,
-    });
-  }
-});
-
-// Finder nye mails for en bruger og videresender dem til edge-funktionen
-async function pollSingleUser(user: AutomationUser) {
-  if (!supabase) throw new Error("Supabase klient ikke konfigureret");
-  try {
-    const gmailToken = await getGmailAccessToken(user.clerk_user_id);
-    const shopId = await resolveShopId(user.user_id);
-    if (shopId) {
-      await syncDraftStatuses(shopId, gmailToken);
-    }
-    const state = await loadPollState(user.clerk_user_id);
-    const candidates = await fetchCandidateMessages(gmailToken, state);
-
-    let handled = 0;
-    let draftsCreated = 0;
-    let skipped = 0;
-    let maxInternalDate = state?.last_internal_date ?? 0;
-    for (const item of candidates) {
-      if (handled >= MAX_MESSAGES_PER_USER) break;
-      const outcome = await triggerDraft(user.clerk_user_id, item.id);
-      handled += 1;
-      const ts = Number(item.internalDate ?? "0");
-      if (ts > maxInternalDate) maxInternalDate = ts;
-      if (outcome?.skipped) {
-        skipped += 1;
-      } else {
-        draftsCreated += 1;
-      }
-    }
-
-    if (handled && maxInternalDate) {
-      await savePollState(user.clerk_user_id, candidates[candidates.length - 1]?.id ?? null, maxInternalDate);
-    }
-
-    emitDebugLog("gmail-poll", user.clerk_user_id, {
-      candidates: candidates.length,
-      drafts: draftsCreated,
-      skipped,
-      handled,
-      maxInternalDate,
-    });
-
-    return {
-      clerkUserId: user.clerk_user_id,
-      supabaseUserId: user.user_id,
-      candidates: candidates.length,
-      draftsCreated,
-      skipped,
-      processed: handled,
-    };
-  } catch (err: any) {
-    console.warn("gmail-poll user failed", user.clerk_user_id, err?.message || err);
-    return {
-      clerkUserId: user.clerk_user_id,
-      supabaseUserId: user.user_id,
-      error: err?.message || String(err),
-    };
-  }
-}
-
-// Vi henter metadata først, så vi kan filtrere nyhedsbreve billigt
-async function fetchCandidateMessages(gmailToken: string, state: PollState | null) {
-  const url = new URL(`${GMAIL_BASE}/messages`);
-  url.searchParams.set("maxResults", "20");
-  url.searchParams.set("labelIds", "INBOX");
-  url.searchParams.set("q", MESSAGE_QUERY);
-
-  const list = await fetchJson<{ messages?: Array<{ id: string }> }>(url.toString(), gmailToken);
-  const ids = list.messages ?? [];
-  if (!ids.length) return [];
-
-  const metas = await Promise.all(
-    ids.map(async ({ id }) => fetchMessageMeta(id, gmailToken)),
-  );
-  const lastTs = state?.last_internal_date ?? 0;
-
-  return metas
-    .filter((meta): meta is GmailMessageMeta => !!meta && isCustomerMessage(meta))
-    .filter((meta) => {
-      const ts = Number(meta.internalDate ?? "0");
-      if (!lastTs) return true;
-      return !ts || ts > lastTs;
-    })
-    .sort((a, b) => (Number(a.internalDate ?? "0") || 0) - (Number(b.internalDate ?? "0") || 0));
-}
-
-// Kalder gmail-create-draft-ai med intern secret så vi slipper for Clerk token
-async function triggerDraft(clerkUserId: string, messageId: string) {
-  if (!PROJECT_URL) throw new Error("PROJECT_URL mangler");
-  if (!INTERNAL_AGENT_SECRET)
-    throw new Error("INTERNAL_AGENT_SECRET mangler – kan ikke kalde gmail-create-draft-ai");
-  if (!SERVICE_ROLE_KEY)
-    throw new Error("SERVICE_ROLE_KEY mangler – kan ikke autorisere gmail-create-draft-ai");
-
-  const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/gmail-create-draft-ai`;
-  const res = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-internal-secret": INTERNAL_AGENT_SECRET,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({ clerkUserId, messageId }),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`gmail-create-draft-ai fejlede ${res.status}: ${text}`);
-  }
-  if (text) {
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-
-async function resolveShopId(ownerUserId: string): Promise<string | null> {
-  if (!supabase || !ownerUserId) return null;
-  const { data, error } = await supabase
-    .from("shops")
-    .select("id")
-    .eq("owner_user_id", ownerUserId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (error) {
-    console.warn("gmail-poll: failed to resolve shop id", error.message);
-  }
-  return data?.id ?? null;
-}
-
-async function gmailDraftExists(token: string, draftId: string): Promise<boolean | null> {
-  const url = `${GMAIL_BASE}/drafts/${encodeURIComponent(draftId)}`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (res.status === 404) return false;
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    console.warn("gmail-poll: draft check failed", {
-      draftId,
-      status: res.status,
-      body: text?.slice(0, 500) || "",
-    });
-    return null;
-  }
-  return true;
-}
-
-async function threadHasSentSince(
-  token: string,
-  threadId: string,
-  sinceMs: number,
-): Promise<boolean | null> {
-  const url = `${GMAIL_BASE}/threads/${encodeURIComponent(threadId)}?format=metadata`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  const text = await res.text().catch(() => "");
-  let json: any = null;
-  try {
-    json = text ? JSON.parse(text) : null;
+    return await req.json();
   } catch {
-    json = null;
+    return {};
   }
-  if (!res.ok) {
-    console.warn("gmail-poll: thread check failed", {
-      threadId,
-      status: res.status,
-      body: text?.slice(0, 500) || "",
-    });
-    return null;
-  }
-  const messages = Array.isArray(json?.messages) ? json.messages : [];
-  return messages.some((msg: any) => {
-    const labels = Array.isArray(msg?.labelIds) ? msg.labelIds : [];
-    const internalDate = Number(msg?.internalDate ?? 0);
-    return labels.includes("SENT") && internalDate >= sinceMs;
-  });
 }
 
-async function syncDraftStatuses(shopId: string, token: string) {
-  if (!supabase) return;
-  const { data, error } = await supabase
-    .from("drafts")
-    .select("id,draft_id,thread_id,created_at")
-    .eq("shop_id", shopId)
-    .eq("platform", "gmail")
-    .eq("status", "pending")
-    .not("draft_id", "is", null);
-  if (error) {
-    console.warn("gmail-poll: failed to load pending drafts", error.message);
-    return;
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
   }
-  const toMarkSent: string[] = [];
-  for (const row of data ?? []) {
-    const draftId = (row as any)?.draft_id;
-    if (!draftId) continue;
-    const exists = await gmailDraftExists(token, String(draftId));
-    if (exists === false) {
-      toMarkSent.push((row as any).id);
-      continue;
+  return bytes;
+}
+
+function maybeDecodeBase64String(value: string): string | null {
+  if (!/^[A-Za-z0-9+/=]+$/.test(value)) return null;
+  if (value.length % 4 !== 0) return null;
+  try {
+    const decoded = new TextDecoder().decode(base64ToBytes(value));
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary);
+}
+
+async function getAesKey(): Promise<CryptoKey | null> {
+  if (!ENCRYPTION_KEY) return null;
+  const data = new TextEncoder().encode(ENCRYPTION_KEY);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return await crypto.subtle.importKey("raw", hash, { name: "AES-CBC" }, false, [
+    "encrypt",
+    "decrypt",
+  ]);
+}
+
+async function encryptToken(value: string): Promise<string> {
+  const key = await getAesKey();
+  if (!key) return bytesToBase64(new TextEncoder().encode(value));
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-CBC", iv },
+    key,
+    new TextEncoder().encode(value),
+  );
+  return `${bytesToBase64(iv)}:${bytesToBase64(new Uint8Array(encrypted))}`;
+}
+
+async function decryptToken(value: string | null): Promise<string | null> {
+  if (!value) return null;
+  if (value.startsWith("\\x")) {
+    const hex = value.slice(2);
+    if (hex.length % 2 !== 0) return null;
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16);
     }
-    if (exists === true) {
-      const threadId = (row as any)?.thread_id;
-      const createdAtRaw = (row as any)?.created_at;
-      const createdAtMs = Date.parse(createdAtRaw || "");
-      if (threadId && Number.isFinite(createdAtMs)) {
-        const sentInThread = await threadHasSentSince(token, String(threadId), createdAtMs);
-        if (sentInThread === true) {
-          toMarkSent.push((row as any).id);
+    const decoded = new TextDecoder().decode(bytes);
+    const maybeBase64 = maybeDecodeBase64String(decoded);
+    return maybeBase64 ?? decoded;
+  }
+  if (value.includes(":")) {
+    const key = await getAesKey();
+    if (key) {
+      const [ivB64, dataB64] = value.split(":");
+      if (ivB64 && dataB64) {
+        const iv = base64ToBytes(ivB64);
+        const encrypted = base64ToBytes(dataB64);
+        try {
+          const decrypted = await crypto.subtle.decrypt(
+            { name: "AES-CBC", iv },
+            key,
+            encrypted,
+          );
+          return new TextDecoder().decode(new Uint8Array(decrypted));
+        } catch {
+          // fallthrough
         }
       }
     }
   }
-  if (!toMarkSent.length) return;
-  const { error: updateError } = await supabase
-    .from("drafts")
-    .update({ status: "sent" })
-    .in("id", toMarkSent);
-  if (updateError) {
-    console.warn("gmail-poll: failed to update draft status", updateError.message);
+  try {
+    return new TextDecoder().decode(base64ToBytes(value));
+  } catch {
+    return value;
   }
 }
 
-async function fetchMessageMeta(id: string, token: string) {
-  const url = `${GMAIL_BASE}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence`;
-  return await fetchJson<GmailMessageMeta>(url, token).catch(() => null);
+function decodeBase64Url(data: string): string {
+  const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binaryString = atob(padded);
+  try {
+    return decodeURIComponent(escape(binaryString));
+  } catch {
+    return binaryString;
+  }
 }
 
-function isCustomerMessage(meta: GmailMessageMeta) {
+const shopIdCache = new Map<string, string | null>();
+
+async function resolveShopId(userId: string): Promise<string | null> {
+  if (!supabase) return null;
+  if (shopIdCache.has(userId)) return shopIdCache.get(userId) ?? null;
+  const { data, error } = await supabase
+    .from("shops")
+    .select("id")
+    .eq("owner_user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const shopId = data?.id ?? null;
+  shopIdCache.set(userId, shopId);
+  return shopId;
+}
+
+function extractPlainTextFromPayload(payload: any): string {
+  if (!payload) return "";
+  if (payload.body?.data) return decodeBase64Url(payload.body.data);
+  if (Array.isArray(payload.parts)) {
+    for (const part of payload.parts) {
+      const mime = part?.mimeType ?? "";
+      const value = extractPlainTextFromPayload(part);
+      if (!value) continue;
+      if (mime.includes("text/plain")) return value;
+      if (mime.includes("text/html")) return value.replace(/<[^>]*>/g, " ").trim();
+      return value;
+    }
+  }
+  return "";
+}
+
+function findHeader(headers: Array<{ name: string; value: string }> = [], name: string) {
+  return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
+}
+
+function isSpamLike(meta: GmailMessageMeta): boolean {
+  if (IGNORE_SPAM_FILTER) return false;
   const headers = meta.payload?.headers ?? [];
   const from = findHeader(headers, "From");
   const listUnsubscribe = findHeader(headers, "List-Unsubscribe");
   const precedence = findHeader(headers, "Precedence");
   const subject = findHeader(headers, "Subject");
 
-  if (listUnsubscribe) return false;
-  if (/bulk|list|auto/i.test(precedence)) return false;
-  if (/newsletter/i.test(subject)) return false;
-  if (/no[- ]?reply|noreply/i.test(from)) return false;
-
-  return true;
-}
-
-function findHeader(headers: Array<{ name: string; value: string }>, name: string) {
-  return headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())?.value ?? "";
-}
-
-async function loadAutoDraftUsers(limit: number): Promise<AutomationUser[]> {
-  if (!supabase) return [];
-  const { data: automation, error } = await supabase
-    .from("agent_automation")
-    .select("user_id")
-    .eq("auto_draft_enabled", true)
-    .limit(limit);
-  if (error || !automation?.length) return [];
-  const userIds = automation.map((row) => row.user_id);
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("user_id, clerk_user_id")
-    .in("user_id", userIds);
-  if (!profiles) return [];
-  return profiles
-    .filter((p): p is { user_id: string; clerk_user_id: string } =>
-      typeof p?.user_id === "string" && typeof p?.clerk_user_id === "string",
-    )
-    .map((p) => ({ clerk_user_id: p.clerk_user_id, user_id: p.user_id }));
-}
-
-async function mapClerkUsers(ids: string[]): Promise<AutomationUser[]> {
-  if (!supabase || !ids.length) return [];
-  const { data } = await supabase
-    .from("profiles")
-    .select("user_id, clerk_user_id")
-    .in("clerk_user_id", ids);
-  if (!data) return [];
-  return data
-    .filter((p): p is { user_id: string; clerk_user_id: string } =>
-      typeof p?.user_id === "string" && typeof p?.clerk_user_id === "string",
-    )
-    .map((p) => ({ clerk_user_id: p.clerk_user_id, user_id: p.user_id }));
-}
-
-async function loadPollState(clerkUserId: string): Promise<PollState | null> {
-  if (!supabase) return null;
-  const { data } = await supabase
-    .from("gmail_poll_state")
-    .select("clerk_user_id,last_message_id,last_internal_date")
-    .eq("clerk_user_id", clerkUserId)
-    .maybeSingle();
-  if (!data) return null;
-  const rawTs = (data as any).last_internal_date;
-  const parsedTs =
-    typeof rawTs === "number"
-      ? rawTs
-      : typeof rawTs === "string"
-      ? Number(rawTs)
-      : null;
-  return {
-    clerk_user_id: data.clerk_user_id,
-    last_message_id: data.last_message_id,
-    last_internal_date: Number.isFinite(parsedTs) ? Number(parsedTs) : null,
-  };
-}
-
-async function savePollState(clerkUserId: string, lastMessageId: string | null, lastInternalDate: number) {
-  if (!supabase) return;
-  await supabase.from("gmail_poll_state").upsert({
-    clerk_user_id: clerkUserId,
-    last_message_id: lastMessageId,
-    last_internal_date: lastInternalDate,
-    updated_at: new Date().toISOString(),
-  });
-}
-
-async function getGmailAccessToken(clerkUserId: string) {
-  const tokens = await clerk.users.getUserOauthAccessToken(clerkUserId, "oauth_google");
-  let accessToken = tokens?.data?.[0]?.token ?? null;
-  if (!accessToken) {
-    await clerk.users.refreshUserOauthAccessToken(clerkUserId, "oauth_google");
-    const refreshed = await clerk.users.getUserOauthAccessToken(clerkUserId, "oauth_google");
-    accessToken = refreshed?.data?.[0]?.token ?? null;
-  }
-  if (!accessToken) {
-    throw new Error("Ingen Gmail adgangstoken fundet for brugeren");
-  }
-  return accessToken;
+  if (listUnsubscribe) return true;
+  if (/bulk|list|auto/i.test(precedence)) return true;
+  if (/newsletter/i.test(subject)) return true;
+  if (/no[- ]?reply|noreply/i.test(from)) return true;
+  return false;
 }
 
 async function fetchJson<T>(url: string, token: string): Promise<T> {
@@ -441,65 +236,243 @@ async function fetchJson<T>(url: string, token: string): Promise<T> {
   return json as T;
 }
 
-function authorize(req: Request): {
-  ok: boolean;
-  reason?: string;
-  meta?: Record<string, unknown>;
-} {
-  if (!GMAIL_POLL_SECRET) {
-    return { ok: false, reason: "GMAIL_POLL_SECRET missing" };
+async function refreshAccessToken(account: MailAccount, refreshToken: string): Promise<string> {
+  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
+    throw new Error("GOOGLE_CLIENT_ID/SECRET mangler til token refresh");
+  }
+  const params = new URLSearchParams();
+  params.set("client_id", GOOGLE_CLIENT_ID);
+  params.set("client_secret", GOOGLE_CLIENT_SECRET);
+  params.set("refresh_token", refreshToken);
+  params.set("grant_type", "refresh_token");
+
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok) {
+    const message = payload?.error_description || payload?.error || `HTTP ${res.status}`;
+    throw new Error(`Token refresh fejlede: ${message}`);
+  }
+  const nextAccessToken = payload?.access_token;
+  const expiresIn = Number(payload?.expires_in ?? 0);
+  if (!nextAccessToken) throw new Error("Token refresh mangler access_token");
+
+  const nextExpiresAt = new Date(Date.now() + Math.max(0, expiresIn) * 1000).toISOString();
+  const encrypted = await encryptToken(nextAccessToken);
+  const { error } = await supabase!
+    .from("mail_accounts")
+    .update({
+      access_token_enc: encrypted,
+      token_expires_at: nextExpiresAt,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", account.id);
+  if (error) {
+    console.warn("gmail-poll: failed to update tokens", error.message);
   }
 
-  const headerName = ["x-cron-secret", "x-internal-secret"].find((key) => req.headers.has(key));
-  const header =
-    req.headers.get("x-cron-secret") ??
-    req.headers.get("X-Cron-Secret") ??
-    req.headers.get("x-internal-secret") ??
-    req.headers.get("X-Internal-Secret");
-
-  if (!header) {
-    return {
-      ok: false,
-      reason: "Missing auth header",
-      meta: {
-        headerName,
-        headersSeen: Array.from(req.headers.keys()),
-        expectedSecret: maskSecret(GMAIL_POLL_SECRET),
-      },
-    };
-  }
-  if (header !== GMAIL_POLL_SECRET) {
-    return {
-      ok: false,
-      reason: "Invalid secret",
-      meta: {
-        provided: maskSecret(header),
-        expected: maskSecret(GMAIL_POLL_SECRET),
-        providedLength: header.length,
-        expectedLength: GMAIL_POLL_SECRET.length,
-        headerName,
-      },
-    };
-  }
-  return { ok: true };
+  return nextAccessToken;
 }
 
-function maskSecret(secret: string | null) {
-  if (!secret) return "(missing)";
-  if (secret.length <= 4) return "*".repeat(secret.length);
-  return `${secret.slice(0, 2)}...${secret.slice(-2)} (len:${secret.length})`;
+async function fetchMessageMeta(id: string, token: string) {
+  const url = `${GMAIL_BASE}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=List-Unsubscribe&metadataHeaders=Precedence`;
+  return await fetchJson<GmailMessageMeta>(url, token).catch(() => null);
 }
 
-async function readJson(req: Request) {
+async function fetchMessageFull(id: string, token: string) {
+  const url = `${GMAIL_BASE}/messages/${id}?format=full`;
+  return await fetchJson<any>(url, token);
+}
+
+async function listMessages(token: string) {
+  const url = new URL(`${GMAIL_BASE}/messages`);
+  url.searchParams.set("maxResults", "20");
+  url.searchParams.set("q", "is:unread");
+  const list = await fetchJson<{ messages?: Array<{ id: string }> }>(url.toString(), token);
+  return list.messages ?? [];
+}
+
+async function listHistory(token: string, startHistoryId: string) {
+  const url = new URL(`${GMAIL_BASE}/history`);
+  url.searchParams.set("startHistoryId", startHistoryId);
+  url.searchParams.set("historyTypes", "messageAdded");
+  url.searchParams.set("labelId", "INBOX");
+  return await fetchJson<any>(url.toString(), token);
+}
+
+async function callGenerateDraft(
+  shopId: string,
+  accessToken: string,
+  emailData: Record<string, unknown>,
+) {
+  if (!PROJECT_URL) throw new Error("PROJECT_URL mangler");
+  if (!INTERNAL_AGENT_SECRET) {
+    throw new Error("INTERNAL_AGENT_SECRET mangler – kan ikke kalde generate-draft-unified");
+  }
+  const endpoint = `${PROJECT_URL.replace(/\/$/, "")}/functions/v1/generate-draft-unified`;
+  const res = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-internal-secret": INTERNAL_AGENT_SECRET,
+    },
+    body: JSON.stringify({
+      shop_id: shopId,
+      provider: "gmail",
+      access_token: accessToken,
+      email_data: emailData,
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`generate-draft-unified fejlede ${res.status}: ${text}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+Deno.serve(async (req) => {
   try {
-    return await req.json();
-  } catch {
-    return {};
-  }
-}
+    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    if (!isAuthorized(req)) return new Response("Unauthorized", { status: 401 });
+    if (!supabase) return new Response("Supabase client missing", { status: 500 });
 
-function denoAssertConfig() {
-  if (!supabase) {
-    console.warn("gmail-poll: Supabase klient ikke initialiseret – tjek env vars");
+    const body = await readJson(req);
+    const limit = Number(body?.limit ?? MAX_USERS_PER_RUN);
+
+    const { data: accounts, error } = await supabase
+      .from("mail_accounts")
+      .select("id, user_id, access_token_enc, refresh_token_enc, token_expires_at, metadata")
+      .eq("provider", "gmail")
+      .eq("status", "active")
+      .limit(limit);
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const results = [];
+    for (const account of accounts ?? []) {
+      const userId = account.user_id;
+      if (!userId) {
+        results.push({ error: "Missing user_id on mail account" });
+        continue;
+      }
+
+      const shopId = await resolveShopId(userId);
+      if (!shopId) {
+        results.push({ userId, error: "No shop found for user" });
+        continue;
+      }
+
+      try {
+        const accessToken = await decryptToken(account.access_token_enc);
+        const refreshToken = await decryptToken(account.refresh_token_enc);
+        if (!accessToken || !refreshToken) {
+          throw new Error("Missing access/refresh token.");
+        }
+
+        const expiresAt = account.token_expires_at ? Date.parse(account.token_expires_at) : NaN;
+        const expiresSoon = !Number.isFinite(expiresAt) || expiresAt - Date.now() <= 60_000;
+        const freshAccessToken = expiresSoon
+          ? await refreshAccessToken(account as MailAccount, refreshToken)
+          : accessToken;
+
+        const historyId = account.metadata?.historyId;
+        let messageIds: string[] = [];
+        let newHistoryId: string | null = null;
+
+        if (historyId) {
+          try {
+            const history = await listHistory(freshAccessToken, historyId);
+            newHistoryId = history?.historyId ?? null;
+            const items = Array.isArray(history?.history) ? history.history : [];
+            const ids = new Set<string>();
+            for (const entry of items) {
+              const added = Array.isArray(entry?.messagesAdded) ? entry.messagesAdded : [];
+              for (const item of added) {
+                const id = item?.message?.id;
+                if (id) ids.add(id);
+              }
+            }
+            messageIds = Array.from(ids);
+          } catch (err) {
+            console.warn("gmail-poll: history fetch failed, fallback to unread", err?.message || err);
+          }
+        }
+
+        if (!messageIds.length) {
+          const list = await listMessages(freshAccessToken);
+          messageIds = list.map((m) => m.id).filter(Boolean) as string[];
+        }
+
+        let processed = 0;
+        let draftsCreated = 0;
+        const metas = await Promise.all(
+          messageIds.map((id) => fetchMessageMeta(id, freshAccessToken)),
+        );
+
+        const candidates = metas
+          .filter((meta): meta is GmailMessageMeta => !!meta?.id && !isSpamLike(meta))
+          .slice(0, MAX_MESSAGES_PER_USER);
+
+        for (const meta of candidates) {
+          if (processed >= MAX_MESSAGES_PER_USER) break;
+          const full = await fetchMessageFull(meta.id!, freshAccessToken);
+          const headers = full?.payload?.headers ?? [];
+          const from = findHeader(headers, "From");
+          const subject = findHeader(headers, "Subject");
+          const threadId = full?.threadId ?? meta.threadId ?? null;
+          const messageId = full?.id ?? meta.id ?? null;
+          const plain = extractPlainTextFromPayload(full?.payload);
+          const emailMatch = from.match(/<([^>]+)>/);
+          const fromEmail = emailMatch
+            ? emailMatch[1]
+            : (from.match(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i) ?? [null, null])[1];
+
+          await callGenerateDraft(shopId, freshAccessToken, {
+            messageId,
+            threadId,
+            subject,
+            from,
+            fromEmail,
+            body: plain,
+          });
+          processed += 1;
+          draftsCreated += 1;
+        }
+
+        if (newHistoryId) {
+          const { error: updateError } = await supabase
+            .from("mail_accounts")
+            .update({
+              metadata: { ...(account.metadata ?? {}), historyId: newHistoryId },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", account.id);
+          if (updateError) {
+            console.warn("gmail-poll: failed to update historyId", updateError.message);
+          }
+        }
+
+        emitDebugLog("gmail-poll", shopId, {
+          candidates: candidates.length,
+          draftsCreated,
+        });
+
+        results.push({ shopId, processed, draftsCreated });
+      } catch (err: any) {
+        console.warn("gmail-poll: account failed", account?.id, err?.message || err);
+        results.push({ shopId, error: err?.message || String(err) });
+      }
+    }
+
+    return Response.json({ success: true, processed: results.length, results });
+  } catch (err: any) {
+    console.error("gmail-poll error", err?.message || err);
+    return new Response(JSON.stringify({ error: err?.message || "Ukendt fejl" }), {
+      status: typeof err?.status === "number" ? err.status : 500,
+    });
   }
-}
+});
