@@ -2,9 +2,8 @@ import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { InboxFilters } from "@/components/inbox/InboxFilters";
+import { InboxSplitView } from "@/components/inbox/InboxSplitView";
 
 const SUPABASE_URL =
   (process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -45,7 +44,7 @@ async function loadMessages(serviceClient, userId, mailboxIds, { query, unreadOn
   let request = serviceClient
     .from("mail_messages")
     .select(
-      "id, mailbox_id, thread_id, subject, snippet, from_name, from_email, is_read, received_at, sent_at, created_at"
+      "id, mailbox_id, thread_id, subject, snippet, body_text, body_html, from_name, from_email, is_read, received_at, sent_at, created_at, ai_draft_text"
     )
     .eq("user_id", userId)
     .in("mailbox_id", mailboxIds)
@@ -63,33 +62,76 @@ async function loadMessages(serviceClient, userId, mailboxIds, { query, unreadOn
     );
   }
 
-  const { data, error } = await request;
+  let { data, error } = await request;
+  if (error && /ai_draft_text/i.test(error.message || "")) {
+    const fallbackRequest = serviceClient
+      .from("mail_messages")
+      .select(
+        "id, mailbox_id, thread_id, subject, snippet, body_text, body_html, from_name, from_email, is_read, received_at, sent_at, created_at"
+      )
+      .eq("user_id", userId)
+      .in("mailbox_id", mailboxIds)
+      .order("received_at", { ascending: false, nullsLast: true })
+      .limit(60);
+
+    if (unreadOnly) {
+      fallbackRequest.eq("is_read", false);
+    }
+
+    if (query) {
+      const escaped = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
+      fallbackRequest.or(
+        `subject.ilike.%${escaped}%,snippet.ilike.%${escaped}%,from_name.ilike.%${escaped}%,from_email.ilike.%${escaped}%`
+      );
+    }
+
+    const fallback = await fallbackRequest;
+    data = fallback.data;
+    error = fallback.error;
+  }
   if (error) throw new Error(error.message);
   return Array.isArray(data) ? data : [];
 }
 
-function formatMessageTime(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays < 1) {
-    return date.toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  if (diffDays === 1) return "Yesterday";
-  if (diffDays < 7) return `${diffDays} days ago`;
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-}
+const NEWSLETTER_SUBJECT_PATTERNS = [
+  /unsubscribe/i,
+  /newsletter/i,
+  /\bpromo\b/i,
+  /\bpromotion\b/i,
+  /\bmarketing\b/i,
+  /\bdiscount\b/i,
+  /\bsale\b/i,
+  /\bdo not reply\b/i,
+  /\bno-?reply\b/i,
+  /\bemail preferences\b/i,
+];
 
-function getSenderLabel(message) {
-  if (message.from_name) return message.from_name;
-  if (message.from_email) return message.from_email;
-  return "Unknown sender";
+const NEWSLETTER_SENDER_PATTERNS = [
+  /mailchimp/i,
+  /sendgrid/i,
+  /klaviyo/i,
+  /campaign-?monitor/i,
+  /constantcontact/i,
+  /mailerlite/i,
+  /mailgun/i,
+  /sparkpost/i,
+  /postmarkapp/i,
+];
+
+function shouldHideFromInbox(message) {
+  const subject = message?.subject || "";
+  const snippet = message?.snippet || "";
+  const fromEmail = message?.from_email || "";
+  const fromName = message?.from_name || "";
+  const combined = `${subject}\n${snippet}\n${fromName}`.toLowerCase();
+
+  if (NEWSLETTER_SUBJECT_PATTERNS.some((pattern) => pattern.test(combined))) {
+    return true;
+  }
+  if (NEWSLETTER_SENDER_PATTERNS.some((pattern) => pattern.test(fromEmail))) {
+    return true;
+  }
+  return false;
 }
 
 export default async function InboxPage({ searchParams }) {
@@ -138,61 +180,13 @@ export default async function InboxPage({ searchParams }) {
     );
   }
 
-  return (
-    <div className="flex flex-1 overflow-hidden bg-background">
-      <aside className="w-full max-w-sm border-r bg-background">
-        <div className="border-b p-4">
-          <InboxFilters initialQuery={query} initialUnread={unreadOnly} />
-        </div>
-        <div className="h-[calc(100vh-9rem)] overflow-y-auto">
-          {messages.length ? (
-            <div className="divide-y">
-              {messages.map((message) => {
-                const timestamp =
-                  message.received_at || message.sent_at || message.created_at;
-                const sender = getSenderLabel(message);
-                return (
-                  <button
-                    key={message.id}
-                    type="button"
-                    className={cn(
-                      "flex w-full flex-col gap-2 px-4 py-3 text-left transition hover:bg-muted/40",
-                      message.is_read ? "bg-background" : "bg-muted/20"
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate text-sm font-semibold text-slate-900">
-                        {sender}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {formatMessageTime(timestamp)}
-                      </span>
-                    </div>
-                    <div className="text-sm font-medium text-slate-800">
-                      {message.subject || "No subject"}
-                    </div>
-                    <div className="line-clamp-2 text-xs text-muted-foreground">
-                      {message.snippet || "No preview available."}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="px-6 py-10 text-sm text-muted-foreground">
-              No messages yet. Sync will appear here once your mailbox is processed.
-            </div>
-          )}
-        </div>
-      </aside>
+  const visibleMessages = messages.filter((message) => !shouldHideFromInbox(message));
 
-      <section className="hidden flex-1 flex-col p-6 lg:flex">
-        <div className="flex h-full min-h-[480px] items-center justify-center rounded-xl border border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
-          <span className="text-sm font-medium uppercase tracking-wide text-slate-400">
-            Coming soon
-          </span>
-        </div>
-      </section>
-    </div>
+  return (
+    <InboxSplitView
+      messages={visibleMessages}
+      initialQuery={query}
+      initialUnread={unreadOnly}
+    />
   );
 }

@@ -452,6 +452,21 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     const customerEmail = emailData.fromEmail || emailData.from || null;
     const subject = emailData.subject || "";
 
+    if (supabase && ownerUserId && emailData.messageId) {
+      const { error: updateError } = await supabase
+        .from("mail_messages")
+        .update({
+          ai_draft_text: finalText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", ownerUserId)
+        .eq("provider", provider)
+        .eq("provider_message_id", emailData.messageId);
+      if (updateError) {
+        console.warn("generate-draft-unified: failed to store ai draft", updateError.message);
+      }
+    }
+
     // Log draft i Supabase til tracking.
     if (supabase && shopId) {
       const { error } = await supabase.from("drafts").insert({

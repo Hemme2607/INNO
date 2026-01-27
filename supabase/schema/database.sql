@@ -122,6 +122,7 @@ CREATE TABLE public.mail_messages (
   snippet text,
   body_text text,
   body_html text,
+  ai_draft_text text,
   from_name text,
   from_email text,
   to_emails text[],
