@@ -1,5 +1,6 @@
 // supabase/functions/gmail-poll/index.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { shouldSkipInboxMessage } from "../_shared/inbox-filter.ts";
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 const PROJECT_URL = Deno.env.get("PROJECT_URL") ?? Deno.env.get("SUPABASE_URL");
@@ -13,7 +14,7 @@ const ENCRYPTION_KEY = Deno.env.get("ENCRYPTION_KEY");
 const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
 const MAX_USERS_PER_RUN = Number(Deno.env.get("GMAIL_POLL_MAX_USERS") ?? "5");
 const MAX_MESSAGES_PER_USER = Number(Deno.env.get("GMAIL_POLL_MAX_MESSAGES") ?? "20");
-const IGNORE_SPAM_FILTER = Deno.env.get("GMAIL_IGNORE_SPAM") !== "false";
+const IGNORE_SPAM_FILTER = Deno.env.get("GMAIL_IGNORE_SPAM") === "true";
 
 const emitDebugLog = (...args: Array<unknown>) => {
   if (EDGE_DEBUG_LOGS) console.log(...args);
@@ -576,6 +577,18 @@ Deno.serve(async (req) => {
             ? new Date(internalDate).toISOString()
             : null;
           const snippet = buildSnippet(plain);
+          if (
+            !IGNORE_SPAM_FILTER &&
+            shouldSkipInboxMessage({
+              from: from || "",
+              subject,
+              snippet,
+              body: plain,
+              headers,
+            })
+          ) {
+            continue;
+          }
           const threadRecordId = await upsertThread({
             mailboxId: account.id,
             userId,

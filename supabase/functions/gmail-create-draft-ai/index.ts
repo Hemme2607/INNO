@@ -688,6 +688,21 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     aiText = finalText;
     const htmlBody = formatEmailBody(aiText);
 
+    if (supabase && supabaseUserId && messageId) {
+      const { error: updateError } = await supabase
+        .from("mail_messages")
+        .update({
+          ai_draft_text: finalText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", supabaseUserId)
+        .eq("provider", "gmail")
+        .eq("provider_message_id", messageId);
+      if (updateError) {
+        console.warn("gmail-create-draft-ai: failed to store ai draft", updateError.message);
+      }
+    }
+
     // Opret et draft i Gmail
     const rawLines = [] as string[];
     rawLines.push(`To: ${fromEmail || from}`);

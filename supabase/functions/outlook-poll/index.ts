@@ -1,5 +1,6 @@
 // supabase/functions/outlook-poll/index.ts
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { shouldSkipInboxMessage } from "../_shared/inbox-filter.ts";
 
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 const EDGE_DEBUG_LOGS = Deno.env.get("EDGE_DEBUG_LOGS") === "true";
@@ -20,7 +21,7 @@ const INTERNAL_AGENT_SECRET = Deno.env.get("INTERNAL_AGENT_SECRET");
 const OUTLOOK_POLL_SECRET = Deno.env.get("OUTLOOK_POLL_SECRET") ?? INTERNAL_AGENT_SECRET;
 const MAX_USERS_PER_RUN = Number(Deno.env.get("OUTLOOK_POLL_MAX_USERS") ?? "5");
 const MAX_MESSAGES_PER_USER = Number(Deno.env.get("OUTLOOK_POLL_MAX_MESSAGES") ?? "20");
-const IGNORE_SPAM_FILTER = Deno.env.get("OUTLOOK_IGNORE_SPAM") !== "false";
+const IGNORE_SPAM_FILTER = Deno.env.get("OUTLOOK_IGNORE_SPAM") === "true";
 
 if (!PROJECT_URL) console.warn("PROJECT_URL mangler – outlook-poll kan ikke kalde edge functions.");
 if (!SERVICE_ROLE_KEY) console.warn("SERVICE_ROLE_KEY mangler – outlook-poll kan ikke læse tabeller.");
@@ -257,6 +258,19 @@ async function pollSingleMailbox(target: MailboxTarget, shouldDraft: boolean) {
       const snippet = buildSnippet(message?.bodyPreview ?? bodyText);
       const providerThreadId = message?.conversationId ?? null;
       const providerMessageId = message?.id ?? msg.id;
+      const from = fromName ? `${fromName} <${fromAddress}>` : fromAddress;
+      if (
+        !IGNORE_SPAM_FILTER &&
+        shouldSkipInboxMessage({
+          from,
+          subject,
+          snippet,
+          body: bodyText,
+          headers: [],
+        })
+      ) {
+        continue;
+      }
       const threadRecordId = await upsertThread({
         mailboxId: target.mailbox_id,
         userId: target.user_id,

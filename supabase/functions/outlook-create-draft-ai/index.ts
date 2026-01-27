@@ -621,6 +621,21 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
 
     const htmlBody = formatEmailBody(finalText);
 
+    if (supabase && supabaseUserId && messageId) {
+      const { error: updateError } = await supabase
+        .from("mail_messages")
+        .update({
+          ai_draft_text: finalText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", supabaseUserId)
+        .eq("provider", "outlook")
+        .eq("provider_message_id", messageId);
+      if (updateError) {
+        console.warn("outlook-create-draft-ai: failed to store ai draft", updateError.message);
+      }
+    }
+
     const draft = await createOutlookDraftReply({
       accessToken,
       messageId,
