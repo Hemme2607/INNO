@@ -1,10 +1,10 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Package, XCircle, DollarSign, Archive } from "lucide-react";
+import { Archive, DollarSign, Inbox, Mail, Package, SlidersHorizontal, XCircle } from "lucide-react";
 import { useAgentAutomation } from "@/hooks/useAgentAutomation";
 
 // Definition af de tilstande vi lader brugeren styre fra automation-panelet.
@@ -32,6 +32,19 @@ const toggles = [
     icon: Archive,
     label: "Historical inbox",
     description: "Allow access to old emails so the agent can reference past conversations.",
+  }
+];
+
+const draftDestinations = [
+  {
+    id: "sona",
+    label: "Drafts stay in Sona AI dashboard - Answer directly in your inbox",
+    icon: Inbox,
+  },
+  {
+    id: "own-inbox",
+    label: "Drafts appear directly in Gmail or Outlook",
+    icon: Mail,
   },
 ];
 
@@ -55,6 +68,10 @@ export function AutomationPanel({ children = null }) {
   useEffect(() => {
     setLocal(settings || {});
   }, [settings]);
+
+  const [draftDestination, setDraftDestination] = useState("sona");
+  const [pendingDestination, setPendingDestination] = useState(null);
+  const [showDestinationConfirm, setShowDestinationConfirm] = useState(false);
 
   // Hver switch får sin egen change handler der opdaterer lokale state felter.
   const handleToggle = useCallback(
@@ -108,6 +125,35 @@ export function AutomationPanel({ children = null }) {
     }
   }, [local?.autoDraftEnabled, save]);
 
+  const handleDestinationPick = useCallback(
+    (next) => {
+      if (!next || next === draftDestination) {
+        return;
+      }
+      setPendingDestination(next);
+      setShowDestinationConfirm(true);
+    },
+    [draftDestination]
+  );
+
+  const handleConfirmDestination = useCallback(() => {
+    if (pendingDestination) {
+      setDraftDestination(pendingDestination);
+    }
+    setShowDestinationConfirm(false);
+    setPendingDestination(null);
+  }, [pendingDestination]);
+
+  const handleCancelDestination = useCallback(() => {
+    setShowDestinationConfirm(false);
+    setPendingDestination(null);
+  }, []);
+
+  const selectedDestination = useMemo(
+    () => draftDestinations.find((destination) => destination.id === draftDestination),
+    [draftDestination]
+  );
+
   return (
     <AutomationPanelContext.Provider value={contextValue}>
       {children}
@@ -136,10 +182,115 @@ export function AutomationPanel({ children = null }) {
               onClick={handleToggleAutoDraft}
               disabled={loading || saving}
               variant={local?.autoDraftEnabled ? "outline" : "default"}
+              className={
+                local?.autoDraftEnabled
+                  ? "border-sky-100 text-sky-500 hover:bg-sky-50 hover:text-sky-700"
+                  : "bg-sky-500 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400"
+              }
             >
               {local?.autoDraftEnabled ? "Disable" : "Enable"}
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4 rounded-xl border border-border bg-white shadow-sm">
+        <CardContent className="px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-full bg-sky-100 p-2 text-sky-500">
+              <SlidersHorizontal className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-base font-semibold text-foreground">Draft Destination</p>
+              <p className="text-sm text-muted-foreground">
+                Choose where you want AI drafts to appear.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            {draftDestinations.map((destination) => {
+              const Icon = destination.icon;
+              const isActive = destination.id === draftDestination;
+              return (
+                <button
+                  key={destination.id}
+                  type="button"
+                  onClick={() => handleDestinationPick(destination.id)}
+                  className={`group flex w-full items-center gap-4 rounded-2xl border p-5 text-left transition ${
+                    isActive
+                      ? "border-sky-500 bg-sky-50 shadow-[0_0_0_1px_rgba(14,116,144,0.15)]"
+                      : "border-border bg-white hover:border-sky-200"
+                  }`}
+                >
+                  <div
+                    className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                      isActive
+                        ? "bg-sky-100 text-sky-500"
+                        : "bg-slate-100 text-sky-500"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-foreground">{destination.label}</p>
+                  </div>
+                  <div
+                    className={`flex h-6 w-6 items-center justify-center rounded-full border ${
+                      isActive
+                        ? "border-sky-500 text-sky-600"
+                        : "border-muted-foreground/40 text-muted-foreground/60"
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {isActive && (
+                      <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {selectedDestination && (
+            <div className="mt-3 text-xs text-muted-foreground">
+              Selected: {selectedDestination.label}
+            </div>
+          )}
+
+          {showDestinationConfirm && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="destination-confirm-title"
+              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4"
+            >
+              <div className="w-full max-w-sm rounded-2xl border border-border bg-white p-5 shadow-xl">
+                <p id="destination-confirm-title" className="text-base font-semibold text-foreground">
+                  Are you sure you want to switch?
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  You will switch to{" "}
+                  {
+                    draftDestinations.find((destination) => destination.id === pendingDestination)
+                      ?.label
+                  }
+                </p>
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={handleCancelDestination}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-sky-500 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400"
+                    onClick={handleConfirmDestination}
+                  >
+                    Switch
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
