@@ -37,6 +37,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
+import { SonaLogo } from "@/components/ui/SonaLogo"
+
 // Dummy data så hele TailArk sidebar-komponenten kan vises i Next.
 const baseData = {
   user: {
@@ -121,8 +123,8 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton asChild className="data-[slot=sidebar-menu-button]:!p-1.5">
               <a href="#">
-                <ArrowUpCircleIcon className="h-5 w-5" />
-                <span className="text-base font-semibold">Sona.ai</span>
+                <SonaLogo size={24} className="h-4 w-4" />
+                <span className="text-base font-semibold">Sona AI</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

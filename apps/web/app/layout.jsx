@@ -5,6 +5,9 @@ export const metadata = {
   title: "Sona AI",
   description:
     "INNO web app - get a clear view of customer service and integrations in your browser.",
+  icons: {
+    icon: "/icon.svg",
+  },
 };
 
 // Wrapper layout der sætter globale providers og <html lang="da">
