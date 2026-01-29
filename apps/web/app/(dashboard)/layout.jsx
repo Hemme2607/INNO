@@ -27,8 +27,10 @@ export default async function DashboardLayout({ children }) {
       <AppSidebar variant="inset" user={sidebarUser} />
       <SidebarInset>
         <SiteHeader />
-        <div className="flex flex-1 flex-col">
-          <div className="flex flex-1 flex-col gap-2">{children}</div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+            {children}
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

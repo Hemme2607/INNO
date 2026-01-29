@@ -1,0 +1,92 @@
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { TicketListItem } from "@/components/inbox/TicketListItem";
+
+const STATUS_FILTERS = ["All", "New", "Open", "Waiting", "Solved"];
+
+export function TicketList({
+  threads,
+  selectedThreadId,
+  ticketStateByThread,
+  customerByThread,
+  onSelectThread,
+  filters,
+  onFiltersChange,
+  getTimestamp,
+  getUnreadCount,
+}) {
+  return (
+    <aside className="flex w-full flex-col border-b bg-background lg:w-[20vw] lg:min-w-[20vw] lg:max-w-[20vw] lg:flex-none lg:border-b-0 lg:border-r">
+      <div className="border-b p-4">
+        <div className="grid gap-3">
+          <Input
+            value={filters.query}
+            onChange={(event) => onFiltersChange({ query: event.target.value })}
+            placeholder="Search tickets"
+          />
+          <div className="flex items-center justify-between gap-3">
+            <Select
+              value={filters.status}
+              onValueChange={(value) => onFiltersChange({ status: value })}
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                {STATUS_FILTERS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>Unreads</span>
+              <Switch
+                checked={filters.unreadsOnly}
+                onCheckedChange={(checked) => onFiltersChange({ unreadsOnly: checked })}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {threads.length ? (
+          <div className="divide-y">
+            {threads.map((thread) => {
+              const uiState = ticketStateByThread[thread.id];
+              const customer = customerByThread[thread.id] || "Unknown sender";
+              const timestamp = getTimestamp(thread);
+              const unreadCount = getUnreadCount(thread);
+              return (
+                <TicketListItem
+                  key={thread.id}
+                  thread={thread}
+                  isActive={thread.id === selectedThreadId}
+                  status={uiState?.status || "Open"}
+                  customerLabel={customer}
+                  timestamp={timestamp}
+                  unreadCount={unreadCount}
+                  assignee={uiState?.assignee}
+                  priority={uiState?.priority}
+                  onSelect={() => onSelectThread(thread.id)}
+                />
+              );
+            })}
+          </div>
+        ) : (
+          <div className="px-6 py-10 text-sm text-muted-foreground">
+            No tickets found yet.
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
