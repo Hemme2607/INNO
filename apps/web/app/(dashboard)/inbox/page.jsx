@@ -93,6 +93,19 @@ async function loadMessages(serviceClient, userId, mailboxIds, { query, unreadOn
   return Array.isArray(data) ? data : [];
 }
 
+async function loadThreads(serviceClient, userId, mailboxIds) {
+  const { data, error } = await serviceClient
+    .from("mail_threads")
+    .select(
+      "id, user_id, mailbox_id, provider, provider_thread_id, subject, snippet, last_message_at, unread_count, created_at, updated_at"
+    )
+    .eq("user_id", userId)
+    .in("mailbox_id", mailboxIds)
+    .order("last_message_at", { ascending: false, nullsLast: true });
+  if (error) throw new Error(error.message);
+  return Array.isArray(data) ? data : [];
+}
+
 const NEWSLETTER_SUBJECT_PATTERNS = [
   /unsubscribe/i,
   /newsletter/i,
@@ -145,6 +158,7 @@ export default async function InboxPage({ searchParams }) {
   const unreadOnly = searchParams?.unread === "1";
   let mailboxes = [];
   let messages = [];
+  let threads = [];
 
   if (serviceClient) {
     try {
@@ -153,6 +167,7 @@ export default async function InboxPage({ searchParams }) {
         mailboxes = await loadMailboxes(serviceClient, supabaseUserId);
         const mailboxIds = mailboxes.map((mailbox) => mailbox.id);
         if (mailboxIds.length) {
+          threads = await loadThreads(serviceClient, supabaseUserId, mailboxIds);
           messages = await loadMessages(serviceClient, supabaseUserId, mailboxIds, {
             query,
             unreadOnly,
@@ -184,9 +199,8 @@ export default async function InboxPage({ searchParams }) {
 
   return (
     <InboxSplitView
+      threads={threads}
       messages={visibleMessages}
-      initialQuery={query}
-      initialUnread={unreadOnly}
     />
   );
 }
