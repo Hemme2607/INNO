@@ -221,6 +221,49 @@ create policy "agent_automation_modify_own"
 
 ---
 
+## public.customer_lookup_cache
+
+```sql
+alter table public.customer_lookup_cache enable row level security;
+
+drop policy if exists "customer_lookup_cache_select_own" on public.customer_lookup_cache;
+drop policy if exists "customer_lookup_cache_modify_own" on public.customer_lookup_cache;
+
+create policy "customer_lookup_cache_select_own"
+  on public.customer_lookup_cache
+  for select
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.customer_lookup_cache.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+
+create policy "customer_lookup_cache_modify_own"
+  on public.customer_lookup_cache
+  for all
+  using (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.customer_lookup_cache.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  )
+  with check (
+    user_id::text = coalesce(auth.jwt()->>'supabase_user_id', '')
+    or exists (
+      select 1 from public.profiles p
+      where p.user_id = public.customer_lookup_cache.user_id
+        and p.clerk_user_id = coalesce(auth.jwt()->>'sub', '')
+    )
+  );
+```
+
+---
+
 ## public.agent_templates
 
 ```sql

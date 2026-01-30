@@ -8,11 +8,19 @@ import { deriveThreadsFromMessages } from "@/hooks/useInboxData";
 import { getMessageTimestamp, getSenderLabel, isOutboundMessage } from "@/components/inbox/inbox-utils";
 import { useClerkSupabase } from "@/lib/useClerkSupabase";
 import { toast } from "sonner";
+import { useCustomerLookup } from "@/hooks/useCustomerLookup";
 
 const DEFAULT_TICKET_STATE = {
   status: "Open",
   assignee: null,
   priority: null,
+};
+
+const extractOrderNumber = (value = "") => {
+  if (!value) return null;
+  const match =
+    value.match(/(?:ordre|order)?\s*#?\s*(\d{3,})/i) ?? value.match(/(\d{3,})/);
+  return match ? match[1] : null;
 };
 
 const MOCK_ACTIONS = [
@@ -179,20 +187,26 @@ export function InboxSplitView({ messages = [], threads = [] }) {
     return match?.ai_draft_text?.trim() || "";
   }, [draftMessage, threadMessages]);
 
-  const customerProfile = useMemo(() => {
+  const customerLookupParams = useMemo(() => {
     const inbound = threadMessages.find(
       (message) => !isOutboundMessage(message, mailboxEmails)
     );
-    const email = inbound?.from_email || "customer@email.com";
-    return {
-      name: inbound?.from_name || "Emma Nielsen",
-      email,
-      tier: "GOLD MEMBER",
-      spent: "DKK 2.450",
-      ordersCount: 3,
-      recentOrders: [{ id: "#8921", status: "Shipped" }],
-    };
-  }, [mailboxEmails, threadMessages]);
+    const email = inbound?.from_email || null;
+    const subject = inbound?.subject || selectedThread?.subject || "";
+    const body = inbound?.body_text || "";
+    const orderNumber = extractOrderNumber(subject) || extractOrderNumber(body);
+    return { email, subject, orderNumber };
+  }, [mailboxEmails, selectedThread?.subject, threadMessages]);
+
+  const {
+    data: customerLookup,
+    loading: customerLookupLoading,
+    error: customerLookupError,
+    refresh: refreshCustomerLookup,
+  } = useCustomerLookup({
+    ...customerLookupParams,
+    enabled: insightsOpen && Boolean(selectedThreadId),
+  });
 
   const actions = useMemo(() => {
     return MOCK_ACTIONS.map((action) => ({
@@ -304,7 +318,10 @@ export function InboxSplitView({ messages = [], threads = [] }) {
         open={insightsOpen}
         onOpenChange={setInsightsOpen}
         actions={actions}
-        customerProfile={customerProfile}
+        customerLookup={customerLookup}
+        customerLookupLoading={customerLookupLoading}
+        customerLookupError={customerLookupError}
+        onCustomerRefresh={refreshCustomerLookup}
       />
     </div>
   );

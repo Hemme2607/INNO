@@ -1,0 +1,356 @@
+import { NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { createClient } from "@supabase/supabase-js";
+
+const SUPABASE_URL =
+  (process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.EXPO_PUBLIC_SUPABASE_URL ||
+    "").replace(/\/$/, "");
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_KEY ||
+  "";
+const SUPABASE_EDGE_BASE = SUPABASE_URL;
+
+const DEFAULT_TTL_MINUTES = Number(process.env.CUSTOMER_LOOKUP_TTL_MINUTES || 30);
+const NEGATIVE_TTL_MINUTES = Number(process.env.CUSTOMER_LOOKUP_NEGATIVE_TTL_MINUTES || 5);
+const SHOPIFY_LIMIT = 50;
+
+function createServiceClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+}
+
+async function resolveSupabaseUserId(serviceClient, clerkUserId) {
+  const { data, error } = await serviceClient
+    .from("profiles")
+    .select("user_id")
+    .eq("clerk_user_id", clerkUserId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.user_id ?? null;
+}
+
+function normalizeEmail(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim().toLowerCase();
+  return trimmed || null;
+}
+
+function normalizeOrderNumber(value) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const digits = trimmed.replace(/\D/g, "");
+  return digits || trimmed;
+}
+
+function extractOrderNumber(subject) {
+  if (!subject) return null;
+  const match =
+    subject.match(/(?:ordre|order)?\s*#?\s*(\d{3,})/i) ?? subject.match(/(\d{3,})/);
+  return match ? match[1] : null;
+}
+
+function buildCacheKey({ platform, email, orderNumber }) {
+  const parts = [platform];
+  if (orderNumber) parts.push(`order:${orderNumber}`);
+  if (email) parts.push(`email:${email}`);
+  return parts.join("|");
+}
+
+function matchesOrderNumber(order, candidate) {
+  if (!candidate) return false;
+  const values = [
+    order?.name,
+    order?.order_number,
+    order?.id,
+    order?.number,
+    order?.legacy_order?.order_number,
+  ];
+  return values.some((value) => {
+    if (!value && value !== 0) return false;
+    const str = String(value);
+    if (str.includes(candidate)) return true;
+    const digits = str.replace(/\D/g, "");
+    return digits ? digits.includes(candidate) : false;
+  });
+}
+
+function mapOrder(order) {
+  const shipping = order?.shipping_address || {};
+  const fulfillments = Array.isArray(order?.fulfillments) ? order.fulfillments : [];
+  const fulfillmentWithTracking = fulfillments.find(
+    (item) =>
+      (Array.isArray(item?.tracking_numbers) && item.tracking_numbers.length) ||
+      item?.tracking_number ||
+      (Array.isArray(item?.tracking_urls) && item.tracking_urls.length) ||
+      item?.tracking_url
+  );
+  const trackingNumber =
+    (Array.isArray(fulfillmentWithTracking?.tracking_numbers) &&
+      fulfillmentWithTracking.tracking_numbers[0]) ||
+    fulfillmentWithTracking?.tracking_number ||
+    null;
+  const trackingUrl =
+    (Array.isArray(fulfillmentWithTracking?.tracking_urls) &&
+      fulfillmentWithTracking.tracking_urls[0]) ||
+    fulfillmentWithTracking?.tracking_url ||
+    null;
+  const lineItems = Array.isArray(order?.line_items) ? order.line_items : [];
+  const items = lineItems
+    .map((item) => {
+      if (!item) return null;
+      const qty = typeof item?.quantity === "number" ? item.quantity : 1;
+      const title = item?.title ?? item?.name ?? "Item";
+      const variant = item?.variant_title || item?.variant_name || "";
+      return `${qty}x ${title}${variant ? ` (${variant})` : ""}`;
+    })
+    .filter(Boolean);
+  const financialStatus = String(order?.financial_status || "").toLowerCase();
+  const fulfillmentStatus = String(order?.fulfillment_status || "").toLowerCase();
+  return {
+    id: order?.order_number ?? order?.name ?? order?.id ?? "Unknown",
+    adminId: order?.id ?? null,
+    status: order?.fulfillment_status ?? order?.financial_status ?? "unknown",
+    financialStatus: financialStatus.includes("refund") ? "refunded" : "paid",
+    fulfillmentStatus: fulfillmentStatus === "fulfilled" ? "fulfilled" : "unfulfilled",
+    total: order?.current_total_price ?? order?.total_price ?? null,
+    currency: order?.currency ?? order?.presentment_currency ?? null,
+    placedAt: order?.created_at ?? null,
+    items,
+    shippingAddress: {
+      name: shipping?.name ?? null,
+      address1: shipping?.address1 ?? null,
+      address2: shipping?.address2 ?? null,
+      zip: shipping?.zip ?? null,
+      city: shipping?.city ?? null,
+      country: shipping?.country ?? null,
+    },
+    tracking: {
+      company: fulfillmentWithTracking?.tracking_company || null,
+      number: trackingNumber,
+      url: trackingUrl,
+    },
+  };
+}
+
+function mapCustomer(orders, fallbackEmail) {
+  const primary = orders[0] || {};
+  const customer = primary?.customer || {};
+  const shipping = primary?.shipping_address || {};
+  const name =
+    shipping?.name ||
+    customer?.name ||
+    [customer?.first_name, customer?.last_name].filter(Boolean).join(" ") ||
+    null;
+  return {
+    name: name || fallbackEmail || "Unknown customer",
+    email: primary?.email || customer?.email || fallbackEmail || null,
+    phone: shipping?.phone || customer?.phone || null,
+    tags: customer?.tags || null,
+  };
+}
+
+export async function POST(request) {
+  const { getToken, userId } = auth();
+  if (!userId) {
+    return NextResponse.json({ error: "You must be signed in." }, { status: 401 });
+  }
+
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return NextResponse.json(
+      { error: "Supabase service configuration is missing." },
+      { status: 500 }
+    );
+  }
+
+  if (!SUPABASE_EDGE_BASE) {
+    return NextResponse.json(
+      { error: "Supabase edge URL is missing." },
+      { status: 500 }
+    );
+  }
+
+  const body = (await request.json().catch(() => ({}))) ?? {};
+  const inputEmail = normalizeEmail(body?.email);
+  const inputOrder = normalizeOrderNumber(body?.orderNumber);
+  const subject = typeof body?.subject === "string" ? body.subject : "";
+  const forceRefresh = Boolean(body?.forceRefresh);
+
+  const derivedOrderNumber = inputOrder || extractOrderNumber(subject);
+  const platform = "shopify";
+
+  if (!inputEmail && !derivedOrderNumber) {
+    return NextResponse.json(
+      { error: "Missing email or order number." },
+      { status: 400 }
+    );
+  }
+
+  const cacheKey = buildCacheKey({
+    platform,
+    email: inputEmail ?? "",
+    orderNumber: derivedOrderNumber ?? "",
+  });
+
+  const serviceClient = createServiceClient();
+  if (!serviceClient) {
+    return NextResponse.json(
+      { error: "Supabase service client could not be created." },
+      { status: 500 }
+    );
+  }
+
+  let supabaseUserId = null;
+  try {
+    supabaseUserId = await resolveSupabaseUserId(serviceClient, userId);
+  } catch (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!supabaseUserId) {
+    return NextResponse.json({ error: "Supabase user not found." }, { status: 404 });
+  }
+
+  if (!forceRefresh) {
+    const { data: cached, error: cacheError } = await serviceClient
+      .from("customer_lookup_cache")
+      .select("data, fetched_at, expires_at, source")
+      .eq("user_id", supabaseUserId)
+      .eq("cache_key", cacheKey)
+      .maybeSingle();
+    if (cacheError) {
+      return NextResponse.json({ error: cacheError.message }, { status: 500 });
+    }
+    if (cached?.expires_at && new Date(cached.expires_at) > new Date()) {
+      return NextResponse.json(
+        {
+          ...(cached?.data || {}),
+          cached: true,
+          fetchedAt: cached.fetched_at,
+          expiresAt: cached.expires_at,
+          source: cached.source || cached?.data?.source || platform,
+        },
+        { status: 200 }
+      );
+    }
+  }
+
+  const token = await getToken();
+  if (!token) {
+    return NextResponse.json(
+      { error: "Could not fetch Clerk session token." },
+      { status: 401 }
+    );
+  }
+
+  const fetchOrders = async (params) => {
+    const url = new URL(`${SUPABASE_EDGE_BASE}/functions/v1/shopify-orders`);
+    url.searchParams.set("status", "any");
+    url.searchParams.set("limit", String(SHOPIFY_LIMIT));
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value) url.searchParams.set(key, value);
+    });
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const text = await response.text();
+    let json = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { response, text, json };
+  };
+
+  const primaryParams = {
+    email: inputEmail || "",
+    order_number: derivedOrderNumber || "",
+  };
+  const primaryResult = await fetchOrders(primaryParams);
+  if (!primaryResult.response.ok) {
+    const message =
+      primaryResult.json?.error || primaryResult.text || "Shopify lookup failed.";
+    return NextResponse.json({ error: message }, { status: primaryResult.response.status });
+  }
+
+  let payload = primaryResult.json || {};
+  let rawOrders = Array.isArray(payload?.orders) ? payload.orders : [];
+
+  if (!rawOrders.length && derivedOrderNumber && inputEmail) {
+    const fallbackResult = await fetchOrders({ email: inputEmail });
+    if (fallbackResult.response.ok) {
+      payload = fallbackResult.json || {};
+      rawOrders = Array.isArray(payload?.orders) ? payload.orders : [];
+    }
+  }
+
+  const filteredOrders = derivedOrderNumber
+    ? rawOrders.filter((order) => matchesOrderNumber(order, derivedOrderNumber))
+    : rawOrders;
+  const ordersToUse = filteredOrders.length ? filteredOrders : rawOrders;
+  let shopDomain = null;
+  const { data: shopRow } = await serviceClient
+    .from("shops")
+    .select("shop_domain")
+    .eq("owner_user_id", supabaseUserId)
+    .maybeSingle();
+  if (shopRow?.shop_domain) {
+    shopDomain = String(shopRow.shop_domain).replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  }
+
+  const mappedOrders = ordersToUse.map((order) => {
+    const mapped = mapOrder(order);
+    if (shopDomain && mapped?.adminId) {
+      mapped.adminUrl = `https://${shopDomain}/admin/orders/${mapped.adminId}`;
+    }
+    return mapped;
+  });
+  const customer = mapCustomer(ordersToUse, inputEmail);
+
+  const data = {
+    customer,
+    orders: mappedOrders,
+    matchedOrderNumber: derivedOrderNumber,
+    source: platform,
+    shopDomain,
+  };
+
+  const ttlMinutes = ordersToUse.length ? DEFAULT_TTL_MINUTES : NEGATIVE_TTL_MINUTES;
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + ttlMinutes * 60 * 1000);
+
+  await serviceClient.from("customer_lookup_cache").upsert(
+    {
+      user_id: supabaseUserId,
+      platform,
+      cache_key: cacheKey,
+      email: inputEmail,
+      order_number: derivedOrderNumber,
+      data,
+      source: platform,
+      fetched_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      updated_at: now.toISOString(),
+    },
+    { onConflict: "user_id,cache_key" }
+  );
+
+  return NextResponse.json(
+    {
+      ...data,
+      cached: false,
+      fetchedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      source: platform,
+    },
+    { status: 200 }
+  );
+}

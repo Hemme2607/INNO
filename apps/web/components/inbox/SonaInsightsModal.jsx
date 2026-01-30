@@ -4,7 +4,15 @@ import { ActionsTimeline } from "@/components/inbox/ActionsTimeline";
 import { CustomerTab } from "@/components/inbox/CustomerTab";
 import { X } from "lucide-react";
 
-export function SonaInsightsModal({ open, onOpenChange, actions, customerProfile }) {
+export function SonaInsightsModal({
+  open,
+  onOpenChange,
+  actions,
+  customerLookup,
+  customerLookupLoading,
+  customerLookupError,
+  onCustomerRefresh,
+}) {
   return (
     <aside
       className={`flex h-full flex-none flex-col border-l border-gray-200 bg-background transition-[width] duration-200 ease-linear ${
@@ -36,7 +44,12 @@ export function SonaInsightsModal({ open, onOpenChange, actions, customerProfile
             </div>
           </TabsContent>
           <TabsContent value="customer" className="flex-1 overflow-y-auto">
-            <CustomerTab profile={customerProfile} />
+            <CustomerTab
+              data={customerLookup}
+              loading={customerLookupLoading}
+              error={customerLookupError}
+              onRefresh={onCustomerRefresh}
+            />
           </TabsContent>
         </Tabs>
       </div>
