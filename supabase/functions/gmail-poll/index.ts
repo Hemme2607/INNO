@@ -452,6 +452,7 @@ async function callGenerateDraft(
     headers: {
       "Content-Type": "application/json",
       "x-internal-secret": INTERNAL_AGENT_SECRET,
+      ...(SERVICE_ROLE_KEY ? { Authorization: `Bearer ${SERVICE_ROLE_KEY}` } : {}),
     },
     body: JSON.stringify({
       shop_id: shopId,

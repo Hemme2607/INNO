@@ -420,6 +420,7 @@ async function triggerDraft(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...(SERVICE_ROLE_KEY ? { Authorization: `Bearer ${SERVICE_ROLE_KEY}` } : {}),
     },
     body: JSON.stringify({
       provider: "outlook",

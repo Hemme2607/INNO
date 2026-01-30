@@ -23,7 +23,7 @@ export function TicketList({
   getUnreadCount,
 }) {
   return (
-    <aside className="flex w-full flex-col border-b bg-background lg:w-[20vw] lg:min-w-[20vw] lg:max-w-[20vw] lg:flex-none lg:border-b-0 lg:border-r">
+    <aside className="flex w-full flex-col border-b bg-slate-50 lg:w-[20vw] lg:min-w-[20vw] lg:max-w-[20vw] lg:flex-none lg:border-b-0 lg:border-r lg:border-gray-200">
       <div className="border-b p-4">
         <div className="grid gap-3">
           <Input

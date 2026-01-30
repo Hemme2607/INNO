@@ -1,3 +1,4 @@
+import { Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -23,8 +24,9 @@ export function TicketDetail({
   onOpenInsights,
   draftValue,
   onDraftChange,
-  onInsertDraft,
-  canInsertDraft,
+  draftLoaded,
+  canSend,
+  onSend,
   composerMode,
   onComposerModeChange,
   mailboxEmails,
@@ -41,18 +43,49 @@ export function TicketDetail({
   const firstMessage = messages[0] || {};
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden lg:min-w-0">
-      <header className="flex-none border-b px-6 py-5">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white lg:min-w-0">
+      <header className="flex-none border-b border-gray-100 px-6 py-4">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
+          <div className="min-w-0">
             <div className="text-sm font-semibold text-slate-900">
               {getSenderLabel(firstMessage)}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {firstMessage?.from_email}
+              </span>
             </div>
-            <div className="text-xs text-muted-foreground">{firstMessage?.from_email}</div>
-            <div className="text-lg font-semibold text-slate-900">
+            <div className="mt-1 text-lg font-semibold text-slate-900">
               {thread.subject || "Untitled ticket"}
             </div>
+            <div className="mt-2 text-xs text-muted-foreground">Last update {lastUpdated}</div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={ticketState.assignee || "Unassigned"}
+              onValueChange={(value) =>
+                onTicketStateChange({ assignee: value === "Unassigned" ? null : value })
+              }
+            >
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Assign" />
+              </SelectTrigger>
+              <SelectContent>
+                {ASSIGNEE_OPTIONS.map((option) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" variant="outline" className="gap-2">
+              <Clock className="h-4 w-4" />
+              Snooze
+            </Button>
+            <Button type="button" className="bg-slate-900 text-white hover:bg-slate-800">
+              Close Ticket
+            </Button>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <Select
               value={ticketState.status}
@@ -63,23 +96,6 @@ export function TicketDetail({
               </SelectTrigger>
               <SelectContent>
                 {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={ticketState.assignee || "Unassigned"}
-              onValueChange={(value) =>
-                onTicketStateChange({ assignee: value === "Unassigned" ? null : value })
-              }
-            >
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Assignee" />
-              </SelectTrigger>
-              <SelectContent>
-                {ASSIGNEE_OPTIONS.map((option) => (
                   <SelectItem key={option} value={option}>
                     {option}
                   </SelectItem>
@@ -103,16 +119,16 @@ export function TicketDetail({
                 ))}
               </SelectContent>
             </Select>
-            <Button type="button" variant="outline" onClick={onOpenInsights}>
-              View actions
-            </Button>
           </div>
+          <Button type="button" variant="outline" onClick={onOpenInsights}>
+            View actions
+          </Button>
         </div>
-        <div className="mt-3 text-xs text-muted-foreground">Last update {lastUpdated}</div>
       </header>
 
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
-        {messages.map((message) => {
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="w-full max-w-3xl space-y-6 p-6">
+          {messages.map((message) => {
           const direction = isOutboundMessage(message, mailboxEmails) ? "outbound" : "inbound";
           const messageAttachments = attachments.filter(
             (attachment) => attachment.message_id === message.id
@@ -126,11 +142,15 @@ export function TicketDetail({
             />
           );
         })}
+        </div>
       </div>
 
       <Composer
         value={draftValue}
         onChange={onDraftChange}
+        draftLoaded={draftLoaded}
+        canSend={canSend}
+        onSend={onSend}
         mode={composerMode}
         onModeChange={onComposerModeChange}
       />

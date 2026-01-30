@@ -7,7 +7,7 @@ import { X } from "lucide-react";
 export function SonaInsightsModal({ open, onOpenChange, actions, customerProfile }) {
   return (
     <aside
-      className={`flex h-full flex-none flex-col border-l bg-background transition-[width] duration-200 ease-linear ${
+      className={`flex h-full flex-none flex-col border-l border-gray-200 bg-background transition-[width] duration-200 ease-linear ${
         open ? "w-[360px]" : "w-0"
       }`}
       aria-hidden={!open}
@@ -31,7 +31,7 @@ export function SonaInsightsModal({ open, onOpenChange, actions, customerProfile
             <TabsTrigger value="customer">Customer</TabsTrigger>
           </TabsList>
           <TabsContent value="actions" className="flex-1 overflow-y-auto">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <div className="rounded-2xl border border-blue-100 bg-gradient-to-b from-blue-50/50 to-white p-4">
               <ActionsTimeline items={actions} />
             </div>
           </TabsContent>
