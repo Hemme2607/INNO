@@ -20,11 +20,17 @@ if (!SHOPIFY_TOKEN_KEY)
 const supabase =
   PROJECT_URL && SERVICE_ROLE_KEY ? createClient(PROJECT_URL, SERVICE_ROLE_KEY) : null;
 
-const JWKS = CLERK_JWT_ISSUER
-  ? createRemoteJWKSet(
-      new URL(`${CLERK_JWT_ISSUER.replace(/\/$/, "")}/.well-known/jwks.json`),
-    )
-  : null;
+const ISSUERS = (CLERK_JWT_ISSUER || "")
+  .split(",")
+  .map((issuer) => issuer.trim())
+  .filter(Boolean);
+
+const JWKS_BY_ISSUER = new Map(
+  ISSUERS.map((issuer) => [
+    issuer,
+    createRemoteJWKSet(new URL(`${issuer.replace(/\/$/, "")}/.well-known/jwks.json`)),
+  ]),
+);
 
 type ShopRecord = {
   shop_domain: string;
@@ -43,16 +49,34 @@ function readBearerToken(req: Request): string {
 }
 
 async function requireClerkUserId(req: Request): Promise<string> {
-  if (!JWKS || !CLERK_JWT_ISSUER) {
+  if (!ISSUERS.length) {
     throw Object.assign(
       new Error("CLERK_JWT_ISSUER mangler – kan ikke verificere Clerk session."),
       { status: 500 },
     );
   }
   const token = readBearerToken(req);
-  const { payload } = await jwtVerify(token, JWKS, {
-    issuer: CLERK_JWT_ISSUER,
-  });
+  let payload: Record<string, unknown> | null = null;
+  let lastError: unknown = null;
+  for (const issuer of ISSUERS) {
+    const jwks = JWKS_BY_ISSUER.get(issuer);
+    if (!jwks) continue;
+    try {
+      const result = await jwtVerify(token, jwks, { issuer });
+      payload = result.payload as Record<string, unknown>;
+      break;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (!payload) {
+    throw Object.assign(
+      new Error(
+        lastError instanceof Error ? lastError.message : "Ugyldigt Clerk token.",
+      ),
+      { status: 401 },
+    );
+  }
   const sub = payload?.sub;
   if (!sub || typeof sub !== "string") {
     throw Object.assign(new Error("Ugyldigt Clerk token – subject mangler."), { status: 401 });
@@ -172,6 +196,281 @@ async function fetchShopifyOrders(
   });
 }
 
+function mapGraphqlOrder(order: any) {
+  if (!order) return null;
+  const gid = String(order?.id || "");
+  const idMatch = gid.match(/Order\/(\d+)/);
+  const numericId = idMatch?.[1] ? Number(idMatch[1]) : null;
+  const lineItems = Array.isArray(order?.lineItems?.edges)
+    ? order.lineItems.edges.map((edge: any) => edge?.node).filter(Boolean)
+    : [];
+  const fulfillments = Array.isArray(order?.fulfillments?.edges)
+    ? order.fulfillments.edges.map((edge: any) => edge?.node).filter(Boolean)
+    : [];
+  const trackingInfo = fulfillments.flatMap((fulfillment: any) =>
+    Array.isArray(fulfillment?.trackingInfo) ? fulfillment.trackingInfo : [],
+  );
+  return {
+    id: numericId ?? null,
+    order_number: order?.orderNumber ?? null,
+    name: order?.name ?? null,
+    financial_status: String(order?.financialStatus || "").toLowerCase(),
+    fulfillment_status: String(order?.fulfillmentStatus || "").toLowerCase(),
+    total_price: order?.currentTotalPriceSet?.shopMoney?.amount ?? null,
+    current_total_price: order?.currentTotalPriceSet?.shopMoney?.amount ?? null,
+    currency: order?.currentTotalPriceSet?.shopMoney?.currencyCode ?? null,
+    created_at: order?.createdAt ?? null,
+    email: order?.email ?? null,
+    customer: {
+      email: order?.customer?.email ?? null,
+      first_name: order?.customer?.firstName ?? null,
+      last_name: order?.customer?.lastName ?? null,
+    },
+    shipping_address: order?.shippingAddress
+      ? {
+          name: order.shippingAddress?.name ?? null,
+          address1: order.shippingAddress?.address1 ?? null,
+          address2: order.shippingAddress?.address2 ?? null,
+          zip: order.shippingAddress?.zip ?? null,
+          city: order.shippingAddress?.city ?? null,
+          country: order.shippingAddress?.country ?? null,
+          phone: order.shippingAddress?.phone ?? null,
+          email: order.shippingAddress?.email ?? null,
+        }
+      : null,
+    line_items: lineItems.map((item: any) => ({
+      title: item?.title ?? null,
+      name: item?.name ?? null,
+      quantity: item?.quantity ?? 1,
+      variant_title: item?.variantTitle ?? null,
+    })),
+    fulfillments: trackingInfo.length
+      ? [
+          {
+            tracking_number: trackingInfo[0]?.number ?? null,
+            tracking_numbers: trackingInfo.map((t: any) => t?.number).filter(Boolean),
+            tracking_url: trackingInfo[0]?.url ?? null,
+            tracking_urls: trackingInfo.map((t: any) => t?.url).filter(Boolean),
+            tracking_company: trackingInfo[0]?.company ?? null,
+          },
+        ]
+      : [],
+  };
+}
+
+function extractNextPageInfo(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  const parts = linkHeader.split(",");
+  for (const part of parts) {
+    if (part.includes('rel="next"')) {
+      const match = part.match(/<([^>]+)>/);
+      if (!match?.[1]) continue;
+      try {
+        const url = new URL(match[1]);
+        return url.searchParams.get("page_info");
+      } catch {
+        continue;
+      }
+    }
+  }
+  return null;
+}
+
+function matchesOrderNumber(order: any, candidate: string): boolean {
+  const values = [
+    order?.name,
+    order?.order_number,
+    order?.id,
+    order?.number,
+    order?.legacy_order?.order_number,
+  ];
+  return values.some((value) => {
+    if (!value && value !== 0) return false;
+    const str = String(value);
+    if (str.includes(candidate)) return true;
+    const digits = str.replace(/\D/g, "");
+    return digits ? digits.includes(candidate) : false;
+  });
+}
+
+async function fetchOrdersPage(
+  shop: ShopRecord,
+  searchParams: URLSearchParams,
+): Promise<{ orders: any[]; nextPageInfo: string | null }> {
+  const domain = shop.shop_domain.replace(/^https?:\/\//, "");
+  const url = new URL(`https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json`);
+  searchParams.forEach((value, key) => {
+    if (value !== null && value !== undefined && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+  const response = await fetch(url.toString(), {
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": shop.access_token,
+    },
+  });
+  const text = await response.text();
+  let json: any = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    json = null;
+  }
+  if (!response.ok) {
+    const message =
+      json?.errors ||
+      json?.error ||
+      text ||
+      `Shopify svarede med status ${response.status}.`;
+    throw Object.assign(new Error(String(message)), { status: response.status });
+  }
+  const nextPageInfo = extractNextPageInfo(response.headers.get("link"));
+  return { orders: json?.orders ?? [], nextPageInfo };
+}
+
+async function fetchShopifyOrdersByNumberViaRest(
+  shop: ShopRecord,
+  orderNumber: string,
+  email?: string | null,
+): Promise<{ orders: any[]; raw: any }> {
+  const limit = 250;
+  let pageInfo: string | null = null;
+  let lastOrders: any[] = [];
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    params.set("status", "any");
+    if (pageInfo) {
+      params.set("page_info", pageInfo);
+    } else if (email) {
+      params.set("email", email);
+    }
+    const { orders, nextPageInfo } = await fetchOrdersPage(shop, params);
+    lastOrders = orders;
+    const matches = orders.filter((order) => matchesOrderNumber(order, orderNumber));
+    if (matches.length) {
+      return { orders: matches, raw: orders };
+    }
+    if (!nextPageInfo) break;
+    pageInfo = nextPageInfo;
+  }
+  return { orders: [], raw: lastOrders };
+}
+
+async function fetchShopifyOrdersByNumber(
+  shop: ShopRecord,
+  orderNumber: string,
+  email?: string | null,
+): Promise<{ orders: any[]; raw: any }> {
+  const domain = shop.shop_domain.replace(/^https?:\/\//, "");
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const trimmedEmail = email?.trim();
+  const queries = [
+    `name:#${orderNumber}`,
+    `order_number:${orderNumber}`,
+    `name:${orderNumber}`,
+  ];
+  if (trimmedEmail) {
+    queries.unshift(
+      `name:#${orderNumber} email:${trimmedEmail}`,
+      `order_number:${orderNumber} email:${trimmedEmail}`,
+      `name:${orderNumber} email:${trimmedEmail}`,
+    );
+  }
+  const query = `
+    query OrdersByNumber($query: String!) {
+      orders(first: 5, query: $query) {
+        edges {
+          node {
+            id
+            name
+            orderNumber
+            financialStatus
+            fulfillmentStatus
+            createdAt
+            email
+            currentTotalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
+            customer {
+              firstName
+              lastName
+              email
+            }
+            shippingAddress {
+              name
+              address1
+              address2
+              zip
+              city
+              country
+              phone
+              email
+            }
+            lineItems(first: 10) {
+              edges {
+                node {
+                  title
+                  name
+                  quantity
+                  variantTitle
+                }
+              }
+            }
+            fulfillments(first: 5) {
+              edges {
+                node {
+                  trackingInfo {
+                    number
+                    url
+                    company
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+  let lastPayload: any = null;
+  for (const queryValue of queries) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": shop.access_token,
+      },
+      body: JSON.stringify({
+        query,
+        variables: { query: queryValue },
+      }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    lastPayload = payload;
+    if (!res.ok || payload?.errors) {
+      const message =
+        payload?.errors?.[0]?.message ||
+        payload?.error ||
+        res.statusText ||
+        `Shopify svarede med status ${res.status}.`;
+      throw Object.assign(new Error(String(message)), { status: res.status });
+    }
+    const edges = payload?.data?.orders?.edges ?? [];
+    const orders = edges.map((edge: any) => mapGraphqlOrder(edge?.node)).filter(Boolean);
+    if (orders.length) {
+      return { orders, raw: payload };
+    }
+  }
+  return { orders: [], raw: lastPayload };
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== "GET") {
@@ -192,6 +491,22 @@ Deno.serve(async (req) => {
 
     const email = url.searchParams.get("email");
     if (email) searchParams.set("email", email);
+
+    const orderNumber = url.searchParams.get("order_number");
+    if (orderNumber) {
+      const graphqlResult = await fetchShopifyOrdersByNumber(shop, orderNumber, email);
+      if (graphqlResult.orders.length) {
+        return Response.json(graphqlResult);
+      }
+      const restResult = await fetchShopifyOrdersByNumberViaRest(
+        shop,
+        orderNumber,
+        email ?? undefined,
+      );
+      if (restResult.orders.length) {
+        return Response.json(restResult);
+      }
+    }
 
     const createdAtMin = url.searchParams.get("created_at_min");
     if (createdAtMin) searchParams.set("created_at_min", createdAtMin);

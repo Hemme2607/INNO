@@ -203,6 +203,27 @@ CREATE TABLE public.shops (
   CONSTRAINT shops_owner_user_uuid_fkey FOREIGN KEY (owner_user_id) REFERENCES auth.users(id)
 );
 
+CREATE TABLE public.customer_lookup_cache (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  platform text NOT NULL,
+  cache_key text NOT NULL,
+  email text,
+  order_number text,
+  data jsonb NOT NULL,
+  source text,
+  fetched_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT customer_lookup_cache_pkey PRIMARY KEY (id),
+  CONSTRAINT customer_lookup_cache_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT customer_lookup_cache_unique UNIQUE (user_id, cache_key)
+);
+
+CREATE INDEX customer_lookup_cache_user_idx ON public.customer_lookup_cache(user_id);
+CREATE INDEX customer_lookup_cache_expires_idx ON public.customer_lookup_cache(expires_at);
+
 -- Simpel venteliste / landing page signup
 CREATE TABLE public.landing_signups (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
