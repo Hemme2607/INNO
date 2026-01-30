@@ -3,7 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
-import { InboxSplitView } from "@/components/inbox/InboxSplitView";
+import { InboxPageClient } from "@/components/inbox/InboxPageClient";
 
 const SUPABASE_URL =
   (process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -197,10 +197,5 @@ export default async function InboxPage({ searchParams }) {
 
   const visibleMessages = messages.filter((message) => !shouldHideFromInbox(message));
 
-  return (
-    <InboxSplitView
-      threads={threads}
-      messages={visibleMessages}
-    />
-  );
+  return <InboxPageClient threads={threads} messages={visibleMessages} />;
 }

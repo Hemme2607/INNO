@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { SiteHeader } from "@/components/site-header";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { auth, clerkClient } from "@clerk/nextjs/server";
 
 function mapClerkUser(user) {
@@ -25,14 +25,7 @@ export default async function DashboardLayout({ children }) {
   return (
     <SidebarProvider>
       <AppSidebar variant="inset" user={sidebarUser} />
-      <SidebarInset>
-        <SiteHeader />
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-            {children}
-          </div>
-        </div>
-      </SidebarInset>
+      <DashboardShell>{children}</DashboardShell>
     </SidebarProvider>
   );
 }

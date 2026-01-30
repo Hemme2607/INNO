@@ -6,6 +6,8 @@ import { TicketDetail } from "@/components/inbox/TicketDetail";
 import { SonaInsightsModal } from "@/components/inbox/SonaInsightsModal";
 import { deriveThreadsFromMessages } from "@/hooks/useInboxData";
 import { getMessageTimestamp, getSenderLabel, isOutboundMessage } from "@/components/inbox/inbox-utils";
+import { useClerkSupabase } from "@/lib/useClerkSupabase";
+import { toast } from "sonner";
 
 const DEFAULT_TICKET_STATE = {
   status: "Open",
@@ -51,6 +53,7 @@ export function InboxSplitView({ messages = [], threads = [] }) {
   const [composerMode, setComposerMode] = useState("reply");
   const [draftValue, setDraftValue] = useState("");
   const [insightsOpen, setInsightsOpen] = useState(false);
+  const supabase = useClerkSupabase();
 
   const derivedThreads = useMemo(() => {
     if (threads?.length) return threads;
@@ -164,11 +167,17 @@ export function InboxSplitView({ messages = [], threads = [] }) {
 
   const threadAttachments = useMemo(() => [], []);
 
+  const draftMessage = useMemo(
+    () => threadMessages.find((message) => message?.is_draft && message?.from_me) || null,
+    [threadMessages]
+  );
+
   const aiDraft = useMemo(() => {
+    if (draftMessage) return "";
     const reversed = [...threadMessages].reverse();
     const match = reversed.find((message) => message.ai_draft_text?.trim());
     return match?.ai_draft_text?.trim() || "";
-  }, [threadMessages]);
+  }, [draftMessage, threadMessages]);
 
   const customerProfile = useMemo(() => {
     const inbound = threadMessages.find(
@@ -202,6 +211,12 @@ export function InboxSplitView({ messages = [], threads = [] }) {
     setDraftValue((prev) => (prev ? prev : aiDraft));
   }, [aiDraft, selectedThreadId]);
 
+  useEffect(() => {
+    if (!draftMessage) return;
+    const draftBody = draftMessage.body_text || draftMessage.body_html || "";
+    setDraftValue((prev) => (prev ? prev : draftBody));
+  }, [draftMessage]);
+
   const handleFiltersChange = (updates) => {
     setFilters((prev) => ({ ...prev, ...updates }));
   };
@@ -215,6 +230,38 @@ export function InboxSplitView({ messages = [], threads = [] }) {
         ...updates,
       },
     }));
+  };
+
+  const handleSendDraft = async () => {
+    if (!draftMessage?.id) {
+      toast.error("No draft to send.");
+      return;
+    }
+    if (!draftValue.trim()) {
+      toast.error("Draft is empty.");
+      return;
+    }
+    if (!supabase) {
+      toast.error("Supabase client not ready.");
+      return;
+    }
+    const toastId = toast.loading("Sending draft...");
+    try {
+      const { error } = await supabase
+        .from("mail_messages")
+        .update({
+          body_text: draftValue,
+          body_html: draftValue,
+          is_draft: false,
+          sent_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", draftMessage.id);
+      if (error) throw error;
+      toast.success("Draft sent.", { id: toastId });
+    } catch (err) {
+      toast.error("Could not send draft.", { id: toastId });
+    }
   };
 
 
@@ -245,6 +292,9 @@ export function InboxSplitView({ messages = [], threads = [] }) {
         onOpenInsights={() => setInsightsOpen(true)}
         draftValue={draftValue}
         onDraftChange={setDraftValue}
+        draftLoaded={Boolean(draftMessage)}
+        canSend={Boolean(draftMessage?.id)}
+        onSend={handleSendDraft}
         composerMode={composerMode}
         onComposerModeChange={setComposerMode}
         mailboxEmails={mailboxEmails}

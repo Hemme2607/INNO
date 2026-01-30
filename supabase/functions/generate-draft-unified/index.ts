@@ -316,6 +316,68 @@ async function createOutlookDraft(
   return text ? JSON.parse(text) : null;
 }
 
+async function resolveInternalThread(
+  userId: string | null,
+  provider: string,
+  emailData: EmailData,
+) {
+  if (!supabase || !userId) return { threadId: null, mailboxId: null };
+  if (emailData.threadId) {
+    const { data } = await supabase
+      .from("mail_threads")
+      .select("id, mailbox_id")
+      .eq("user_id", userId)
+      .eq("provider", provider)
+      .eq("provider_thread_id", emailData.threadId)
+      .maybeSingle();
+    if (data?.id) return { threadId: data.id, mailboxId: data.mailbox_id ?? null };
+  }
+  if (emailData.messageId) {
+    const { data } = await supabase
+      .from("mail_messages")
+      .select("thread_id, mailbox_id")
+      .eq("user_id", userId)
+      .eq("provider", provider)
+      .eq("provider_message_id", emailData.messageId)
+      .maybeSingle();
+    if (data?.thread_id) return { threadId: data.thread_id, mailboxId: data.mailbox_id ?? null };
+  }
+  return { threadId: null, mailboxId: null };
+}
+
+async function createInternalDraft(options: {
+  userId: string | null;
+  mailboxId: string | null;
+  threadId: string | null;
+  subject: string;
+  htmlBody: string;
+  textBody: string;
+}) {
+  if (!supabase || !options.userId || !options.threadId) return null;
+  const payload: Record<string, unknown> = {
+    user_id: options.userId,
+    mailbox_id: options.mailboxId,
+    thread_id: options.threadId,
+    subject: options.subject,
+    snippet: options.textBody.slice(0, 160),
+    body_text: options.textBody,
+    body_html: options.htmlBody,
+    is_draft: true,
+    from_me: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await supabase
+    .from("mail_messages")
+    .insert(payload)
+    .select()
+    .maybeSingle();
+  if (error) {
+    throw new Error(`Internal draft insert failed: ${error.message}`);
+  }
+  return data;
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
@@ -328,12 +390,6 @@ Deno.serve(async (req) => {
 
     if (!shopId || !provider) {
       return new Response(JSON.stringify({ error: "shop_id og provider er påkrævet." }), {
-        status: 400,
-      });
-    }
-
-    if (!accessToken) {
-      return new Response(JSON.stringify({ error: "access_token er påkrævet for Gmail/Outlook." }), {
         status: 400,
       });
     }
@@ -364,6 +420,25 @@ Deno.serve(async (req) => {
     }
 
     const ownerUserId = await resolveShopOwnerId(shopId);
+    const providerMessageId =
+      typeof emailData.messageId === "string" ? emailData.messageId.trim() : "";
+    if (supabase && ownerUserId && providerMessageId) {
+      const { data, error } = await supabase
+        .from("mail_messages")
+        .select("ai_draft_text")
+        .eq("user_id", ownerUserId)
+        .eq("provider", provider)
+        .eq("provider_message_id", providerMessageId)
+        .maybeSingle();
+      if (error) {
+        console.warn("generate-draft-unified: dedupe lookup failed", error.message);
+      } else if (data?.ai_draft_text?.trim()) {
+        return new Response(
+          JSON.stringify({ success: true, skipped: true, reason: "already_drafted" }),
+          { status: 200 },
+        );
+      }
+    }
     const productContext = await fetchProductContext(
       supabase,
       ownerUserId,
@@ -438,17 +513,67 @@ Afslut ikke med signatur – signaturen tilføjes automatisk senere.`;
     // Render HTML med konsistent styling og line breaks.
     const htmlBody = formatEmailBody(finalText);
 
-    let draftResponse: any = null;
-    if (provider === "gmail") {
-      draftResponse = await createGmailDraft(accessToken, emailData, htmlBody);
-    } else if (provider === "outlook") {
-      draftResponse = await createOutlookDraft(accessToken, emailData, htmlBody);
-    } else {
-      return new Response(JSON.stringify({ error: "Unsupported provider." }), { status: 400 });
+    let draftDestination =
+      context?.automation?.draft_destination === "sona_inbox"
+        ? "sona_inbox"
+        : "email_provider";
+    if (supabase && ownerUserId) {
+      const { data, error } = await supabase
+        .from("agent_automation")
+        .select("draft_destination")
+        .eq("user_id", ownerUserId)
+        .maybeSingle();
+      if (error) {
+        console.warn("generate-draft-unified: draft destination lookup failed", error.message);
+      } else if (data?.draft_destination === "sona_inbox") {
+        draftDestination = "sona_inbox";
+      } else if (data?.draft_destination === "email_provider") {
+        draftDestination = "email_provider";
+      } else {
+        draftDestination = "sona_inbox";
+      }
     }
 
-    const draftId = draftResponse?.id ?? draftResponse?.message?.id ?? null;
-    const threadId = draftResponse?.message?.threadId ?? emailData.threadId ?? null;
+    let draftResponse: any = null;
+    let internalDraft: any = null;
+    let draftId: string | null = null;
+    let threadId: string | null = null;
+
+    if (draftDestination === "email_provider") {
+      if (!accessToken) {
+        return new Response(
+          JSON.stringify({ error: "access_token er påkrævet for Gmail/Outlook." }),
+          { status: 400 },
+        );
+      }
+      if (provider === "gmail") {
+        draftResponse = await createGmailDraft(accessToken, emailData, htmlBody);
+      } else if (provider === "outlook") {
+        draftResponse = await createOutlookDraft(accessToken, emailData, htmlBody);
+      } else {
+        return new Response(JSON.stringify({ error: "Unsupported provider." }), { status: 400 });
+      }
+      draftId = draftResponse?.id ?? draftResponse?.message?.id ?? null;
+      threadId = draftResponse?.message?.threadId ?? emailData.threadId ?? null;
+    } else {
+      const internal = await resolveInternalThread(ownerUserId, provider, emailData);
+      if (!internal.threadId) {
+        console.warn("generate-draft-unified: missing internal thread for draft");
+      }
+      internalDraft = await createInternalDraft({
+        userId: ownerUserId,
+        mailboxId: internal.mailboxId,
+        threadId: internal.threadId,
+        subject: emailData.subject ? `Re: ${emailData.subject}` : "Re:",
+        htmlBody,
+        textBody: finalText,
+      }).catch((err) => {
+        console.warn("generate-draft-unified: internal draft failed", err?.message || err);
+        return null;
+      });
+      draftId = internalDraft?.id ?? null;
+      threadId = internal.threadId ?? emailData.threadId ?? null;
+    }
     const customerEmail = emailData.fromEmail || emailData.from || null;
     const subject = emailData.subject || "";
 

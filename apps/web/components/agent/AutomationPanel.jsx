@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Archive, DollarSign, Inbox, Mail, Package, SlidersHorizontal, XCircle } from "lucide-react";
 import { useAgentAutomation } from "@/hooks/useAgentAutomation";
+import { toast } from "sonner";
 
 // Definition af de tilstande vi lader brugeren styre fra automation-panelet.
 const toggles = [
@@ -37,12 +38,12 @@ const toggles = [
 
 const draftDestinations = [
   {
-    id: "sona",
+    id: "sona_inbox",
     label: "Drafts stay in Sona AI dashboard - Answer directly in your inbox",
     icon: Inbox,
   },
   {
-    id: "own-inbox",
+    id: "email_provider",
     label: "Drafts appear directly in Gmail or Outlook",
     icon: Mail,
   },
@@ -69,9 +70,7 @@ export function AutomationPanel({ children = null }) {
     setLocal(settings || {});
   }, [settings]);
 
-  const [draftDestination, setDraftDestination] = useState("sona");
-  const [pendingDestination, setPendingDestination] = useState(null);
-  const [showDestinationConfirm, setShowDestinationConfirm] = useState(false);
+  const draftDestination = local?.draftDestination || settings?.draftDestination || "email_provider";
 
   // Hver switch får sin egen change handler der opdaterer lokale state felter.
   const handleToggle = useCallback(
@@ -101,7 +100,8 @@ export function AutomationPanel({ children = null }) {
       ({ key }) => Boolean(local?.[key]) !== Boolean(settings?.[key])
     );
     const draftDirty = Boolean(local?.autoDraftEnabled) !== Boolean(settings?.autoDraftEnabled);
-    return baseDirty || draftDirty;
+    const destinationDirty = local?.draftDestination !== settings?.draftDestination;
+    return baseDirty || draftDirty || destinationDirty;
   }, [local, settings]);
 
   // Samlet API der deles via context så headeren kan gengemme ændringer.
@@ -126,28 +126,20 @@ export function AutomationPanel({ children = null }) {
   }, [local?.autoDraftEnabled, save]);
 
   const handleDestinationPick = useCallback(
-    (next) => {
-      if (!next || next === draftDestination) {
-        return;
+    async (next) => {
+      if (!next || next === draftDestination) return;
+      setLocal((s) => ({ ...(s || {}), draftDestination: next }));
+      const toastId = toast.loading("Updating draft destination...");
+      try {
+        await save({ draftDestination: next });
+        toast.success("Draft destination updated.", { id: toastId });
+      } catch (err) {
+        toast.error("Could not update draft destination.", { id: toastId });
+        setLocal((s) => ({ ...(s || {}), draftDestination }));
       }
-      setPendingDestination(next);
-      setShowDestinationConfirm(true);
     },
-    [draftDestination]
+    [draftDestination, save]
   );
-
-  const handleConfirmDestination = useCallback(() => {
-    if (pendingDestination) {
-      setDraftDestination(pendingDestination);
-    }
-    setShowDestinationConfirm(false);
-    setPendingDestination(null);
-  }, [pendingDestination]);
-
-  const handleCancelDestination = useCallback(() => {
-    setShowDestinationConfirm(false);
-    setPendingDestination(null);
-  }, []);
 
   const selectedDestination = useMemo(
     () => draftDestinations.find((destination) => destination.id === draftDestination),
@@ -219,7 +211,7 @@ export function AutomationPanel({ children = null }) {
                   onClick={() => handleDestinationPick(destination.id)}
                   className={`group flex w-full items-center gap-4 rounded-2xl border p-5 text-left transition ${
                     isActive
-                      ? "border-sky-500 bg-sky-50 shadow-[0_0_0_1px_rgba(14,116,144,0.15)]"
+                      ? "border-blue-500 bg-blue-50 ring-2 ring-blue-500"
                       : "border-border bg-white hover:border-sky-200"
                   }`}
                 >
@@ -238,14 +230,12 @@ export function AutomationPanel({ children = null }) {
                   <div
                     className={`flex h-6 w-6 items-center justify-center rounded-full border ${
                       isActive
-                        ? "border-sky-500 text-sky-600"
+                        ? "border-blue-500 text-blue-600"
                         : "border-muted-foreground/40 text-muted-foreground/60"
                     }`}
                     aria-hidden="true"
                   >
-                    {isActive && (
-                      <span className="h-2.5 w-2.5 rounded-full bg-sky-500" />
-                    )}
+                    {isActive && <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />}
                   </div>
                 </button>
               );
@@ -258,39 +248,6 @@ export function AutomationPanel({ children = null }) {
             </div>
           )}
 
-          {showDestinationConfirm && (
-            <div
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="destination-confirm-title"
-              className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4"
-            >
-              <div className="w-full max-w-sm rounded-2xl border border-border bg-white p-5 shadow-xl">
-                <p id="destination-confirm-title" className="text-base font-semibold text-foreground">
-                  Are you sure you want to switch?
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  You will switch to{" "}
-                  {
-                    draftDestinations.find((destination) => destination.id === pendingDestination)
-                      ?.label
-                  }
-                </p>
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={handleCancelDestination}>
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    className="bg-sky-500 text-slate-900 shadow-lg shadow-sky-900/40 hover:bg-sky-400"
-                    onClick={handleConfirmDestination}
-                  >
-                    Switch
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
